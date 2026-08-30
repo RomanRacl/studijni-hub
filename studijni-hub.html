@@ -26,6 +26,12 @@
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 
+<!-- Po přidání na plochu na iPhonu se appka spustí "na celou obrazovku" bez
+     adresního řádku Safari, podobně jako běžná nainstalovaná appka. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Studijní Hub">
+
 <!-- Google Font: Inter -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
@@ -2466,8 +2472,15 @@ createApp({
 
     /* ---------- Video na pozadí hero sekce (viz heroVideoEl v šabloně) ----------
        Zdrojová data (base64) viz HERO_VIDEO_MP4_B64 / HERO_POSTER_JPG_B64 výše -
-       videu se přiřazují až tady přes Blob URL, ne přímo v HTML atributu (viz
-       komentář u těch konstant - kvůli spolehlivosti na mobilním Safari). */
+       videu se přiřazují přes Blob URL, ne přímo v HTML atributu (viz komentář
+       u těch konstant - kvůli spolehlivosti na mobilním Safari).
+       Hero sekce je uvnitř v-if (dashboard/detail předmětu), takže <video>
+       element se při každém přechodu na předmět a zpět celý zničí a znovu
+       vytvoří - proto přiřazení NENÍ jen v onMounted (to by proběhlo jen
+       jednou při prvním načtení appky), ale ve watch() na heroVideoEl, který
+       se spustí pokaždé, když se video element znovu objeví v DOM. Samotné
+       Blob URL se ale počítá (dekóduje base64) jen jednou a dál se jen
+       recykluje, aby se to při každém přepnutí zbytečně nedělalo pořád znovu. */
     const heroVideoEl = ref(null);
     function b64ToBlobUrl(b64, mime) {
       const byteChars = atob(b64);
@@ -2475,6 +2488,16 @@ createApp({
       const byteArray = new Uint8Array(len);
       for (let i = 0; i < len; i++) byteArray[i] = byteChars.charCodeAt(i);
       return URL.createObjectURL(new Blob([byteArray], { type: mime }));
+    }
+    let heroVideoBlobUrlCache = null;
+    let heroPosterBlobUrlCache = null;
+    function getHeroVideoBlobUrl() {
+      if (!heroVideoBlobUrlCache) heroVideoBlobUrlCache = b64ToBlobUrl(HERO_VIDEO_MP4_B64, 'video/mp4');
+      return heroVideoBlobUrlCache;
+    }
+    function getHeroPosterBlobUrl() {
+      if (!heroPosterBlobUrlCache) heroPosterBlobUrlCache = b64ToBlobUrl(HERO_POSTER_JPG_B64, 'image/jpeg');
+      return heroPosterBlobUrlCache;
     }
 
     /* ---------- Jemné 3D naklopení karty předmětu podle pozice kurzoru ---------- */
@@ -3787,6 +3810,25 @@ createApp({
         if (noteTitleEl.value) noteTitleEl.value.focus();
       }
     }
+    // Hero video/poster: viz komentář u heroVideoEl výše - přiřazení musí
+    // proběhnout přes watch (ne jen v onMounted), protože <video> je uvnitř
+    // v-if a při přechodu na předmět a zpět na dashboard se celý znovu
+    // vytvoří jako čerstvý element bez src/poster.
+    watch(heroVideoEl, (el) => {
+      if (!el) return;
+      try {
+        el.poster = getHeroPosterBlobUrl();
+        el.src = getHeroVideoBlobUrl();
+        if (prefersReducedMotion) {
+          el.pause();
+        } else {
+          el.play().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Video na pozadí hero sekce se nepodařilo připravit.', e);
+      }
+    }, { immediate: true });
+
     onMounted(() => {
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
@@ -3795,23 +3837,6 @@ createApp({
       badgeStatus.value.forEach((b) => {
         if (b.unlocked && !stats.celebratedBadges.includes(b.id)) stats.celebratedBadges.push(b.id);
       });
-      // Video/poster hero sekce se přiřazují až tady přes Blob URL (viz
-      // b64ToBlobUrl výše) - kvůli spolehlivosti na mobilním Safari (viz
-      // komentář u HERO_VIDEO_MP4_B64). U lidí s nastaveným "omezit pohyb"
-      // se video vůbec nepřehraje, zůstane jen klidový snímek (poster).
-      if (heroVideoEl.value) {
-        try {
-          heroVideoEl.value.poster = b64ToBlobUrl(HERO_POSTER_JPG_B64, 'image/jpeg');
-          heroVideoEl.value.src = b64ToBlobUrl(HERO_VIDEO_MP4_B64, 'video/mp4');
-          if (prefersReducedMotion) {
-            heroVideoEl.value.pause();
-          } else {
-            heroVideoEl.value.play().catch(() => {});
-          }
-        } catch (e) {
-          console.warn('Video na pozadí hero sekce se nepodařilo připravit.', e);
-        }
-      }
     });
     onBeforeUnmount(() => {
       window.removeEventListener('keydown', onKeydown);
