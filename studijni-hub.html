@@ -18,6 +18,33 @@
   })();
 </script>
 
+<!-- DOČASNÁ DIAGNOSTIKA (odstranit po nalezení příčiny): zobrazí jakoukoliv
+     JS chybu přímo na obrazovce jako červený pruh, aby šla vyfotit i bez
+     přístupu k vývojářské konzoli (na mobilu bez Macu se jinak k chybové
+     hlášce nedá dostat). -->
+<script>
+  (function () {
+    function showError(label, detail) {
+      try {
+        var el = document.createElement('div');
+        el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7f1d1d;color:#fff;padding:12px;font:12px/1.4 monospace;white-space:pre-wrap;max-height:70vh;overflow:auto;';
+        el.textContent = '⚠️ ' + label + '\n' + detail;
+        document.body ? document.body.appendChild(el) : window.addEventListener('DOMContentLoaded', function () { document.body.appendChild(el); });
+      } catch (e2) { /* i diagnostika může selhat - nic víc s tím nenaděláme */ }
+    }
+    window.addEventListener('error', function (e) {
+      showError('JS chyba', (e.message || '') + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || '') + '\n' + (e.error && e.error.stack ? e.error.stack : ''));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      showError('Neošetřená Promise chyba', (r && r.stack) ? r.stack : String(r));
+    });
+    window.__vueErrorHandler = function (err, instance, info) {
+      showError('Vue chyba (' + info + ')', err && err.stack ? err.stack : String(err));
+    };
+  })();
+</script>
+
 <!-- PWA: manifest + ikony. Fungují jen tehdy, když je soubor obsluhován přes http/https
      (viz sw.js) - při prostém otevření dvojklikem (file://) je prohlížeč tiše ignoruje
      a aplikace běží úplně stejně jako dřív. -->
@@ -2435,7 +2462,7 @@ const BADGE_DEFS = [
 /* =====================================================================
    VUE APLIKACE
    ===================================================================== */
-createApp({
+const app = createApp({
   setup() {
     /* ---------- Světlý / tmavý režim ---------- */
     const THEME_KEY = 'studijniHubTheme_v1';
@@ -3849,7 +3876,14 @@ createApp({
       handleSubjectImageUpload, removeSubjectImage,
     };
   },
-}).mount('#app');
+});
+// DOČASNÁ DIAGNOSTIKA (viz <head>): zachytí i chyby, ke kterým dojde uvnitř
+// Vue (render, watch, lifecycle hook) - ty by jinak jen tiše skončily v
+// konzoli, kterou na mobilu bez Macu nejde otevřít.
+if (window.__vueErrorHandler) {
+  app.config.errorHandler = window.__vueErrorHandler;
+}
+app.mount('#app');
 </script>
 
 <!-- Volitelná PWA registrace: service worker funguje jen na http/https originu
