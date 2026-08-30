@@ -32,9 +32,25 @@
         document.body ? document.body.appendChild(el) : window.addEventListener('DOMContentLoaded', function () { document.body.appendChild(el); });
       } catch (e2) { /* i diagnostika může selhat - nic víc s tím nenaděláme */ }
     }
+    // Poznámka k "true" na konci: chyba typu "soubor se nepodařilo stáhnout"
+    // (např. zablokovaný/needostupný CDN) se na window nešíří běžným
+    // "bubbling" způsobem jako normální JS chyby - musí se odchytávat ve
+    // "capture" fázi, jinak by právě tenhle nejčastější mobilní problém
+    // (blokovaná síť/VPN/firewall) touto diagnostikou vůbec nešel zachytit.
     window.addEventListener('error', function (e) {
+      var url = e.target && e.target !== window && (e.target.src || e.target.href);
+      // Font (Google Fonts) selhat může - appka pak jen použije náhradní
+      // systémové písmo, nic se nerozbije. Banner má smysl jen u souborů,
+      // bez kterých appka vůbec nenaběhne (Tailwind, Vue) - ty řeší i
+      // konkrétní onerror atributy přímo na <script> tazích níž.
+      var isCriticalResourceError = url && (url.indexOf('tailwindcss.com') !== -1 || url.indexOf('jsdelivr.net') !== -1);
+      if (isCriticalResourceError) {
+        window.__showCdnFailure && window.__showCdnFailure(url.indexOf('tailwindcss.com') !== -1 ? 'Tailwind CSS' : 'Vue.js', url);
+        return;
+      }
+      if (url) return; // nekritický soubor (např. font) - tichá chyba, appka běží dál
       showError('JS chyba', (e.message || '') + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || '') + '\n' + (e.error && e.error.stack ? e.error.stack : ''));
-    });
+    }, true);
     window.addEventListener('unhandledrejection', function (e) {
       var r = e.reason;
       showError('Neošetřená Promise chyba', (r && r.stack) ? r.stack : String(r));
@@ -42,6 +58,33 @@
     window.__vueErrorHandler = function (err, instance, info) {
       showError('Vue chyba (' + info + ')', err && err.stack ? err.stack : String(err));
     };
+    window.__cdnWatchdogShown = false;
+    window.__showCdnFailure = function (what, url) {
+      if (window.__cdnWatchdogShown) return;
+      window.__cdnWatchdogShown = true;
+      showError(
+        'Nepodařilo se načíst: ' + what,
+        url + '\n\n' +
+        'Appka potřebuje stáhnout pár souborů z internetu (Tailwind, Vue, font) a tohle ' +
+        'se nepodařilo ani po několika vteřinách - nejčastější příčina na mobilu je ' +
+        'Wi-Fi/mobilní síť, VPN nebo blokování reklam (adblock/firewall).\n\n' +
+        'Zkus prosím: 1) přepnout z Wi-Fi na mobilní data (nebo naopak), ' +
+        '2) dočasně vypnout VPN nebo adblock, 3) stránku znovu načíst.'
+      );
+    };
+    // Pojistka navíc k oběma listenerům výše (kdyby síťový požadavek nezamítla
+    // hláškou, ale nechal ho "viset" bez odpovědi - v tom případě by
+    // window "load" event nikdy nenastal, takže časovač startuje hned teď,
+    // nezávisle na "load"): po 7 vteřinách zkontroluje, jestli se Tailwind
+    // a Vue vůbec načetly, a pokud ne, ukáže srozumitelnou hlášku i bez
+    // jakékoliv JS chyby.
+    setTimeout(function () {
+      if (typeof window.tailwind === 'undefined') {
+        window.__showCdnFailure('Tailwind CSS', 'https://cdn.tailwindcss.com');
+      } else if (typeof window.Vue === 'undefined') {
+        window.__showCdnFailure('Vue.js', 'https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js');
+      }
+    }, 7000);
   })();
 </script>
 
@@ -63,20 +106,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
-<!-- Tailwind CSS (Play CDN / JIT v prohlížeči) -->
-<script src="https://cdn.tailwindcss.com"></script>
+<!-- Tailwind CSS (Play CDN / JIT v prohlížeči). onerror: viz __showCdnFailure
+     výše v hlavičce - okamžitě upozorní, pokud se soubor z CDN vůbec
+     nepodaří stáhnout (typicky blokovaná síť/VPN/adblock na mobilu). -->
+<script src="https://cdn.tailwindcss.com" onerror="window.__showCdnFailure && window.__showCdnFailure('Tailwind CSS', this.src)"></script>
 <script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+  // Pojistka: pokud se Tailwind z nějakého důvodu nenačetl (viz onerror výše),
+  // tenhle blok by jinak sám shodil zbytek stránky chybou "tailwind is not
+  // defined" ještě předtím, než diagnostika stihne cokoliv ukázat.
+  if (window.tailwind) {
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        }
       }
     }
   }
 </script>
 
 <!-- Vue 3 (globální build s runtime kompilátorem šablon) -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous" onerror="window.__showCdnFailure && window.__showCdnFailure('Vue.js', this.src)"></script>
 
 <style>
   /* ===================== BAREVNÉ PROMĚNNÉ (TMAVÝ / SVĚTLÝ REŽIM) =====================
