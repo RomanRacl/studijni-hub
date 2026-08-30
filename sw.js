@@ -19,7 +19,7 @@
 // bez problémů. Jediné, co se pořád stahuje z internetu, je font (Google
 // Fonts) - a ten není kritický, appka bez něj jen použije náhradní písmo.
 
-const CACHE_NAME = 'studijni-hub-cache-v4';
+const CACHE_NAME = 'studijni-hub-cache-v5';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
@@ -57,42 +57,58 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Strategie "network-first, fallback na cache" pro vlastní HTML (aby se po
-// nasazení nové verze appka aktualizovala co nejdřív), a "cache-first,
-// aktualizace na pozadí" pro externí knihovny (Vue, Tailwind, font) - ty se
-// mění zřídka, takže je výhodnější je servírovat okamžitě z cache a jen si
-// je na pozadí obnovit pro příště.
+// Strategie "network-first, fallback na cache" pro VŠECHNY soubory appky
+// (HTML, Tailwind, Vue, manifest) - aby se po nahrání nové verze na hosting
+// appka aktualizovala hned při dalším načtení, ne až se "sama od sebe"
+// rozhodne obnovit cache na pozadí.
+//
+// DŮLEŽITÉ - tohle byla skutečná příčina toho, že se opravy dlouho vůbec
+// neprojevovaly na reálném telefonu, i když nové soubory už dávno ležely na
+// GitHubu: dřív měly Tailwind/Vue strategii "cache-first" (rovnou z cache,
+// aktualizace až na pozadí pro příště) - jakmile telefon jednou (třeba před
+// týdny) úspěšně stáhl a uložil vue.global.prod.js, každé další otevření
+// appky dostalo OKAMŽITĚ tu starou uloženou verzi, bez ohledu na to, co nové
+// mezitím přibylo na GitHubu - a nová verze se v cache vyměnila až tiše na
+// pozadí, kdy si toho nikdo nevšiml. Teprve network-first u úplně všeho tohle
+// definitivně řeší: appka se vždycky nejdřív pokusí stáhnout čerstvou verzi,
+// a jen když se to nepovede (offline), použije to, co má uložené z minula.
+//
+// Cache-first (rovnou z uloženého, bez čekání na síť) zůstává jen u velkých
+// binárních souborů, které se prakticky nikdy nemění (video, obrázky) - tam
+// dává smysl upřednostnit rychlost před okamžitou aktualizací.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  const isAppShell = req.url.includes('studijni-hub.html') || req.url.endsWith('/');
+  const isLargeStaticAsset = /\.(mp4|jpg|jpeg|png|webp)$/i.test(req.url);
 
-  if (isAppShell) {
+  if (isLargeStaticAsset) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-          return res;
-        })
-        .catch(() => caches.match(req))
+      caches.match(req).then((cached) => {
+        const networkFetch = fetch(req)
+          .then((res) => {
+            if (res && (res.status === 200 || res.type === 'opaque')) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        return cached || networkFetch;
+      })
     );
     return;
   }
 
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const networkFetch = fetch(req)
-        .then((res) => {
-          if (res && (res.status === 200 || res.type === 'opaque')) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && (res.status === 200 || res.type === 'opaque')) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });
