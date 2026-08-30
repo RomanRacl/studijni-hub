@@ -37,15 +37,22 @@
     // "bubbling" způsobem jako normální JS chyby - musí se odchytávat ve
     // "capture" fázi, jinak by právě tenhle nejčastější mobilní problém
     // (blokovaná síť/VPN/firewall) touto diagnostikou vůbec nešel zachytit.
+    // Pozn.: Tailwind i Vue už NEJSOU načítané z internetu (cdn.tailwindcss.com /
+    // cdn.jsdelivr.net) - to byl dlouho neodhalený skutečný důvod, proč appka na
+    // mobilu (Safari i Chrome) vždy skončila jen s navbarem a fotkou na pozadí,
+    // zatímco na počítači fungovala: mobilní síť/VPN/adblock uměly tyhle dvě
+    // konkrétní adresy blokovat, zatímco počítač byl na jiném připojení. Oba
+    // soubory jsou teď součástí appky (tailwind-play-cdn.js, vue.global.prod.js,
+    // viz <script> tagy níž) a appka je tak na síti při startu nezávislá -
+    // funguje stejně na počítači, mobilu i tabletu, i offline (viz sw.js).
     window.addEventListener('error', function (e) {
       var url = e.target && e.target !== window && (e.target.src || e.target.href);
-      // Font (Google Fonts) selhat může - appka pak jen použije náhradní
-      // systémové písmo, nic se nerozbije. Banner má smysl jen u souborů,
-      // bez kterých appka vůbec nenaběhne (Tailwind, Vue) - ty řeší i
-      // konkrétní onerror atributy přímo na <script> tazích níž.
-      var isCriticalResourceError = url && (url.indexOf('tailwindcss.com') !== -1 || url.indexOf('jsdelivr.net') !== -1);
+      // Font (Google Fonts) je jediná zbývající věc, která se pořád stahuje
+      // z internetu - když selže, appka jen použije náhradní systémové
+      // písmo, nic se nerozbije, takže na to banner není potřeba.
+      var isCriticalResourceError = url && (url.indexOf('tailwind-play-cdn.js') !== -1 || url.indexOf('vue.global.prod.js') !== -1);
       if (isCriticalResourceError) {
-        window.__showCdnFailure && window.__showCdnFailure(url.indexOf('tailwindcss.com') !== -1 ? 'Tailwind CSS' : 'Vue.js', url);
+        window.__showLoadFailure && window.__showLoadFailure(url.indexOf('tailwind-play-cdn.js') !== -1 ? 'Tailwind CSS' : 'Vue.js', url);
         return;
       }
       if (url) return; // nekritický soubor (např. font) - tichá chyba, appka běží dál
@@ -58,33 +65,31 @@
     window.__vueErrorHandler = function (err, instance, info) {
       showError('Vue chyba (' + info + ')', err && err.stack ? err.stack : String(err));
     };
-    window.__cdnWatchdogShown = false;
-    window.__showCdnFailure = function (what, url) {
-      if (window.__cdnWatchdogShown) return;
-      window.__cdnWatchdogShown = true;
+    window.__loadFailureShown = false;
+    window.__showLoadFailure = function (what, url) {
+      if (window.__loadFailureShown) return;
+      window.__loadFailureShown = true;
       showError(
         'Nepodařilo se načíst: ' + what,
         url + '\n\n' +
-        'Appka potřebuje stáhnout pár souborů z internetu (Tailwind, Vue, font) a tohle ' +
-        'se nepodařilo ani po několika vteřinách - nejčastější příčina na mobilu je ' +
-        'Wi-Fi/mobilní síť, VPN nebo blokování reklam (adblock/firewall).\n\n' +
-        'Zkus prosím: 1) přepnout z Wi-Fi na mobilní data (nebo naopak), ' +
-        '2) dočasně vypnout VPN nebo adblock, 3) stránku znovu načíst.'
+        'Appka potřebuje tenhle soubor, aby se vůbec spustila, a nepodařilo se ho ' +
+        'načíst - ať už proto, že chybí vedle studijni-hub.html na hostingu, nebo ' +
+        'proto, že appku otevíráš přímo dvojklikem ze souboru (file://) místo přes ' +
+        'http/https adresu.\n\n' +
+        'Zkontroluj prosím, že jsou vedle studijni-hub.html i soubory ' +
+        'tailwind-play-cdn.js a vue.global.prod.js, a appku otevři přes webovou adresu.'
       );
     };
-    // Pojistka navíc k oběma listenerům výše (kdyby síťový požadavek nezamítla
-    // hláškou, ale nechal ho "viset" bez odpovědi - v tom případě by
-    // window "load" event nikdy nenastal, takže časovač startuje hned teď,
-    // nezávisle na "load"): po 7 vteřinách zkontroluje, jestli se Tailwind
-    // a Vue vůbec načetly, a pokud ne, ukáže srozumitelnou hlášku i bez
-    // jakékoliv JS chyby.
+    // Pojistka navíc k listeneru výše (kdyby se soubor nenačetl, ale bez chybové
+    // hlášky - v tom případě startuje časovač hned teď, nezávisle na "load"):
+    // po 5 vteřinách zkontroluje, jestli se Tailwind a Vue vůbec načetly.
     setTimeout(function () {
       if (typeof window.tailwind === 'undefined') {
-        window.__showCdnFailure('Tailwind CSS', 'https://cdn.tailwindcss.com');
+        window.__showLoadFailure('Tailwind CSS', 'tailwind-play-cdn.js');
       } else if (typeof window.Vue === 'undefined') {
-        window.__showCdnFailure('Vue.js', 'https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js');
+        window.__showLoadFailure('Vue.js', 'vue.global.prod.js');
       }
-    }, 7000);
+    }, 5000);
   })();
 </script>
 
@@ -106,10 +111,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
-<!-- Tailwind CSS (Play CDN / JIT v prohlížeči). onerror: viz __showCdnFailure
-     výše v hlavičce - okamžitě upozorní, pokud se soubor z CDN vůbec
-     nepodaří stáhnout (typicky blokovaná síť/VPN/adblock na mobilu). -->
-<script src="https://cdn.tailwindcss.com" onerror="window.__showCdnFailure && window.__showCdnFailure('Tailwind CSS', this.src)"></script>
+<!-- Tailwind CSS (Play CDN / JIT v prohlížeči) - SOUBOR VEDLE studijni-hub.html,
+     ne z internetu. Dřív se stahoval přímo z cdn.tailwindcss.com při každém
+     spuštění - na počítači to fungovalo, ale na mobilu (v Safari i Chrome)
+     tenhle konkrétní soubor uměla blokovat mobilní síť/VPN/adblock, takže se
+     appka vůbec nespustila (zůstal jen navbar a fotka na pozadí, beze změny
+     napříč všemi předchozími opravami - protože ty řešily něco jiného, tohle
+     bylo o úroveň níž). Teď appka žádný soubor ke spuštění z internetu
+     nepotřebuje (jen font, viz níž - a ten není kritický). onerror: viz
+     __showLoadFailure výše v hlavičce. -->
+<script src="tailwind-play-cdn.js" onerror="window.__showLoadFailure && window.__showLoadFailure('Tailwind CSS', this.src)"></script>
 <script>
   // Pojistka: pokud se Tailwind z nějakého důvodu nenačetl (viz onerror výše),
   // tenhle blok by jinak sám shodil zbytek stránky chybou "tailwind is not
@@ -125,8 +136,9 @@
   }
 </script>
 
-<!-- Vue 3 (globální build s runtime kompilátorem šablon) -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous" onerror="window.__showCdnFailure && window.__showCdnFailure('Vue.js', this.src)"></script>
+<!-- Vue 3 (globální build s runtime kompilátorem šablon) - stejně jako Tailwind
+     výše, teď soubor vedle studijni-hub.html místo cdn.jsdelivr.net. -->
+<script src="vue.global.prod.js" onerror="window.__showLoadFailure && window.__showLoadFailure('Vue.js', this.src)"></script>
 
 <style>
   /* ===================== BAREVNÉ PROMĚNNÉ (TMAVÝ / SVĚTLÝ REŽIM) =====================

@@ -5,14 +5,21 @@
 // soubor). Aby tento soubor začal fungovat a appka byla instalovatelná a plně
 // dostupná offline, je potřeba všechny soubory (studijni-hub.html,
 // manifest.json, icon-192.png, icon-512.png, hero-video.mp4, hero-poster.jpg,
-// sw.js) nahrát pohromadě na jakýkoliv webový hosting (i ten nejjednodušší,
-// např. GitHub Pages, Netlify, nebo lokální server přes
-// "python3 -m http.server" ve stejné složce) a appku otevřít přes http://
-// nebo https:// (u lokálního serveru i http://localhost funguje). Bez toho
-// appka funguje úplně stejně jako dřív, jen si knihovny (Tailwind, Vue, font)
-// stahuje z internetu při každém prvním načtení.
+// tailwind-play-cdn.js, vue.global.prod.js, sw.js - celkem 9 souborů) nahrát
+// pohromadě na jakýkoliv webový hosting (i ten nejjednodušší, např. GitHub
+// Pages, Netlify, nebo lokální server přes "python3 -m http.server" ve
+// stejné složce) a appku otevřít přes http:// nebo https:// (u lokálního
+// serveru i http://localhost funguje). Bez toho appka funguje úplně stejně
+// jako dřív, jen bez offline režimu a bez možnosti instalace na plochu.
+//
+// Tailwind a Vue jsou od teď součástí appky (tailwind-play-cdn.js,
+// vue.global.prod.js) místo stahování z cdn.tailwindcss.com/cdn.jsdelivr.net
+// při každém spuštění - to se na mobilních sítích (Wi-Fi/VPN/adblock) umělo
+// zablokovat a appka se pak vůbec nespustila, i když na počítači fungovala
+// bez problémů. Jediné, co se pořád stahuje z internetu, je font (Google
+// Fonts) - a ten není kritický, appka bez něj jen použije náhradní písmo.
 
-const CACHE_NAME = 'studijni-hub-cache-v3';
+const CACHE_NAME = 'studijni-hub-cache-v4';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
@@ -26,8 +33,8 @@ const CORE_ASSETS = [
   './icon-512.png',
   './hero-video.mp4',
   './hero-poster.jpg',
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js',
+  './tailwind-play-cdn.js',
+  './vue.global.prod.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
 
