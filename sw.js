@@ -11,7 +11,7 @@
 // funguje). Bez toho appka funguje úplně stejně jako dřív, jen si knihovny
 // (Tailwind, Vue, font) stahuje z internetu při každém prvním načtení.
 
-const CACHE_NAME = 'studijni-hub-cache-v1';
+const CACHE_NAME = 'studijni-hub-cache-v2';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
