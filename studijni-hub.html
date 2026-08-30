@@ -24,11 +24,24 @@
      hlášce nedá dostat). -->
 <script>
   (function () {
+    // Pozn.: jedna chyba (typicky uvnitř vykreslování seznamu - v-for) se dřív
+    // dokázala zopakovat klidně desetkrát za sebou a zaplnit celou obrazovku
+    // stejnými bannery přes sebe, takže bylo skoro nemožné cokoliv přečíst.
+    // Teď se stejná dvojice (nadpis + text chyby) ukáže jen jednou a další
+    // opakování se jen tiše počítají do titulku toho prvního banneru.
+    var shownErrors = {};
     function showError(label, detail) {
       try {
+        var sig = label + '|' + detail;
+        if (shownErrors[sig]) {
+          shownErrors[sig].count++;
+          shownErrors[sig].el.textContent = '⚠️ ' + label + ' (×' + shownErrors[sig].count + ')\n' + detail;
+          return;
+        }
         var el = document.createElement('div');
         el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7f1d1d;color:#fff;padding:12px;font:12px/1.4 monospace;white-space:pre-wrap;max-height:70vh;overflow:auto;';
         el.textContent = '⚠️ ' + label + '\n' + detail;
+        shownErrors[sig] = { el: el, count: 1 };
         document.body ? document.body.appendChild(el) : window.addEventListener('DOMContentLoaded', function () { document.body.appendChild(el); });
       } catch (e2) { /* i diagnostika může selhat - nic víc s tím nenaděláme */ }
     }
@@ -137,7 +150,16 @@
 </script>
 
 <!-- Vue 3 (globální build s runtime kompilátorem šablon) - stejně jako Tailwind
-     výše, teď soubor vedle studijni-hub.html místo cdn.jsdelivr.net. -->
+     výše, teď soubor vedle studijni-hub.html místo cdn.jsdelivr.net.
+     ZÁMĚRNĚ verze 3.4.38, ne nejnovější 3.5.x: na verzi 3.5.42 se v reálném
+     Safari na iPhonu (v Safari i Chrome, protože oba běží na stejném enginu
+     WebKit) objevovala chyba přímo uvnitř Vue při vykreslování seznamu karet
+     předmětů - "InvalidCharacterError: Invalid qualified name: '-'" v
+     patchAttr - dost pravděpodobně WebKit-specifická regrese v novém
+     Transition/TransitionGroup kódu 3.5.x, která se v Chrome (ani v jeho
+     mobilní simulaci) vůbec neprojevila, takže ji nešlo odhalit vzdáleně.
+     3.4.38 je starší, déle prověřená řada bez téhle chyby a appka nepoužívá
+     žádnou funkci, která by vyžadovala novější verzi. -->
 <script src="vue.global.prod.js" onerror="window.__showLoadFailure && window.__showLoadFailure('Vue.js', this.src)"></script>
 
 <style>
