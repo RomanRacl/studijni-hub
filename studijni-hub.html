@@ -64,7 +64,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
 <!-- Tailwind CSS (Play CDN / JIT v prohlížeči) -->
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -76,7 +76,7 @@
 </script>
 
 <!-- Vue 3 (globální build s runtime kompilátorem šablon) -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" crossorigin="anonymous"></script>
 
 <style>
   /* ===================== BAREVNÉ PROMĚNNÉ (TMAVÝ / SVĚTLÝ REŽIM) =====================
@@ -2844,7 +2844,10 @@ const app = createApp({
       if (!el) return;
       el.scrollBy({ left: dir * el.clientWidth * 0.75, behavior: 'smooth' });
     }
-    watch(() => visibleSubjects.value.length, () => nextTick(updateScrollState));
+    // Pozn.: watch() sledující visibleSubjects je až za jeho definicí (viz
+    // "Archivace předmětů" níže) - watch() svůj getter vyhodnotí hned při
+    // vytvoření, takže odkaz na visibleSubjects dřív, než je deklarovaný,
+    // by shodil celý dashboard (ReferenceError kvůli temporal dead zone).
 
     /* ---------- Přetahování (drag & drop) pro vlastní pořadí předmětů ----------
        Sleduje se ID taženého předmětu (ne pozice ve v-for), protože karusel může
@@ -2881,6 +2884,7 @@ const app = createApp({
     const visibleSubjects = computed(() =>
       subjects.filter((s) => showArchived.value || !s.archived)
     );
+    watch(() => visibleSubjects.value.length, () => nextTick(updateScrollState));
     const archivedCount = computed(() => subjects.filter((s) => s.archived).length);
     function toggleArchiveSubject(subject) {
       if (!subject) return;
