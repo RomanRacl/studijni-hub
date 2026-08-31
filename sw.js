@@ -5,7 +5,8 @@
 // soubor). Aby tento soubor začal fungovat a appka byla instalovatelná a plně
 // dostupná offline, je potřeba všechny soubory (studijni-hub.html,
 // manifest.json, icon-192.png, icon-512.png, hero-video.mp4, hero-poster.jpg,
-// tailwind-play-cdn.js, vue.global.prod.js, sw.js - celkem 9 souborů) nahrát
+// tailwind-play-cdn.js, vue.global.prod.js, sw.js a celou složku katex/ se
+// všemi jejími soubory) nahrát se zachováním stejné struktury složek
 // pohromadě na jakýkoliv webový hosting (i ten nejjednodušší, např. GitHub
 // Pages, Netlify, nebo lokální server přes "python3 -m http.server" ve
 // stejné složce) a appku otevřít přes http:// nebo https:// (u lokálního
@@ -19,12 +20,15 @@
 // bez problémů. Jediné, co se pořád stahuje z internetu, je font (Google
 // Fonts) - a ten není kritický, appka bez něj jen použije náhradní písmo.
 
-const CACHE_NAME = 'studijni-hub-cache-v5';
+const CACHE_NAME = 'studijni-hub-cache-v6';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
 // hero-video.mp4 a hero-poster.jpg jsou samostatné soubory (ne vložené jako
 // base64 v HTML/JS) - viz komentář u <video> v šabloně.
+// katex/* (css, js a woff2 fonty) - samostatně hostovaný KaTeX pro matematické
+// vzorce v zápiscích, stejný důvod jako u tailwind-play-cdn.js/vue.global.prod.js
+// výše: appka nesmí při startu záviset na žádném externím CDN.
 const CORE_ASSETS = [
   './',
   './studijni-hub.html',
@@ -35,6 +39,28 @@ const CORE_ASSETS = [
   './hero-poster.jpg',
   './tailwind-play-cdn.js',
   './vue.global.prod.js',
+  './katex/katex.min.css',
+  './katex/katex.min.js',
+  './katex/fonts/KaTeX_AMS-Regular.woff2',
+  './katex/fonts/KaTeX_Caligraphic-Bold.woff2',
+  './katex/fonts/KaTeX_Caligraphic-Regular.woff2',
+  './katex/fonts/KaTeX_Fraktur-Bold.woff2',
+  './katex/fonts/KaTeX_Fraktur-Regular.woff2',
+  './katex/fonts/KaTeX_Main-Bold.woff2',
+  './katex/fonts/KaTeX_Main-BoldItalic.woff2',
+  './katex/fonts/KaTeX_Main-Italic.woff2',
+  './katex/fonts/KaTeX_Main-Regular.woff2',
+  './katex/fonts/KaTeX_Math-BoldItalic.woff2',
+  './katex/fonts/KaTeX_Math-Italic.woff2',
+  './katex/fonts/KaTeX_SansSerif-Bold.woff2',
+  './katex/fonts/KaTeX_SansSerif-Italic.woff2',
+  './katex/fonts/KaTeX_SansSerif-Regular.woff2',
+  './katex/fonts/KaTeX_Script-Regular.woff2',
+  './katex/fonts/KaTeX_Size1-Regular.woff2',
+  './katex/fonts/KaTeX_Size2-Regular.woff2',
+  './katex/fonts/KaTeX_Size3-Regular.woff2',
+  './katex/fonts/KaTeX_Size4-Regular.woff2',
+  './katex/fonts/KaTeX_Typewriter-Regular.woff2',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
 

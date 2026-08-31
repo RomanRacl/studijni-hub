@@ -210,6 +210,15 @@
      žádnou funkci, která by vyžadovala novější verzi. -->
 <script src="vue.global.prod.js" onerror="window.__showLoadFailure && window.__showLoadFailure('Vue.js', this.src)"></script>
 
+<!-- KaTeX (matematické vzorce v zápiscích) - stejně jako Tailwind/Vue výše
+     samostatně hostováno ve složce katex/ vedle studijni-hub.html, ne z
+     internetu. Na rozdíl od Tailwindu/Vue ale appka bez KaTeXu dál normálně
+     funguje - jen se vzorec (viz renderMath) zobrazí jako obyčejný text místo
+     naformátovaného vzorce, proto tu záměrně není onerror hlášení jako u
+     Tailwindu/Vue výše (žádná chyba, která by celou appku shodila). -->
+<link rel="stylesheet" href="katex/katex.min.css">
+<script src="katex/katex.min.js"></script>
+
 <style>
   /* ===================== BAREVNÉ PROMĚNNÉ (TMAVÝ / SVĚTLÝ REŽIM) =====================
      Výchozí (:root) hodnoty jsou tmavé - appka byla od začátku navržená jako tmavá.
@@ -755,6 +764,23 @@
   .note-content .note-heading { font-weight: 700; color: var(--btn-secondary-text); margin: 0.6rem 0 0.3rem; font-size: 0.95rem; }
   .note-content .note-list { list-style: disc; padding-left: 1.25rem; margin: 0.3rem 0; }
   .note-content strong { color: var(--page-text); }
+  .note-content .note-code {
+    background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: 0.5rem;
+    padding: 0.6rem 0.8rem; margin: 0.5rem 0; overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem; line-height: 1.5;
+  }
+  .note-content .note-table { border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; max-width: 100%; display: block; overflow-x: auto; }
+  .note-content .note-table th, .note-content .note-table td { border: 1px solid var(--border-soft); padding: 0.35rem 0.6rem; text-align: left; }
+  .note-content .note-table th { background: var(--surface-3); font-weight: 700; color: var(--page-text); }
+  .note-content .note-math-block { margin: 0.6rem 0; overflow-x: auto; padding: 0.4rem 0; }
+  .note-content .note-math-block .katex-display { margin: 0; }
+  .note-content .katex { color: var(--page-text); font-size: 1.05em; }
+  .note-content .note-math-fallback {
+    display: inline-block; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--surface-3); border: 1px dashed var(--border-soft); border-radius: 0.35rem;
+    padding: 0.1rem 0.4rem; font-size: 0.85em; color: var(--muted-text, #94a3b8);
+  }
+  .note-content .note-math-fallback-block { display: block; padding: 0.5rem 0.7rem; margin: 0.5rem 0; }
   .checklist-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.3rem 0; cursor: pointer; }
   .checklist-row input[type="checkbox"] { margin-top: 0.2rem; width: 1.05rem; height: 1.05rem; accent-color: #22d3ee; cursor: pointer; flex-shrink: 0; }
   .checklist-done { text-decoration: line-through; opacity: 0.55; }
@@ -834,6 +860,14 @@
     border-radius: 0.7rem;
     padding: 0.6rem 0.8rem;
   }
+
+  /* Štítky u zápisu - kliknutím se hledá napříč všemi předměty (searchByTag) */
+  .note-tag-chip {
+    font-size: 0.68rem; font-weight: 600; color: var(--text-muted);
+    background: var(--surface-3); border: 1px solid var(--border-soft);
+    border-radius: 9999px; padding: 0.1rem 0.55rem;
+  }
+  .note-tag-chip:hover { color: var(--page-text); border-color: #22d3ee; }
 
   /* ===================== ODZNAKY ZA POKROK ===================== */
   .badge-tile {
@@ -1057,7 +1091,7 @@
             ref="globalSearchEl"
             v-model="globalSearchQuery"
             type="text"
-            placeholder="Hledat ve všech zápisech napříč předměty… (zkratka: /)"
+            placeholder="Hledat ve všech zápisech i štítcích napříč předměty… (zkratka: /)"
             class="input !pl-11"
           />
           <button v-if="globalSearchQuery" @click="globalSearchQuery = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
@@ -1118,13 +1152,28 @@
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
           </button>
+          <button v-if="weeklyPlan.length > 0" @click="showWeeklyPlan = !showWeeklyPlan" class="btn-ghost !text-emerald-300">
+            🗓️ {{ showWeeklyPlan ? 'Skrýt plánovač' : 'Týdenní plánovač' }}
+          </button>
 
           <div class="flex items-center gap-2 ml-auto">
+            <button
+              v-if="notificationsSupported && notificationPermission === 'default'"
+              @click="enableNotifications"
+              class="btn-ghost !text-xs !text-sky-300"
+              title="Appka ti při otevření připomene blížící se zkoušku nebo že sis dnes ještě nezaprocvičoval/a. Funguje jen když appku otevřeš - bez vlastního serveru neumí posílat oznámení, když je appka úplně zavřená."
+            >🔔 Zapnout připomínky</button>
+            <span
+              v-else-if="notificationsSupported && notificationPermission === 'granted'"
+              class="text-xs text-slate-500 select-none"
+              title="Appka ti při otevření připomene blížící se zkoušku nebo že sis dnes ještě nezaprocvičoval/a."
+            >🔔 Připomínky zapnuté</span>
             <span
               class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 flex items-center gap-1 select-none"
               :class="{ 'text-emerald-400 border-emerald-800': syncStatus === 'synced', 'text-amber-400 border-amber-800': syncStatus === 'error', 'animate-pulse': syncStatus === 'syncing' }"
-              :title="syncStatus === 'error' ? 'Data zůstávají bezpečně uložená v appce, do cloudu se jen teď nepodařilo odeslat/stáhnout (např. bez internetu) - zkusí se to znovu při další změně nebo dalším otevření appky.' : 'Data se automaticky ukládají i do cloudu, aby byla stejná na počítači i na mobilu/tabletu.'"
-            >{{ syncStatusLabel }}</span>
+              :title="(syncStatus === 'error' ? 'Data zůstávají bezpečně uložená v appce, do cloudu se jen teď nepodařilo odeslat/stáhnout (např. bez internetu) - zkusí se to znovu při další změně nebo dalším otevření appky.' : 'Data se automaticky ukládají i do cloudu, aby byla stejná na počítači i na mobilu/tabletu.') + (lastSyncedLabel ? ` · naposledy ${lastSyncedLabel}` : '')"
+            >{{ syncStatusLabel }}<span v-if="lastSyncedLabel" class="opacity-70 hidden sm:inline"> · {{ lastSyncedLabel }}</span></span>
+            <button @click="syncNow" class="btn-ghost !text-xs !p-1.5" title="Synchronizovat teď ručně" :disabled="syncStatus === 'syncing'">🔄</button>
             <button @click="showTrashModal = true" class="btn-secondary text-xs !py-1.5 !px-3" title="Smazané předměty a zápisy zůstávají dočasně v koši, odkud je jde obnovit">🗑️ Koš<span v-if="trash.length"> ({{ trash.length }})</span></button>
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
@@ -1215,6 +1264,24 @@
                   <span class="text-slate-500">{{ formatDateShortCs(x.subject.examDate) }}</span>
                   <span class="px-2 py-0.5 rounded-full font-bold" :class="x.info.cls">{{ x.info.shortLabel }}</span>
                 </span>
+              </button>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showWeeklyPlan && weeklyPlan.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Co se učit tento týden</p>
+            <p class="text-xs text-slate-500 mb-3">Appka rozvrhla předměty podle blížících se zkoušek a toho, jak dávno jsi u kterého byl/a - je to jen doporučení, klidně si vyber jinak.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              <button
+                v-for="d in weeklyPlan" :key="d.key"
+                @click="openSubject(d.subject.id)"
+                class="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition text-left"
+              >
+                <span class="text-xs uppercase tracking-wide text-slate-500">{{ d.dayLabel }} · {{ d.shortDate }}</span>
+                <span class="text-sm font-semibold flex items-center gap-1.5">{{ d.subject.emoji }} {{ d.subject.name }}</span>
+                <span class="text-xs text-slate-500 truncate">{{ d.reason }}</span>
               </button>
             </div>
           </div>
@@ -1359,6 +1426,7 @@
         <section class="panel">
           <h3 class="text-lg font-bold mb-1 flex items-center gap-2">🧠 Procvičování</h3>
           <p class="text-slate-400 text-sm mb-2">{{ quizCategoryLabel }}</p>
+          <p v-if="dueReviewCount > 0" class="text-xs text-amber-400 mb-2" title="Appka teď tyhle otázky nabízí přednostně, ať se ti nezapomenou (rozložené opakování)">📅 K opakování dnes: {{ dueReviewCount }}</p>
           <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 mb-4">
             <span>🧠 vyřešeno: <b class="text-slate-300">{{ activeSubjectStats.solved }}</b></span>
             <span v-if="activeSubjectStats.accuracy !== null">🎯 úspěšnost: <b class="text-slate-300">{{ activeSubjectStats.accuracy }} %</b></span>
@@ -1553,6 +1621,7 @@
 
           <form @submit.prevent="addNote" class="space-y-2 mb-6">
             <input ref="noteTitleEl" v-model="noteForm.title" required class="input" placeholder="Název zápisu (např. Kapitola 3 – Zlomky)" />
+            <input v-model="noteForm.tagsInput" class="input !py-1.5 !text-sm" placeholder="🏷️ Štítky, odděl čárkou (např. vzorce, důležité)" />
             <div class="flex gap-1">
               <button type="button" @click="noteForm.kind = 'text'" class="quiz-mode-btn !py-1.5" :class="{ 'quiz-mode-active': noteForm.kind === 'text' }">📝 Text</button>
               <button type="button" @click="noteForm.kind = 'checklist'" class="quiz-mode-btn !py-1.5" :class="{ 'quiz-mode-active': noteForm.kind === 'checklist' }">✅ Checklist</button>
@@ -1564,6 +1633,10 @@
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'italic')" class="fmt-btn italic" title="Kurzíva">I</button>
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'bullet')" class="fmt-btn" title="Odrážkový seznam">• Seznam</button>
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'heading')" class="fmt-btn" title="Nadpis">H Nadpis</button>
+                <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'table')" class="fmt-btn" title="Vložit jednoduchou tabulku">▦ Tabulka</button>
+                <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'code')" class="fmt-btn" title="Blok kódu (text se zobrazí přesně tak, jak je napsaný)">{ } Kód</button>
+                <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'math-inline')" class="fmt-btn" title="Matematický vzorec v textu řádku (LaTeX, mezi $ $)">Σ Vzorec</button>
+                <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'math-block')" class="fmt-btn" title="Matematický vzorec na samostatném řádku (LaTeX, mezi $$ $$)">Σ Vzorec (blok)</button>
                 <label class="fmt-btn cursor-pointer" title="Přidat obrázek (max. 4 na zápis)">
                   📎 Obrázek
                   <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, noteForm)" />
@@ -1573,7 +1646,7 @@
                 ref="noteContentEl"
                 v-model="noteForm.content"
                 rows="4" class="input"
-                placeholder="Obsah zápisu… (podporuje **tučně**, *kurzívu*, řádky s „- “ jako odrážky a „## “ jako nadpis)"
+                placeholder="Obsah zápisu… (podporuje **tučně**, *kurzívu*, řádky s „- “ jako odrážky, „## “ jako nadpis, tabulky a blok kódu - viz tlačítka výš)"
               ></textarea>
               <div v-if="noteForm.images.length > 0" class="flex flex-wrap gap-3">
                 <div v-for="(img, i) in noteForm.images" :key="i" class="composing-thumb-card">
@@ -1636,6 +1709,7 @@
                 <!-- Editační režim -->
                 <div v-if="editingNoteId === n.id">
                   <input v-model="editForm.title" class="input mb-2" placeholder="Název zápisu" />
+                  <input v-model="editForm.tagsInput" class="input mb-2 !py-1.5 !text-sm" placeholder="🏷️ Štítky, odděl čárkou" />
 
                   <template v-if="editForm.kind === 'text'">
                     <div class="flex flex-wrap gap-1 mb-2">
@@ -1643,6 +1717,10 @@
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'italic')" class="fmt-btn italic" title="Kurzíva">I</button>
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'bullet')" class="fmt-btn" title="Odrážkový seznam">• Seznam</button>
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'heading')" class="fmt-btn" title="Nadpis">H Nadpis</button>
+                      <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'table')" class="fmt-btn" title="Vložit jednoduchou tabulku">▦ Tabulka</button>
+                      <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'code')" class="fmt-btn" title="Blok kódu">{ } Kód</button>
+                      <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'math-inline')" class="fmt-btn" title="Matematický vzorec v textu řádku (LaTeX, mezi $ $)">Σ Vzorec</button>
+                      <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'math-block')" class="fmt-btn" title="Matematický vzorec na samostatném řádku (LaTeX, mezi $$ $$)">Σ Vzorec (blok)</button>
                       <label class="fmt-btn cursor-pointer" title="Přidat obrázek (max. 4 na zápis)">
                         📎 Obrázek
                         <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, editForm)" />
@@ -1699,6 +1777,15 @@
                         <span v-if="n.images && n.images.length"> · 📎 {{ n.images.length }}</span>
                         <span v-if="n.kind === 'checklist'"> · {{ n.items.filter(it => it.done).length }} / {{ n.items.length }} hotovo</span>
                       </p>
+                      <div v-if="n.tags && n.tags.length" class="flex flex-wrap gap-1 mt-1.5">
+                        <button
+                          v-for="tag in n.tags" :key="tag"
+                          type="button"
+                          @click.stop="searchByTag(tag)"
+                          class="note-tag-chip"
+                          title="Najít podle tohoto štítku napříč všemi předměty"
+                        >🏷️ {{ tag }}</button>
+                      </div>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
                       <button
@@ -1877,7 +1964,14 @@ const TRASH_RETENTION_DAYS = 14;
 // Pokud appka nemá připojení k internetu, synchronizace se jen tiše
 // nezdaří a appka normálně pokračuje s daty uloženými lokálně (localStorage).
 const FIREBASE_DB_URL = 'https://studijni-hub-default-rtdb.europe-west1.firebasedatabase.app';
-const SYNC_PATH = '/studijniHub.json';
+// Cesta obsahuje dlouhý náhodný kód, aby appku a data v databázi nenašel
+// nikdo jiný, kdo by náhodou uhodl/zkoušel běžné názvy (data v databázi jsou
+// jinak čitelná/zapisovatelná pro kohokoliv, kdo přesnou adresu zná - proto
+// je potřeba, aby zůstala jen v appce a nikde se dál nesdílela). Zároveň je
+// potřeba ve Firebase konzoli nastavit pravidla tak, aby povolovala přístup
+// jen pod touhle konkrétní cestou - viz komentář u SYNC_SECURITY_RULES níž.
+const SYNC_SECRET = '75b708c4e04eb242d512b0eb7734a8f4';
+const SYNC_PATH = `/studijniHub_${SYNC_SECRET}.json`;
 const SYNC_META_KEY = 'studijniHubSyncMeta_v1';
 const SYNC_PUSH_DEBOUNCE_MS = 1500;
 
@@ -2062,17 +2156,74 @@ function fireConfetti(count) {
   setTimeout(() => container.remove(), 3200);
 }
 
-/** Aplikuje jednoduché "inline" formátování (**tučně**, *kurzíva*) na již HTML-escapovaný text. */
+/** Vrátí text zpět z HTML-escapované podoby (opak escapeHtml) - potřeba proto,
+ *  že matematický vzorec (LaTeX) appka dostává z textu, který už prošel
+ *  escapeHtml (viz renderNoteContent), ale KaTeX potřebuje skutečné znaky
+ *  jako < > & (např. u \lt, \gt, maticích apod.), ne HTML entity. */
+function unescapeHtmlEntities(str) {
+  return String(str || '')
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&');
+}
+
+/** Vykreslí LaTeX vzorec přes samostatně hostovanou knihovnu KaTeX (viz
+ *  <link>/<script> tagy s katex/katex.min.css a katex/katex.min.js v <head>).
+ *  Knihovna sama vrací bezpečné HTML, proto se výsledek vkládá přímo (ne přes
+ *  escapeHtml). Když se KaTeX z nějakého důvodu nenačte (starý prohlížeč,
+ *  chybějící soubor), appka nic nerozbije - vzorec se zobrazí jako obyčejný
+ *  text v jednoduchém orámování, aby bylo aspoň vidět, co tam mělo být. */
+function renderMath(tex, displayMode) {
+  if (typeof window !== 'undefined' && window.katex) {
+    try {
+      return window.katex.renderToString(tex, { throwOnError: false, displayMode: !!displayMode, output: 'htmlAndMathml' });
+    } catch (e) {
+      // Sem se appka dostane jen u vstupu, který nedokáže potichu ošetřit ani
+      // throwOnError: false - dál padá na náhradní zobrazení níž.
+    }
+  }
+  const cls = displayMode ? 'note-math-fallback note-math-fallback-block' : 'note-math-fallback';
+  return `<span class="${cls}">${escapeHtml(tex)}</span>`;
+}
+
+/** Aplikuje jednoduché "inline" formátování (**tučně**, *kurzíva*, $vzorec$) na
+ *  již HTML-escapovaný text. Matematické vzorce se z textu nejdřív vytáhnou za
+ *  dočasné značky (aby je nerozbilo hvězdičkové tučně/kurzíva formátování,
+ *  kdyby vzorec obsahoval "*" - např. násobení), a až po tučně/kurzíva se
+ *  vrátí zpátky jako hotové KaTeX HTML. */
 function inlineFormat(escapedText) {
-  return escapedText
+  const mathPieces = [];
+  let text = escapedText.replace(/\$([^$\n]+)\$/g, (m, tex) => {
+    mathPieces.push(renderMath(unescapeHtmlEntities(tex), false));
+    return '' + (mathPieces.length - 1) + '';
+  });
+  text = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/(\d+)/g, (m, idx) => mathPieces[Number(idx)]);
+  return text;
 }
 
 /** Převede jednoduchý zápisový "markdown" (**tučně**, *kurzíva*, "- " odrážky,
  *  "## " nadpis) na bezpečné HTML. Text se nejprve escapuje, teprve poté se do
  *  něj vkládají vlastní (pevně dané) značky, takže obsah zápisu nemůže vložit
  *  žádné cizí HTML ani spustit JavaScript. */
+/** Řádek "| a | b |" - jednoduchá tabulka (viz renderNoteContent). Oddělovací
+ *  řádek s pomlčkami ("| --- | --- |", nepovinně s ":" pro zarovnání) appka
+ *  pozná a jen podle něj rozhodne, jestli je první řádek záhlaví - samotný
+ *  se nevykresluje. */
+function isTableRow(line) {
+  return /^\|.*\|$/.test(line.trim());
+}
+function isTableSeparatorRow(line) {
+  return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/.test(line.trim());
+}
+function parseTableRow(line) {
+  const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+  return trimmed.split('|').map((c) => c.trim());
+}
+
 function renderNoteContent(raw, images) {
   const imgs = Array.isArray(images) ? images : [];
   const lines = escapeHtml(raw || '').split('\n');
@@ -2080,17 +2231,80 @@ function renderNoteContent(raw, images) {
   let inList = false;
   const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
 
-  for (const line of lines) {
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Blok matematického vzorce ohraničený řádky s $$ (LaTeX/KaTeX) - stejný
+    // princip jako blok kódu níž, jen se výsledek vykreslí přes renderMath.
+    if (trimmed === '$$') {
+      closeList();
+      const mathLines = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== '$$') {
+        mathLines.push(lines[i]);
+        i++;
+      }
+      i++; // přeskočí uzavírací $$
+      html += `<div class="note-math-block">${renderMath(unescapeHtmlEntities(mathLines.join('\n')), true)}</div>`;
+      continue;
+    }
+
+    // Blok kódu ohraničený řádky s ``` - text uvnitř se vykreslí přesně tak,
+    // jak je napsaný (bez tučně/kurzívy/odrážek), v neproporcionálním písmu.
+    if (/^```/.test(trimmed)) {
+      closeList();
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      i++; // přeskočí uzavírací ```
+      html += `<pre class="note-code"><code>${codeLines.join('\n')}</code></pre>`;
+      continue;
+    }
+
+    // Jednoduchá tabulka - viz isTableRow/isTableSeparatorRow výš.
+    if (isTableRow(line)) {
+      closeList();
+      const tableLines = [];
+      while (i < lines.length && isTableRow(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      let bodyLines = tableLines;
+      let headerCells = null;
+      if (tableLines.length >= 2 && isTableSeparatorRow(tableLines[1])) {
+        headerCells = parseTableRow(tableLines[0]);
+        bodyLines = tableLines.slice(2);
+      }
+      let tableHtml = '<table class="note-table">';
+      if (headerCells) {
+        tableHtml += `<thead><tr>${headerCells.map((c) => `<th>${inlineFormat(c)}</th>`).join('')}</tr></thead>`;
+      }
+      tableHtml += '<tbody>';
+      for (const row of bodyLines) {
+        if (isTableSeparatorRow(row)) continue; // pro jistotu, kdyby appka narazila na oddělovač i mimo hlavičku
+        tableHtml += `<tr>${parseTableRow(row).map((c) => `<td>${inlineFormat(c)}</td>`).join('')}</tr>`;
+      }
+      tableHtml += '</tbody></table>';
+      html += tableHtml;
+      continue;
+    }
+
     // Řádek "[[img:N]]" appka vkládá sama (viz insertImageToken) při vložení
     // fotky přímo do textu - při vykreslení se nahradí obrázkem s popiskem
     // na místě, kam byl vložen, místo aby se ukazoval jen jako text.
-    const imgMatch = line.trim().match(/^\[\[img:(\d+)\]\]$/);
+    const imgMatch = trimmed.match(/^\[\[img:(\d+)\]\]$/);
     if (imgMatch) {
       closeList();
       const img = imgs[Number(imgMatch[1])];
       if (img && img.src) {
         html += `<figure class="note-inline-image"><img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.caption || '')}">${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}</figure>`;
       }
+      i++;
       continue;
     }
     const bulletMatch = line.match(/^-\s+(.*)$/);
@@ -2099,17 +2313,19 @@ function renderNoteContent(raw, images) {
     if (bulletMatch) {
       if (!inList) { html += '<ul class="note-list">'; inList = true; }
       html += `<li>${inlineFormat(bulletMatch[1])}</li>`;
+      i++;
       continue;
     }
     closeList();
 
     if (headingMatch) {
       html += `<div class="note-heading">${inlineFormat(headingMatch[1])}</div>`;
-    } else if (line.trim() === '') {
+    } else if (trimmed === '') {
       html += '<br>';
     } else {
       html += `<div>${inlineFormat(line)}</div>`;
     }
+    i++;
   }
   closeList();
   return html;
@@ -2149,6 +2365,7 @@ function buildSubjectPdfHtml(subject) {
 <head>
 <meta charset="UTF-8">
 <title>${escapeHtml(subject.name)} — Zápisy</title>
+<link rel="stylesheet" href="katex/katex.min.css">
 <style>
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 760px; margin: 2rem auto; padding: 0 1.5rem; }
   h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
@@ -2159,6 +2376,14 @@ function buildSubjectPdfHtml(subject) {
   .pdf-content { font-size: 0.92rem; line-height: 1.6; }
   .pdf-content .note-heading { font-weight: 700; margin: 0.5rem 0 0.2rem; }
   .pdf-content .note-list { padding-left: 1.25rem; }
+  .pdf-content .note-code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 0.4rem; padding: 0.5rem 0.7rem; margin: 0.4rem 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8rem; white-space: pre-wrap; }
+  .pdf-content .note-table { border-collapse: collapse; margin: 0.4rem 0; font-size: 0.82rem; }
+  .pdf-content .note-table th, .pdf-content .note-table td { border: 1px solid #cbd5e1; padding: 0.3rem 0.5rem; text-align: left; }
+  .pdf-content .note-table th { background: #f1f5f9; }
+  .pdf-content .note-math-block { margin: 0.4rem 0; overflow-x: auto; }
+  .pdf-content .note-math-block .katex-display { margin: 0; }
+  .pdf-content .note-math-fallback { display: inline-block; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: #f1f5f9; border: 1px dashed #cbd5e1; border-radius: 0.35rem; padding: 0.05rem 0.35rem; font-size: 0.85em; color: #64748b; }
+  .pdf-content .note-math-fallback-block { display: block; padding: 0.4rem 0.6rem; margin: 0.4rem 0; }
   .pdf-images { margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .pdf-image-item { margin: 0; max-width: 220px; }
   .pdf-images img { max-width: 220px; max-height: 220px; object-fit: cover; border-radius: 0.4rem; border: 1px solid #e2e8f0; }
@@ -2207,6 +2432,7 @@ function buildAllSubjectsPdfHtml(subjects) {
 <head>
 <meta charset="UTF-8">
 <title>Studijní Hub — Všechny předměty</title>
+<link rel="stylesheet" href="katex/katex.min.css">
 <style>
   body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 760px; margin: 2rem auto; padding: 0 1.5rem; }
   h1 { font-size: 1.7rem; margin-bottom: 0.2rem; }
@@ -2223,6 +2449,14 @@ function buildAllSubjectsPdfHtml(subjects) {
   .pdf-content { font-size: 0.92rem; line-height: 1.6; }
   .pdf-content .note-heading { font-weight: 700; margin: 0.5rem 0 0.2rem; }
   .pdf-content .note-list { padding-left: 1.25rem; }
+  .pdf-content .note-code { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 0.4rem; padding: 0.5rem 0.7rem; margin: 0.4rem 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.8rem; white-space: pre-wrap; }
+  .pdf-content .note-table { border-collapse: collapse; margin: 0.4rem 0; font-size: 0.82rem; }
+  .pdf-content .note-table th, .pdf-content .note-table td { border: 1px solid #cbd5e1; padding: 0.3rem 0.5rem; text-align: left; }
+  .pdf-content .note-table th { background: #f1f5f9; }
+  .pdf-content .note-math-block { margin: 0.4rem 0; overflow-x: auto; }
+  .pdf-content .note-math-block .katex-display { margin: 0; }
+  .pdf-content .note-math-fallback { display: inline-block; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: #f1f5f9; border: 1px dashed #cbd5e1; border-radius: 0.35rem; padding: 0.05rem 0.35rem; font-size: 0.85em; color: #64748b; }
+  .pdf-content .note-math-fallback-block { display: block; padding: 0.4rem 0.6rem; margin: 0.4rem 0; }
   .pdf-images { margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .pdf-image-item { margin: 0; max-width: 220px; }
   .pdf-images img { max-width: 220px; max-height: 220px; object-fit: cover; border-radius: 0.4rem; border: 1px solid #e2e8f0; }
@@ -2318,6 +2552,12 @@ function normalizeSubject(raw, fallbackId) {
       createdAt: (n && n.createdAt) || new Date().toISOString(),
       updatedAt: (n && n.updatedAt) || null,
       pinned: !!(n && n.pinned),
+      // Štítky umožňují najít/filtrovat zápisy napříč všemi předměty (viz
+      // globalSearchResults a filteredNotes), ne jen v rámci jednoho předmětu.
+      tags: (Array.isArray(n && n.tags) ? n.tags : [])
+        .map((t) => String(t || '').trim())
+        .filter(Boolean)
+        .filter((t, i, arr) => arr.indexOf(t) === i),
       kind: (n && n.kind === 'checklist') ? 'checklist' : 'text',
       items: Array.isArray(n && n.items)
         ? n.items.map((it, j) => ({
@@ -2834,7 +3074,63 @@ function generateFromSentenceAnalysis(item) {
  *     rozhoduje, jestli jde o kartičku, nebo o doplňovačku s ověřitelnou
  *     odpovědí),
  *   - u češtiny i vlastní rozbory vět. */
-function buildQuiz(subject, mistakeCounts, mode) {
+/** Jednoduché rozložené opakování (spaced repetition, ve stylu SM-2) pro
+ *  otázky se stabilní identitou (vlastní otázky, otázky ze zápisů, rozbory
+ *  vět - NE procedurálně generované příklady jako matematika, které nemají
+ *  jedno pevné "znění"). Appka si ke každému klíči pamatuje interval (za
+ *  kolik dní se má otázka objevit znovu), datum splatnosti a "ease" (jak
+ *  rychle interval roste u otázek, které dobře znáš). Ukládá se přímo do
+ *  stats.srs, takže se to synchronizuje mezi zařízeními stejně jako zbytek
+ *  statistik. */
+function srsGrade(record, correct) {
+  const rec = record && typeof record === 'object' ? record : {};
+  let interval = typeof rec.interval === 'number' ? rec.interval : 0;
+  let ease = typeof rec.ease === 'number' ? rec.ease : 2.5;
+  let reps = typeof rec.reps === 'number' ? rec.reps : 0;
+  if (correct) {
+    reps += 1;
+    if (reps === 1) interval = 1;
+    else if (reps === 2) interval = 3;
+    else interval = Math.max(1, Math.round(interval * ease));
+    ease = Math.min(2.6, ease + 0.1);
+  } else {
+    reps = 0;
+    interval = 1;
+    ease = Math.max(1.3, ease - 0.25);
+  }
+  return { interval, ease, reps, dueAt: Date.now() + interval * 24 * 60 * 60 * 1000 };
+}
+
+/** Jestli se pro daný klíč otázky vůbec sleduje rozložené opakování - jen
+ *  otázky s pevnou identitou (viz komentář u srsGrade výš). */
+function isSrsEligibleKey(key) {
+  return typeof key === 'string' && (key.indexOf('custom:') === 0 || key.indexOf('notes:') === 0 || key.indexOf('sentence:') === 0);
+}
+
+/** Násobitel váhy při výběru další otázky podle toho, jestli je (podle
+ *  rozloženého opakování) právě splatná. Otázky bez záznamu (ještě nikdy
+ *  zodpovězené) mají neutrální váhu, splatné se silně zvýhodní, ještě
+ *  nesplatné se dočasně přibrzdí, ať uvolní místo jiným. */
+function srsWeight(srs, key) {
+  const rec = srs && srs[key];
+  if (!rec || typeof rec.dueAt !== 'number') return 3;
+  const overdueDays = (Date.now() - rec.dueAt) / (24 * 60 * 60 * 1000);
+  if (overdueDays >= 0) return 6 + Math.min(overdueDays, 14);
+  return 0.4;
+}
+
+/** Rozbor věty se ptá vždy jen na jednu ze tří možných částí (viz
+ *  generateFromSentenceAnalysis), každá má svůj vlastní záznam opakování -
+ *  při výběru KTERÉ věty procvičit se použije ta nejvíc "naléhavá" z nich. */
+function srsWeightForSentence(srs, id) {
+  return Math.max(
+    srsWeight(srs, `sentence:${id}:subject`),
+    srsWeight(srs, `sentence:${id}:predicate`),
+    srsWeight(srs, `sentence:${id}:type`)
+  );
+}
+
+function buildQuiz(subject, mistakeCounts, mode, srs) {
   const mc = mistakeCounts || {};
   const name = typeof subject === 'string' ? subject : subject.name;
   const isObj = subject && typeof subject === 'object';
@@ -2850,16 +3146,16 @@ function buildQuiz(subject, mistakeCounts, mode) {
   const chosenPool = pools.length > 1 ? choice(pools) : pools[0];
 
   if (chosenPool === 'custom') {
-    const picked = weightedChoice(customQuestions, (q) => mistakeWeight(mc, `custom:${q.id}`));
+    const picked = weightedChoice(customQuestions, (q) => mistakeWeight(mc, `custom:${q.id}`) * srsWeight(srs, `custom:${q.id}`));
     return { type: 'custom', ...generateFromCustom(picked) };
   }
   if (chosenPool === 'notes') {
     const noteKeyPrefix = mode === 'flashcard' ? 'notes:card:' : 'notes:blank:';
-    const picked = weightedChoice(relevantNoteItems, (it) => mistakeWeight(mc, noteKeyPrefix + it.id));
+    const picked = weightedChoice(relevantNoteItems, (it) => mistakeWeight(mc, noteKeyPrefix + it.id) * srsWeight(srs, noteKeyPrefix + it.id));
     return { type: 'notes', ...(mode === 'flashcard' ? generateFromNoteCard(picked) : generateFromNoteBlank(picked)) };
   }
   if (chosenPool === 'sentence') {
-    const picked = weightedChoice(sentenceAnalyses, (q) => mistakeWeight(mc, `sentence:${q.id}`));
+    const picked = weightedChoice(sentenceAnalyses, (q) => mistakeWeight(mc, `sentence:${q.id}`) * srsWeightForSentence(srs, q.id));
     return { type: 'sentence', ...generateFromSentenceAnalysis(picked) };
   }
 
@@ -2981,7 +3277,7 @@ const app = createApp({
     }
 
     function loadStats() {
-      const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [] };
+      const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
       try {
         const raw = localStorage.getItem(STATS_KEY);
         if (raw) {
@@ -2992,6 +3288,10 @@ const app = createApp({
             dailyHistory: (parsed && typeof parsed.dailyHistory === 'object' && parsed.dailyHistory) || {},
             mistakeCounts: (parsed && typeof parsed.mistakeCounts === 'object' && parsed.mistakeCounts) || {},
             celebratedBadges: Array.isArray(parsed && parsed.celebratedBadges) ? parsed.celebratedBadges : [],
+            // srs = záznamy rozloženého opakování (viz srsGrade) - u appek
+            // aktualizovaných ze starší verze prostě chybí a začnou se plnit
+            // od nuly, nic se tím nerozbije.
+            srs: (parsed && typeof parsed.srs === 'object' && parsed.srs) || {},
           };
         }
       } catch (e) {
@@ -3023,8 +3323,18 @@ const app = createApp({
        appka "nezadýchala" při rychlém psaní) automaticky pošle do cloudu, odkud
        si ji při dalším otevření vyzvedne libovolné jiné zařízení. */
     const syncStatus = ref('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
+    const lastSyncedAt = ref(null); // ms čas poslední úspěšné synchronizace (na tomhle zařízení)
     let applyingRemoteUpdate = false;
     let pushTimer = null;
+
+    /** Nastaví appce "úspěšně synchronizováno" a zapamatuje si kdy - používá
+     *  se z pushToCloud i pullFromCloudAndMerge, ať appka vždycky ukazuje
+     *  aktuální čas poslední synchronizace bez ohledu na to, kterým směrem
+     *  data zrovna šla. */
+    function markSynced() {
+      syncStatus.value = 'synced';
+      lastSyncedAt.value = Date.now();
+    }
 
     function getSyncMetaUpdatedAt() {
       try {
@@ -3058,7 +3368,7 @@ const app = createApp({
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         setSyncMetaUpdatedAt(now);
-        syncStatus.value = 'synced';
+        markSynced();
       } catch (e) {
         console.warn('Synchronizaci do cloudu se nepodařilo dokončit (appka pokračuje s lokálními daty).', e);
         syncStatus.value = 'error';
@@ -3098,10 +3408,11 @@ const app = createApp({
               mistakeCounts: (remote.stats.mistakeCounts && typeof remote.stats.mistakeCounts === 'object') ? remote.stats.mistakeCounts : {},
               perfectSessions: remote.stats.perfectSessions || 0,
               celebratedBadges: Array.isArray(remote.stats.celebratedBadges) ? remote.stats.celebratedBadges : [],
+              srs: (remote.stats.srs && typeof remote.stats.srs === 'object') ? remote.stats.srs : {},
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
-          syncStatus.value = 'synced';
+          markSynced();
           // Krátké zpoždění, než appka zase začne poslouchat vlastní změny -
           // ať aplikování stažených dat samo nespustí okamžité poslání zpátky nahoru.
           setTimeout(() => { applyingRemoteUpdate = false; }, 300);
@@ -3114,7 +3425,7 @@ const app = createApp({
           // nahoru (kdyby cloud měl starší verzi, např. po obnovení ze zálohy).
           await pushToCloud();
         } else {
-          syncStatus.value = 'synced';
+          markSynced();
         }
       } catch (e) {
         console.warn('Načtení dat z cloudu se nepodařilo, appka pokračuje jen s lokálními daty.', e);
@@ -3130,6 +3441,24 @@ const app = createApp({
         default: return '☁️ Synchronizace…';
       }
     });
+
+    /** Krátký, čitelný popis času poslední úspěšné synchronizace - "dnes v
+     *  14:32", nebo plné datum, pokud to bylo jindy než dnes. */
+    const lastSyncedLabel = computed(() => {
+      if (!lastSyncedAt.value) return null;
+      const d = new Date(lastSyncedAt.value);
+      const isToday = d.toDateString() === new Date().toDateString();
+      const time = d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+      return isToday ? `dnes v ${time}` : formatDate(d.toISOString());
+    });
+
+    /** Ruční vyvolání synchronizace (tlačítko "Synchronizovat teď") - použije
+     *  stejnou logiku jako synchronizace při startu appky (porovná časy a
+     *  použije novější verzi), jen ji spustí okamžitě na vyžádání. */
+    function syncNow() {
+      if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+      pullFromCloudAndMerge();
+    }
 
     /* ---------- Koš (dočasně smazané předměty a zápisy) ---------- */
     function loadTrash() {
@@ -3206,6 +3535,31 @@ const app = createApp({
     const reviewCount = computed(() =>
       Object.values(stats.mistakeCounts || {}).filter((n) => n > 0).length
     );
+
+    /** Kolik otázek u AKTUÁLNÍHO předmětu je podle rozloženého opakování
+     *  (viz srsGrade) právě teď "splatných" - appka jim dává přednost při
+     *  výběru další otázky, tohle číslo jen dělá tenhle mechanismus viditelný. */
+    const dueReviewCount = computed(() => {
+      if (!activeSubject.value) return 0;
+      const srs = stats.srs || {};
+      const now = Date.now();
+      const isDue = (key) => { const r = srs[key]; return !!(r && typeof r.dueAt === 'number' && r.dueAt <= now); };
+      let count = 0;
+      for (const q of activeSubject.value.customQuestions || []) {
+        if (isDue(`custom:${q.id}`)) count++;
+      }
+      for (const q of activeSubject.value.sentenceAnalyses || []) {
+        if (isDue(`sentence:${q.id}:subject`) || isDue(`sentence:${q.id}:predicate`) || isDue(`sentence:${q.id}:type`)) count++;
+      }
+      const notesPool = buildNotesPool(activeSubject.value);
+      for (const it of notesPool.blankItems) {
+        if (isDue(`notes:blank:${it.id}`)) count++;
+      }
+      for (const it of notesPool.cardItems) {
+        if (isDue(`notes:card:${it.id}`)) count++;
+      }
+      return count;
+    });
 
     /* ---------- Odznaky za pokrok ---------- */
     const showBadges = ref(false);
@@ -3359,12 +3713,15 @@ const app = createApp({
           const titleMatch = n.title.toLowerCase().includes(q);
           const contentLower = n.content.toLowerCase();
           const contentMatch = contentLower.includes(q);
-          if (!titleMatch && !contentMatch) continue;
+          const tagMatch = (n.tags || []).find((t) => t.toLowerCase().includes(q));
+          if (!titleMatch && !contentMatch && !tagMatch) continue;
 
           const flat = n.content.replace(/\s+/g, ' ').trim();
           let snippet;
           const idx = contentLower.indexOf(q);
-          if (idx !== -1) {
+          if (tagMatch && !titleMatch && !contentMatch) {
+            snippet = `🏷️ štítek: ${tagMatch}`;
+          } else if (idx !== -1) {
             const start = Math.max(0, idx - 40);
             const end = Math.min(flat.length, idx + q.length + 60);
             snippet = (start > 0 ? '…' : '') + flat.slice(start, end) + (end < flat.length ? '…' : '');
@@ -3373,12 +3730,19 @@ const app = createApp({
           }
           results.push({
             subjectId: s.id, subjectName: s.name, subjectEmoji: s.emoji,
-            noteId: n.id, noteTitle: n.title, snippet,
+            noteId: n.id, noteTitle: n.title, snippet, tags: n.tags || [],
           });
         }
       }
       return results.slice(0, 30);
     });
+
+    /** Kliknutí na štítek u zápisu rovnou spustí hledání podle tohoto štítku
+     *  napříč všemi předměty - viz globalSearchResults výš. */
+    function searchByTag(tag) {
+      globalSearchQuery.value = tag;
+      nextTick(() => { if (globalSearchEl.value) globalSearchEl.value.focus(); });
+    }
 
     /** Otevře předmět daného zápisu, zápis rozbalí a jemně k němu odscrolluje. */
     function openSearchResult(subjectId, noteId) {
@@ -3512,6 +3876,122 @@ const app = createApp({
       return `naposledy před ${daysSince} ${daysSince === 1 ? 'dnem' : 'dny'}`;
     }
 
+    /** Týdenní plánovač - pro každý z následujících 7 dní (dnes + 6) appka
+     *  doporučí jeden předmět k procvičení. Vychází ze stejného skóre jako
+     *  jednorázové doporučení (subjectRecommendationScore - zohledňuje
+     *  blížící se zkoušky i to, jak dávno byl předmět naposledy procvičován),
+     *  ale po přiřazení dne se skóre daného předmětu dočasně sníží (podobně
+     *  jako "weighted round robin" plánování front), aby se do týdne vešly i
+     *  méně naléhavé předměty a appka nedoporučovala pořád jen ten jeden
+     *  nejnaléhavější. */
+    const showWeeklyPlan = ref(false);
+    const weeklyPlan = computed(() => {
+      const candidates = subjects.filter((s) => !s.archived);
+      if (!candidates.length) return [];
+      const state = candidates.map((s) => ({ subject: s, score: subjectRecommendationScore(s) }));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(today.getTime() + i * 86400000);
+        let best = state[0];
+        for (const c of state) { if (c.score > best.score) best = c; }
+        days.push({
+          key: dateKey(date),
+          dayLabel: i === 0 ? 'Dnes' : i === 1 ? 'Zítra' : date.toLocaleDateString('cs-CZ', { weekday: 'long' }),
+          shortDate: formatDateShortCs(dateKey(date)),
+          subject: best.subject,
+          reason: recommendationReason(best.subject),
+        });
+        best.score = Math.max(0, best.score - 40); // po přiřazení dne "odpočine", ať dostanou šanci i ostatní
+      }
+      return days;
+    });
+
+    /* ---------- Připomínky (místní notifikace prohlížeče) ----------
+       DŮLEŽITÉ omezení, se kterým appka počítá: bez vlastního serveru appka
+       neumí poslat "opravdovou" push notifikaci, když je appka úplně
+       zavřená (to vyžaduje Push API + server, který by za appku posílal
+       zprávy). Tohle je tedy "místní" připomínka - kontroluje se jen při
+       otevření appky (v prohlížeči nebo jako nainstalovaná PWA) a maximálně
+       jednou denně za každý typ připomínky, aby appka nezahltila
+       oznámeními. Na iPhonu navíc notifikace z webu/PWA fungují jen v
+       novějších verzích iOS a appka na to reaguje jen tichým selháním, nic
+       se nerozbije. */
+    const NOTIFY_META_KEY = 'studijniHubNotifyMeta_v1';
+    const EXAM_REMINDER_HORIZON_DAYS = 3;
+    const REMINDER_EVENING_HOUR = 18;
+    const notificationsSupported = computed(() => typeof Notification !== 'undefined');
+    const notificationPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+
+    function loadNotifyMeta() {
+      try {
+        const raw = localStorage.getItem(NOTIFY_META_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { /* ignorováno - appka jen případně pošle připomínku znovu */ }
+      return {};
+    }
+    function saveNotifyMeta(meta) {
+      try { localStorage.setItem(NOTIFY_META_KEY, JSON.stringify(meta)); }
+      catch (e) { console.warn('Nepodařilo se uložit metadata připomínek.', e); }
+    }
+
+    function sendLocalNotification(title, body) {
+      try {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        const options = { body, icon: 'icon-192.png', badge: 'icon-192.png' };
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          navigator.serviceWorker.ready
+            .then((reg) => { if (reg && reg.showNotification) reg.showNotification(title, options); else new Notification(title, options); })
+            .catch(() => { try { new Notification(title, options); } catch (e2) { /* iOS bez podpory - tiše přeskočeno */ } });
+        } else {
+          new Notification(title, options);
+        }
+      } catch (e) { console.warn('Odeslání připomínky selhalo.', e); }
+    }
+
+    /** Zeptá se prohlížeče na povolení notifikací a hned zkontroluje, jestli
+     *  je co připomenout. */
+    function enableNotifications() {
+      if (typeof Notification === 'undefined') return;
+      Notification.requestPermission().then((perm) => {
+        notificationPermission.value = perm;
+        if (perm === 'granted') {
+          sendLocalNotification('Připomínky zapnuté 🔔', 'Studijní Hub ti teď při otevření připomene blížící se zkoušky nebo když si dnes ještě nezaprocvičoval/a.');
+          checkAndSendReminders();
+        }
+      }).catch(() => {});
+    }
+
+    /** Zkontroluje, jestli appka dnes ještě neposlala připomínku na blížící
+     *  se zkoušku nebo na to, že dnes ještě nebylo procvičováno - volá se
+     *  při každém otevření appky (viz onMounted), ale reálně pošle
+     *  notifikaci nejvýš jednou denně za každý typ. */
+    function checkAndSendReminders() {
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+      const today = dateKey(new Date());
+      const meta = loadNotifyMeta();
+
+      const soonExams = subjects.filter((s) => {
+        const info = examInfo(s);
+        return info && info.days >= 0 && info.days <= EXAM_REMINDER_HORIZON_DAYS;
+      });
+      if (soonExams.length > 0 && meta.lastExamNotifyDate !== today) {
+        const names = soonExams.map((s) => `${s.emoji} ${s.name} (${examCountdownShort(examInfo(s).days)})`).join(', ');
+        sendLocalNotification('Blíží se zkouška 📅', names);
+        meta.lastExamNotifyDate = today;
+        saveNotifyMeta(meta);
+      }
+
+      const hour = new Date().getHours();
+      const solvedToday = (stats.dailyHistory[today] || 0) > 0;
+      if (hour >= REMINDER_EVENING_HOUR && !solvedToday && meta.lastReminderNotifyDate !== today) {
+        sendLocalNotification('Ještě dnes trochu procvičit? 🧠', 'Dneska sis ještě nic nevyřešil/a - i pár minut se počítá.');
+        meta.lastReminderNotifyDate = today;
+        saveNotifyMeta(meta);
+      }
+    }
+
     /* ---------- Termíny zkoušek / odpočet ---------- */
     function setExamDate(subject, value) {
       if (!subject) return;
@@ -3634,10 +4114,10 @@ const app = createApp({
     /* ---------- Zápisy (CRUD) ---------- */
     // "kind" a "items" patří k checklist zápiskům (viz níže) - u běžného
     // textového zápisu zůstává items prázdné a nepoužívá se.
-    const noteForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '' });
+    const noteForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
     const expandedNoteId = ref(null);
     const editingNoteId = ref(null);
-    const editForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '' });
+    const editForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
     const noteSearchQuery = ref('');
     const noteContentEl = ref(null);
     const editContentEl = ref(null);
@@ -3663,6 +4143,7 @@ const app = createApp({
         (n) => normalizeAnswer(n.title).includes(q)
           || normalizeAnswer(n.content).includes(q)
           || (n.items || []).some((it) => normalizeAnswer(it.text).includes(q))
+          || (n.tags || []).some((t) => normalizeAnswer(t).includes(q))
       );
     });
 
@@ -3688,6 +4169,15 @@ const app = createApp({
       }
     }
 
+    /** Rozseká zadané štítky oddělené čárkou na pole bez prázdných/duplicitních
+     *  položek - používá se při ukládání i editaci zápisu. */
+    function parseTagsInput(raw) {
+      return String(raw || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .filter((t, i, arr) => arr.indexOf(t) === i);
+    }
     function addNote() {
       const title = noteForm.title.trim();
       if (!activeSubject.value || !title) return;
@@ -3706,6 +4196,7 @@ const app = createApp({
         pinned: false,
         kind: noteForm.kind,
         items: noteForm.kind === 'checklist' ? noteForm.items.map((it) => ({ ...it })) : [],
+        tags: parseTagsInput(noteForm.tagsInput),
       });
       noteForm.title = '';
       noteForm.content = '';
@@ -3713,6 +4204,7 @@ const app = createApp({
       noteForm.kind = 'text';
       noteForm.items = [];
       noteForm.newItemText = '';
+      noteForm.tagsInput = '';
     }
     function toggleNote(id) {
       expandedNoteId.value = expandedNoteId.value === id ? null : id;
@@ -3725,6 +4217,7 @@ const app = createApp({
       editForm.kind = n.kind || 'text';
       editForm.items = (n.items || []).map((it) => ({ ...it }));
       editForm.newItemText = '';
+      editForm.tagsInput = (n.tags || []).join(', ');
     }
     function cancelEdit() { editingNoteId.value = null; }
     function saveEditNote(n) {
@@ -3740,6 +4233,7 @@ const app = createApp({
       n.images = editForm.images.map((img) => ({ ...img }));
       n.kind = editForm.kind;
       n.items = editForm.kind === 'checklist' ? editForm.items.map((it) => ({ ...it })) : [];
+      n.tags = parseTagsInput(editForm.tagsInput);
       n.updatedAt = new Date().toISOString();
       editingNoteId.value = null;
     }
@@ -3759,6 +4253,10 @@ const app = createApp({
       else if (type === 'italic') insertion = `*${selected}*`;
       else if (type === 'bullet') insertion = `${needsNewlineBefore ? '\n' : ''}- ${selected}`;
       else if (type === 'heading') insertion = `${needsNewlineBefore ? '\n' : ''}## ${selected}`;
+      else if (type === 'code') insertion = `${needsNewlineBefore ? '\n' : ''}\`\`\`\n${selected}\n\`\`\`\n`;
+      else if (type === 'table') insertion = `${needsNewlineBefore ? '\n' : ''}| Sloupec 1 | Sloupec 2 |\n| --- | --- |\n| ${selected} | |\n`;
+      else if (type === 'math-inline') insertion = `$${selected === 'text' ? 'x^2' : selected}$`;
+      else if (type === 'math-block') insertion = `${needsNewlineBefore ? '\n' : ''}$$\n${selected === 'text' ? 'x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}' : selected}\n$$\n`;
       else return;
 
       state[key] = value.slice(0, start) + insertion + value.slice(end);
@@ -4073,7 +4571,7 @@ const app = createApp({
     function generateNewQuiz() {
       if (!activeSubject.value) return;
       stopSpeaking(); // nová otázka - případné přehrávání předchozího zadání už nedává smysl
-      const built = buildQuiz(activeSubject.value, stats.mistakeCounts, practiceMode.value);
+      const built = buildQuiz(activeSubject.value, stats.mistakeCounts, practiceMode.value, stats.srs);
       quiz.type = built.type;
       quiz.prompt = built.prompt;
       quiz.hintTitle = built.hintTitle;
@@ -4206,6 +4704,10 @@ const app = createApp({
         const current = stats.mistakeCounts[quiz.key] || 0;
         if (current <= 1) delete stats.mistakeCounts[quiz.key];
         else stats.mistakeCounts[quiz.key] = current - 2;
+        if (isSrsEligibleKey(quiz.key)) {
+          if (!stats.srs) stats.srs = {};
+          stats.srs[quiz.key] = srsGrade(stats.srs[quiz.key], true);
+        }
       }
     }
     /** Zaznamená chybnou odpověď / "neumím" do statistik. */
@@ -4214,6 +4716,10 @@ const app = createApp({
       touchSubjectPractice();
       if (quiz.key) {
         stats.mistakeCounts[quiz.key] = Math.min((stats.mistakeCounts[quiz.key] || 0) + 1, 5);
+        if (isSrsEligibleKey(quiz.key)) {
+          if (!stats.srs) stats.srs = {};
+          stats.srs[quiz.key] = srsGrade(stats.srs[quiz.key], false);
+        }
       }
     }
 
@@ -4444,6 +4950,9 @@ const app = createApp({
       // Při startu appky se zkusí porovnat lokální data s cloudem a použije se
       // ta novější verze - viz komentář u "Synchronizace mezi zařízeními" výš.
       pullFromCloudAndMerge();
+      // Připomínky (pokud už appka má povolení) - s malým zpožděním, ať
+      // nezdržují prvotní vykreslení appky.
+      setTimeout(checkAndSendReminders, 2000);
       // Baseline pro odznaky odemčené ještě před touto aktualizací appky -
       // ať se hned po prvním spuštění nerozjedou konfety za staré úspěchy.
       badgeStatus.value.forEach((b) => {
@@ -4463,7 +4972,7 @@ const app = createApp({
     return {
       // data
       theme, greeting, heroVideoEl, prefersReducedMotion, onCardTilt, onCardTiltLeave,
-      subjects, EMOJIS, GRADIENTS, stats, successRate, reviewCount,
+      subjects, EMOJIS, GRADIENTS, stats, successRate, reviewCount, dueReviewCount,
       showBadges, badgeStatus, unlockedBadgeCount,
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
@@ -4478,7 +4987,7 @@ const app = createApp({
       practiceMode, flashcardFlipped,
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
-      globalSearchQuery, globalSearchResults,
+      globalSearchQuery, globalSearchResults, searchByTag,
       // metody
       toggleTheme,
       openSubject, closeSubject, scrollCarousel, updateScrollState,
@@ -4497,6 +5006,8 @@ const app = createApp({
       exportBackup, triggerImportFile, handleImportFile,
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
+      showWeeklyPlan, weeklyPlan,
+      notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
       heatmapCellClass, heatmapCellTitle,
       exportSubjectData, triggerImportSubjectFile, handleImportSubjectFile,
@@ -4509,7 +5020,7 @@ const app = createApp({
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
       togglePinNote,
       handleSubjectImageUpload, removeSubjectImage,
-      syncStatus, syncStatusLabel,
+      syncStatus, syncStatusLabel, lastSyncedAt, lastSyncedLabel, syncNow,
       insertImageToken, isImageInlined,
     };
   },
