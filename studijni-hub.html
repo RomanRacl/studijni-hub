@@ -311,6 +311,14 @@
 
   /* ===================== ZÁKLADNÍ VZHLED ===================== */
   html, body { height: 100%; }
+  /* Velikost písma (přístupnost, viz fontSizeLevel/applyFontSize) - protože
+     appka je postavená na Tailwindu, kde skoro všechny rozměry (text, mezery,
+     padding) vychází z "rem" jednotek, stačí přenastavit základní velikost na
+     <html> a celá appka se úměrně zvětší/zmenší, bez nutnosti řešit každou
+     komponentu zvlášť. Normal (16px) = výchozí, žádná třída navíc. */
+  html.font-size-small { font-size: 14px; }
+  html.font-size-large { font-size: 18px; }
+  html.font-size-xlarge { font-size: 20px; }
   body {
     background-color: var(--page-bg);
     color: var(--page-text);
@@ -1100,6 +1108,16 @@
         class="btn-ghost !text-lg !p-2 rounded-full"
         :title="theme === 'dark' ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim'"
       >{{ theme === 'dark' ? '☀️' : '🌙' }}</button>
+      <div class="flex items-center gap-0.5 rounded-full border border-slate-800 px-1 py-0.5" title="Velikost písma v celé appce">
+        <button
+          v-for="lvl in FONT_SIZE_LEVELS" :key="lvl"
+          @click="setFontSize(lvl)"
+          class="px-1.5 rounded-full transition"
+          :class="fontSizeLevel === lvl ? 'bg-white/15 text-slate-100' : 'text-slate-500 hover:text-slate-300'"
+          :style="{ fontSize: (0.68 + FONT_SIZE_LEVELS.indexOf(lvl) * 0.09) + 'rem' }"
+          :title="FONT_SIZE_LABELS[lvl]"
+        >A</button>
+      </div>
     </div>
   </div>
 
@@ -1274,6 +1292,9 @@
           </button>
           <button v-if="stats.practiceLog.length > 0" @click="showPracticeLog = !showPracticeLog" class="btn-ghost !text-cyan-300">
             📔 {{ showPracticeLog ? 'Skrýt deník procvičování' : 'Deník procvičování' }}
+          </button>
+          <button v-if="stats.practiceLog.length > 0" @click="showTimeOfDayInsight = !showTimeOfDayInsight" class="btn-ghost !text-violet-300">
+            ⏰ {{ showTimeOfDayInsight ? 'Skrýt kdy se mi daří' : 'Kdy se mi nejlíp daří' }}
           </button>
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
@@ -1527,6 +1548,27 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showTimeOfDayInsight && stats.practiceLog.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Kdy se mi nejlíp daří</p>
+            <p class="text-xs text-slate-500 mb-3">Appka rozdělí zodpovězené otázky z deníku procvičování podle denní doby a spočítá, kdy máš nejvyšší úspěšnost.</p>
+            <p v-if="timeOfDayInsight" class="text-sm mb-3 px-3 py-2 rounded-lg bg-violet-950/30 border border-violet-800/50">
+              Nejlíp ti to jde <b class="text-violet-300">{{ timeOfDayInsight.best.label.toLowerCase() }}</b> ({{ timeOfDayInsight.best.range }} h) - úspěšnost <b class="text-emerald-400">{{ timeOfDayInsight.best.accuracy }} %</b>.
+              Nejhůř naopak <b class="text-slate-300">{{ timeOfDayInsight.worst.label.toLowerCase() }}</b> ({{ timeOfDayInsight.worst.range }} h) - <b class="text-rose-400">{{ timeOfDayInsight.worst.accuracy }} %</b>.
+            </p>
+            <p v-else class="text-slate-500 text-sm mb-3">Zatím málo dat na porovnání - appka potřebuje aspoň {{ MIN_TIME_OF_DAY_SAMPLE }} zodpovězených otázek alespoň ve dvou různých částech dne.</p>
+            <div class="flex flex-col gap-1.5">
+              <div v-for="b in practiceByTimeOfDay" :key="b.id" class="flex items-center gap-3 text-sm">
+                <span class="w-40 shrink-0 text-slate-400">{{ b.label }} <span class="text-slate-600">({{ b.range }} h)</span></span>
+                <div class="flex-1 h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div v-if="b.accuracy !== null" class="h-full rounded-full" :class="b.accuracy >= 80 ? 'bg-emerald-500' : (b.accuracy >= 50 ? 'bg-amber-500' : 'bg-rose-500')" :style="{ width: b.accuracy + '%' }"></div>
+                </div>
+                <span class="w-24 shrink-0 text-right text-xs text-slate-500">{{ b.accuracy !== null ? b.accuracy + ' % (' + b.count + 'x)' : '— (' + b.count + 'x)' }}</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showUpcomingExams && upcomingExams.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Nadcházející a nedávné termíny</p>
             <div class="flex flex-col gap-2">
@@ -1535,9 +1577,9 @@
                 @click="openSubject(x.subject.id)"
                 class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition text-left"
               >
-                <span class="flex items-center gap-2 text-sm font-medium">{{ x.subject.emoji }} {{ x.subject.name }}</span>
+                <span class="flex items-center gap-2 text-sm font-medium">{{ x.subject.emoji }} {{ x.subject.name }} <span class="text-slate-500 font-normal">— {{ x.info.label }}</span></span>
                 <span class="flex items-center gap-2 text-xs">
-                  <span class="text-slate-500">{{ formatDateShortCs(x.subject.examDate) }}</span>
+                  <span class="text-slate-500">{{ formatDateShortCs(x.info.date) }}</span>
                   <span class="px-2 py-0.5 rounded-full font-bold" :class="x.info.cls">{{ x.info.shortLabel }}</span>
                 </span>
               </button>
@@ -1630,7 +1672,7 @@
                 {{ s.archived ? '🗄️ Archivováno · ' : '' }}{{ s.notes.length }} {{ noteWord(s.notes.length) }} · 🧠 {{ s.solvedCount || 0 }}
               </p>
               <p v-if="examBadge(s)" class="inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full" :class="examBadge(s).cls">
-                📅 zkouška {{ examBadge(s).shortLabel }}
+                📅 {{ examBadge(s).label.toLowerCase() }} {{ examBadge(s).shortLabel }}
               </p>
               <div class="mt-5 inline-flex items-center gap-1 text-sm font-semibold opacity-90">Otevřít <span>→</span></div>
             </div>
@@ -1694,10 +1736,28 @@
                   @change="setExamDate(activeSubject, $event.target.value)"
                 />
               </label>
-              <span v-if="examInfo(activeSubject)" class="px-2 py-0.5 rounded-full text-xs font-bold" :class="examInfo(activeSubject).cls">
-                {{ examInfo(activeSubject).shortLabel }}
+              <span v-if="examInfo(activeSubject)" class="px-2 py-0.5 rounded-full text-xs font-bold" :class="examInfo(activeSubject).cls" :title="`Nejbližší termín: ${examInfo(activeSubject).label}`">
+                {{ examInfo(activeSubject).label !== 'Zkouška' ? examInfo(activeSubject).label + ' ' : '' }}{{ examInfo(activeSubject).shortLabel }}
               </span>
               <button v-if="activeSubject.examDate" @click="setExamDate(activeSubject, '')" class="btn-ghost !text-xs !p-1 opacity-80" title="Zrušit termín zkoušky">✕</button>
+            </div>
+
+            <!-- Doplňkové termíny (zápočet, dílčí test...) - hlavní zkouška výš zůstává samostatně, tohle je pro DALŠÍ milníky u stejného předmětu -->
+            <div class="mt-2 text-sm">
+              <div v-for="e in (activeSubject.extraExamDates || [])" :key="e.id" class="flex items-center gap-1.5 opacity-90 mb-1">
+                <span class="opacity-80">📌 {{ e.label }}:</span>
+                <input
+                  type="date"
+                  class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20"
+                  :value="e.date || ''"
+                  @change="setExtraExamDate(activeSubject, e.id, $event.target.value)"
+                />
+                <button @click="removeExtraExamDate(activeSubject, e.id)" class="btn-ghost !text-xs !p-1 opacity-80" title="Smazat tenhle termín">✕</button>
+              </div>
+              <div class="flex items-center gap-1.5 mt-1">
+                <input v-model="newExtraExamLabel" type="text" placeholder="Název termínu (např. Zápočet)" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20" @keydown.enter="addExtraExamDate(activeSubject)" />
+                <button @click="addExtraExamDate(activeSubject)" class="btn-ghost !text-xs !p-1 opacity-80" title="Přidá další termín u tohohle předmětu (např. zápočet, dílčí test) - nezávisle na hlavní zkoušce výš">➕ Přidat termín</button>
+              </div>
             </div>
             <div v-if="activeSubjectIsMath" class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">🎚️ Obtížnost:</span>
@@ -1725,6 +1785,7 @@
           <button @click="triggerImportAnkiFile(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Nahraje textový export z appky Anki (#separator:Tab, sloupce líc/rub) a vytvoří z něj vlastní otázky u tohoto předmětu">📥 Import z Anki</button>
           <input ref="importAnkiFileEl" type="file" accept=".txt,text/plain" class="hidden" @change="handleImportAnkiFile" />
           <button @click="exportSubjectFlashcardsToPrint(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled kartiček na vystřihání (otázka na líci, odpověď na rubu) - hodí se na procvičování bez telefonu/počítače">🃏 Tisknutelné kartičky</button>
+          <button @click="exportSubjectCheatSheet(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Sestaví jednostránkový tahák se zápisy do zkoušky (🎓), vlastními otázkami, rozbory vět a zvýrazněnými nejslabšími místy">🗒️ Tahák ke zkoušce</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
           <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
@@ -1899,9 +1960,14 @@
               </div>
               <div class="mt-4">
                 <button v-if="!flashcardFlipped" @click="flipFlashcard" class="btn-primary w-full">🔄 Otočit kartu a zobrazit odpověď</button>
-                <div v-else class="flex flex-col sm:flex-row gap-2">
-                  <button @click="gradeFlashcard(false)" class="btn-danger flex-1">❌ Neuměl/a jsem</button>
-                  <button @click="gradeFlashcard(true)" class="btn-success flex-1">✅ Uměl/a jsem</button>
+                <div v-else>
+                  <p class="text-xs text-slate-500 text-center mb-2">Jak dobře jsi to věděl/a? Ovlivňuje to, za jak dlouho appka kartičku nabídne znovu.</p>
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <button @click="gradeFlashcardQuality(0)" class="btn-danger !text-sm" title="Vůbec jsem si nevzpomněl/a - appka to nabídne znovu už zítra a interval opakování zkrátí nejvíc">❌ Neumím</button>
+                    <button @click="gradeFlashcardQuality(1)" class="!text-sm px-3 py-2 rounded-lg border border-amber-700/60 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 transition" title="Trvalo dlouho / dost jsem váhal/a - appka to taky nabídne zítra, ale interval sníží jen mírně">🤔 Váhal/a jsem</button>
+                    <button @click="gradeFlashcardQuality(2)" class="!text-sm px-3 py-2 rounded-lg border border-emerald-700/60 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40 transition" title="Vzpomněl/a jsem si bez větších potíží - normální prodloužení intervalu opakování">✅ Umím</button>
+                    <button @click="gradeFlashcardQuality(3)" class="btn-success !text-sm" title="Věděl/a jsem to naprosto jistě a hned - interval opakování se prodlouží nejvíc">🌟 Umím skvěle</button>
+                  </div>
                 </div>
               </div>
             </template>
@@ -1915,6 +1981,9 @@
                 <p v-for="(line, i) in quiz.hintBody" :key="i">{{ line }}</p>
               </div>
             </Transition>
+            <button v-if="canUndoLastAnswer" @click="undoLastAnswer" class="hint-toggle !mt-2" title="Vrátí zpět poslední zaznamenanou odpověď (statistiky, sérii i rozložené opakování) - hodí se po omylem kliknuté odpovědi">
+              ↩️ Vrátit poslední odpověď zpět
+            </button>
             </template>
           </div>
 
@@ -1991,6 +2060,23 @@
             <div class="flex gap-1">
               <button type="button" @click="noteForm.kind = 'text'" class="quiz-mode-btn !py-1.5" :class="{ 'quiz-mode-active': noteForm.kind === 'text' }">📝 Text</button>
               <button type="button" @click="noteForm.kind = 'checklist'" class="quiz-mode-btn !py-1.5" :class="{ 'quiz-mode-active': noteForm.kind === 'checklist' }">✅ Checklist</button>
+            </div>
+
+            <div v-if="voiceRecordingSupported" class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                @click="toggleVoiceRecording(noteForm)"
+                class="fmt-btn"
+                :class="{ 'quiz-mode-active': isVoiceRecordingTarget(noteForm) }"
+                :disabled="noteForm.voiceNotes.length >= 3 && !isVoiceRecordingTarget(noteForm)"
+                title="Nahrát hlasovou poznámku k zápisu (max. 3 na zápis, do 2 minut)"
+              >{{ isVoiceRecordingTarget(noteForm) ? `⏹️ Stop (${formatVoiceDuration(voiceRecordingSeconds)})` : '🎤 Hlasovka' }}</button>
+            </div>
+            <div v-if="noteForm.voiceNotes.length > 0" class="flex flex-wrap gap-2">
+              <div v-for="(v, i) in noteForm.voiceNotes" :key="v.id" class="composing-thumb-card !p-2 flex items-center gap-2">
+                <audio :src="v.dataUrl" controls class="h-8 max-w-[180px]"></audio>
+                <button type="button" @click="removeVoiceNote(noteForm, i)" class="btn-ghost !text-xs !p-1" title="Smazat hlasovku">✕</button>
+              </div>
             </div>
 
             <template v-if="noteForm.kind === 'text'">
@@ -2087,6 +2173,23 @@
                   <input v-model="editForm.title" class="input mb-2" placeholder="Název zápisu" />
                   <input v-model="editForm.tagsInput" class="input mb-2 !py-1.5 !text-sm" placeholder="🏷️ Štítky, odděl čárkou" />
 
+                  <div v-if="voiceRecordingSupported" class="flex flex-wrap items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      @click="toggleVoiceRecording(editForm)"
+                      class="fmt-btn"
+                      :class="{ 'quiz-mode-active': isVoiceRecordingTarget(editForm) }"
+                      :disabled="editForm.voiceNotes.length >= 3 && !isVoiceRecordingTarget(editForm)"
+                      title="Nahrát hlasovou poznámku k zápisu (max. 3 na zápis, do 2 minut)"
+                    >{{ isVoiceRecordingTarget(editForm) ? `⏹️ Stop (${formatVoiceDuration(voiceRecordingSeconds)})` : '🎤 Hlasovka' }}</button>
+                  </div>
+                  <div v-if="editForm.voiceNotes.length > 0" class="flex flex-wrap gap-2 mb-2">
+                    <div v-for="(v, i) in editForm.voiceNotes" :key="v.id" class="composing-thumb-card !p-2 flex items-center gap-2">
+                      <audio :src="v.dataUrl" controls class="h-8 max-w-[180px]"></audio>
+                      <button type="button" @click="removeVoiceNote(editForm, i)" class="btn-ghost !text-xs !p-1" title="Smazat hlasovku">✕</button>
+                    </div>
+                  </div>
+
                   <template v-if="editForm.kind === 'text'">
                     <div class="flex flex-wrap gap-1 mb-2">
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'bold')" class="fmt-btn" title="Tučně"><b>B</b></button>
@@ -2162,6 +2265,7 @@
                       <p class="text-xs text-slate-500 mt-0.5">
                         {{ formatDate(n.createdAt) }}<span v-if="n.updatedAt"> · upraveno {{ formatDate(n.updatedAt) }}</span>
                         <span v-if="n.images && n.images.length"> · 📎 {{ n.images.length }}</span>
+                        <span v-if="n.voiceNotes && n.voiceNotes.length"> · 🎤 {{ n.voiceNotes.length }}</span>
                         <span v-if="n.kind === 'checklist'"> · {{ n.items.filter(it => it.done).length }} / {{ n.items.length }} hotovo</span>
                       </p>
                       <div v-if="n.tags && n.tags.length" class="flex flex-wrap gap-1 mt-1.5">
@@ -2208,6 +2312,10 @@
                           </a>
                           <span v-if="img.caption" class="text-xs text-slate-500 max-w-[7rem] text-center truncate" :title="img.caption">{{ img.caption }}</span>
                         </div>
+                      </div>
+
+                      <div v-if="n.voiceNotes && n.voiceNotes.length" class="flex flex-wrap gap-2 mt-3" @click.stop>
+                        <audio v-for="v in n.voiceNotes" :key="v.id" :src="v.dataUrl" controls class="h-8 max-w-[220px]"></audio>
                       </div>
 
                       <!-- Historie verzí - appka si před KAŽDOU skutečnou úpravou (viz
@@ -2908,6 +3016,21 @@ function examUrgencyClass(d) {
   return 'bg-sky-500/80 text-white';
 }
 
+/** Sesbírá VŠECHNY termíny daného předmětu do jednoho pole - hlavní zkoušku
+ *  (subject.examDate, label "Zkouška") i doplňkové termíny (subject.
+ *  extraExamDates - zápočet, dílčí testy...), viz addExtraExamDate. Používá
+ *  se v examInfo níž, aby appka všude (odpočet, upozornění, plánování,
+ *  export do kalendáře) počítala se VŠEMI termíny najednou, ne jen s tím
+ *  hlavním. */
+function collectExamMilestones(subject) {
+  const list = [];
+  if (subject && subject.examDate) list.push({ id: 'main', label: 'Zkouška', date: subject.examDate });
+  if (subject && Array.isArray(subject.extraExamDates)) {
+    subject.extraExamDates.forEach((e) => { if (e && e.date) list.push({ id: e.id, label: e.label || 'Termín', date: e.date }); });
+  }
+  return list;
+}
+
 /** Pozdrav podle denní doby (lokální čas zařízení) pro velký nadpis na dashboardu. */
 function greetingForHour(hour) {
   if (hour >= 5 && hour < 12) return 'Dobré ráno';
@@ -3469,6 +3592,117 @@ function buildFlashcardsPrintHtml(subject) {
 }
 
 /* =====================================================================
+   TAHÁK KE ZKOUŠCE - viz exportSubjectCheatSheet
+   Sestaví jednu hustě zalomenou (ideálně jednostránkovou) tiskovou stránku
+   shrnující to nejdůležitější k danému předmětu: zápisy označené "Do
+   zkoušky" (🎓, viz toggleExamPrepNote), vlastní otázky, rozbory vět a
+   nahoře zvýrazněná nejslabší místa (podle stats.mistakeCounts, jen ta,
+   která appka umí spolehlivě přiřadit k TOMUTO předmětu - viz
+   describeMistakeKey). Na rozdíl od buildSubjectPdfHtml (kompletní export
+   všech zápisů) jde záměrně o zhuštěný, zkrácený přehled - "tahák", ne
+   plnohodnotné poznámky. */
+function buildCheatSheetHtml(subject, stats, subjectsList) {
+  const NOTE_SNIPPET_LEN = 320;
+  const mistakeCounts = (stats && stats.mistakeCounts) || {};
+  const weakSpots = Object.entries(mistakeCounts)
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => ({ key, count, info: describeMistakeKey(key, subjectsList) }))
+    .filter((w) => w.info && w.info.subjectId === subject.id)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  const examNotes = (subject.notes || []).filter((n) => n && n.examPrep);
+  const customQs = subject.customQuestions || [];
+  const sentences = subject.sentenceAnalyses || [];
+
+  const weakSpotsHtml = weakSpots.length ? `
+    <section class="cs-callout">
+      <h2>⚠️ Nejslabší místa (nejvíc chyb)</h2>
+      <ul>
+        ${weakSpots.map((w) => `<li>${escapeHtml(w.info.text)} <span class="cs-count">(${w.count}× chyba)</span></li>`).join('')}
+      </ul>
+    </section>
+  ` : '';
+
+  const examNotesHtml = examNotes.length ? `
+    <section class="cs-section">
+      <h2>🎓 Zápisy do zkoušky</h2>
+      <div class="cs-notes-grid">
+        ${examNotes.map((n) => {
+          const plain = n.kind === 'checklist'
+            ? n.items.map((it) => `• ${it.text}`).join('\n')
+            : noteContentToPlainText(n.content);
+          const snippet = plain.length > NOTE_SNIPPET_LEN ? plain.slice(0, NOTE_SNIPPET_LEN) + '…' : plain;
+          return `<div class="cs-note"><h3>${escapeHtml(n.title)}</h3><p>${escapeHtml(snippet).replace(/\n/g, '<br>')}</p></div>`;
+        }).join('')}
+      </div>
+    </section>
+  ` : '';
+
+  const customQsHtml = customQs.length ? `
+    <section class="cs-section">
+      <h2>❓ Vlastní otázky</h2>
+      <div class="cs-qa-grid">
+        ${customQs.map((q) => `<div class="cs-qa"><p class="cs-q">${escapeHtml(q.question)}</p><p class="cs-a">${escapeHtml(q.answers[0] || '')}</p></div>`).join('')}
+      </div>
+    </section>
+  ` : '';
+
+  const sentencesHtml = sentences.length ? `
+    <section class="cs-section">
+      <h2>📖 Rozbory vět</h2>
+      <table class="cs-table">
+        <thead><tr><th>Věta</th><th>Podmět</th><th>Přísudek</th><th>Druh věty</th></tr></thead>
+        <tbody>
+          ${sentences.map((sa) => `<tr><td>${escapeHtml(sa.sentence)}</td><td>${escapeHtml(sa.subjectPart)}</td><td>${escapeHtml(sa.predicatePart)}</td><td>${escapeHtml(sa.sentenceType)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </section>
+  ` : '';
+
+  const hasContent = examNotes.length || customQs.length || sentences.length;
+
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(subject.name)} — Tahák ke zkoušce</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 900px; margin: 1.2rem auto; padding: 0 1.2rem; font-size: 0.78rem; line-height: 1.35; }
+  h1 { font-size: 1.3rem; margin: 0 0 0.15rem; }
+  .cs-subtitle { color: #64748b; margin: 0 0 1rem; font-size: 0.75rem; }
+  h2 { font-size: 0.85rem; margin: 0 0 0.4rem; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.15rem; }
+  .cs-callout { background: #fff7ed; border: 1px solid #fdba74; border-radius: 0.5rem; padding: 0.6rem 0.9rem; margin-bottom: 1rem; }
+  .cs-callout h2 { border: none; color: #9a3412; }
+  .cs-callout ul { margin: 0; padding-left: 1.1rem; }
+  .cs-count { color: #9a3412; font-size: 0.7rem; }
+  .cs-section { margin-bottom: 1rem; page-break-inside: avoid; }
+  .cs-notes-grid { columns: 2; column-gap: 1.2rem; }
+  .cs-note { break-inside: avoid; margin-bottom: 0.6rem; border-left: 2px solid #94a3b8; padding-left: 0.5rem; }
+  .cs-note h3 { font-size: 0.78rem; margin: 0 0 0.15rem; }
+  .cs-note p { margin: 0; color: #334155; }
+  .cs-qa-grid { columns: 2; column-gap: 1.2rem; }
+  .cs-qa { break-inside: avoid; margin-bottom: 0.5rem; }
+  .cs-q { margin: 0; font-weight: 600; }
+  .cs-a { margin: 0; color: #0e7490; }
+  .cs-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  .cs-table th, .cs-table td { border: 1px solid #cbd5e1; padding: 0.25rem 0.4rem; text-align: left; }
+  .cs-table th { background: #f1f5f9; }
+  @media print { body { margin: 0; padding: 0.5rem; } }
+  @page { size: A4; margin: 10mm; }
+</style>
+</head>
+<body>
+  <h1>🗒️ ${subject.emoji ? escapeHtml(subject.emoji) + ' ' : ''}${escapeHtml(subject.name)} — Tahák ke zkoušce</h1>
+  <p class="cs-subtitle">Vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu · shrnutí zápisů označených 🎓 „Do zkoušky", vlastních otázek a rozborů vět.</p>
+  ${weakSpotsHtml}
+  ${hasContent ? `${examNotesHtml}${customQsHtml}${sentencesHtml}` : '<p style="text-align:center;padding:2rem;color:#64748b;">Tenhle předmět zatím nemá žádné zápisy označené „Do zkoušky" (🎓), vlastní otázky ani rozbory vět, ze kterých by šel tahák sestavit.</p>'}
+</body>
+</html>`;
+}
+
+/* =====================================================================
    EXPORT TERMÍNŮ DO KALENDÁŘE (.ics) - viz exportExamDatesToIcs
    ===================================================================== */
 /** Escapuje text pro pole uvnitř .ics souboru podle RFC 5545 (zpětné
@@ -3584,6 +3818,14 @@ function normalizeSubject(raw, fallbackId) {
     lastPracticedAt: (raw && typeof raw.lastPracticedAt === 'string' && raw.lastPracticedAt) ? raw.lastPracticedAt : null,
     archived: !!(raw && raw.archived),
     examDate: (raw && typeof raw.examDate === 'string' && raw.examDate) ? raw.examDate : null,
+    // Doplňkové termíny (zápočet, dílčí test...) - viz addExtraExamDate/collectExamMilestones.
+    extraExamDates: (Array.isArray(raw && raw.extraExamDates) ? raw.extraExamDates : [])
+      .filter((e) => e && typeof e === 'object')
+      .map((e, i) => ({
+        id: (e.id || e.id === 0) ? e.id : fallbackId + 5000 + i,
+        label: (typeof e.label === 'string' && e.label.trim()) ? e.label.trim() : 'Termín',
+        date: (typeof e.date === 'string' && e.date) ? e.date : null,
+      })),
     difficulty: (raw && DIFFICULTY_LEVELS.includes(raw.difficulty)) ? raw.difficulty : 'medium',
     notes: notesArr.map((n, i) => ({
       id: (n && (n.id || n.id === 0)) ? n.id : fallbackId + i + 1,
@@ -3597,6 +3839,18 @@ function normalizeSubject(raw, fallbackId) {
           ? { src: img, caption: '' }
           : { src: (img && typeof img.src === 'string') ? img.src : '', caption: (img && typeof img.caption === 'string') ? img.caption : '' }))
         .filter((img) => img.src),
+      // Hlasové poznámky - krátké base64-nahrávky (viz startVoiceRecording),
+      // schválně omezené počtem (MAX_VOICE_NOTES_PER_NOTE) už při ukládání,
+      // kdyby appka někdy načetla data z jiného zdroje s víc položkami.
+      voiceNotes: (Array.isArray(n && n.voiceNotes) ? n.voiceNotes : [])
+        .filter((v) => v && typeof v.dataUrl === 'string' && v.dataUrl)
+        .slice(0, 3)
+        .map((v, i) => ({
+          id: (v.id !== undefined && v.id !== null) ? String(v.id) : `${fallbackId}-vn-${i}`,
+          dataUrl: v.dataUrl,
+          duration: Number.isFinite(v.duration) ? v.duration : 0,
+          createdAt: (typeof v.createdAt === 'string' && v.createdAt) ? v.createdAt : new Date().toISOString(),
+        })),
       createdAt: (n && n.createdAt) || new Date().toISOString(),
       updatedAt: (n && n.updatedAt) || null,
       pinned: !!(n && n.pinned),
@@ -4351,6 +4605,29 @@ function srsGrade(record, correct) {
   return { interval, ease, reps, dueAt: Date.now() + interval * 24 * 60 * 60 * 1000 };
 }
 
+/** Jemnější varianta srsGrade výš pro 4-úrovňové kartičkové hodnocení (viz
+ *  gradeFlashcardQuality) - na rozdíl od binárního "správně/špatně" appka
+ *  ví, jestli byla odpověď jistá, nebo jen tak tak uhodnutá:
+ *  quality 0 = Neumím, 1 = Váhal jsem, 2 = Umím, 3 = Umím skvěle. */
+function srsGradeQuality(record, quality) {
+  const rec = record && typeof record === 'object' ? record : {};
+  let interval = typeof rec.interval === 'number' ? rec.interval : 0;
+  let ease = typeof rec.ease === 'number' ? rec.ease : 2.5;
+  let reps = typeof rec.reps === 'number' ? rec.reps : 0;
+  if (quality >= 2) {
+    reps += 1;
+    if (reps === 1) interval = 1;
+    else if (reps === 2) interval = 3;
+    else interval = Math.max(1, Math.round(interval * ease));
+    ease = Math.min(2.8, ease + (quality === 3 ? 0.15 : 0));
+  } else {
+    reps = 0;
+    interval = 1;
+    ease = Math.max(1.3, ease - (quality === 0 ? 0.3 : 0.15));
+  }
+  return { interval, ease, reps, dueAt: Date.now() + interval * 24 * 60 * 60 * 1000 };
+}
+
 /** Jestli se pro daný klíč otázky vůbec sleduje rozložené opakování - jen
  *  otázky s pevnou identitou (viz komentář u srsGrade výš). */
 function isSrsEligibleKey(key) {
@@ -4560,6 +4837,37 @@ const app = createApp({
       applyAccent(); // --accent-text/--accent-text-hover se liší podle světlého/tmavého režimu
     });
 
+    /* ---------- Velikost písma (přístupnost) ----------
+       Stejný princip jako světlý/tmavý režim výš (třída na <html>,
+       localStorage) - viz CSS .font-size-* pravidla, díky kterým se
+       přenastavením jen jedné hodnoty (rem základ) úměrně zvětší/zmenší
+       úplně celá appka. */
+    const FONT_SIZE_KEY = 'studijniHubFontSize_v1';
+    const FONT_SIZE_LEVELS = ['small', 'normal', 'large', 'xlarge'];
+    const FONT_SIZE_LABELS = { small: 'Malé', normal: 'Střední', large: 'Velké', xlarge: 'Extra velké' };
+    function loadFontSize() {
+      try {
+        const saved = localStorage.getItem(FONT_SIZE_KEY);
+        if (FONT_SIZE_LEVELS.includes(saved)) return saved;
+      } catch (e) { /* localStorage nedostupné - použije se výchozí velikost */ }
+      return 'normal';
+    }
+    const fontSizeLevel = ref(loadFontSize());
+    function applyFontSize() {
+      const root = document.documentElement;
+      FONT_SIZE_LEVELS.forEach((lvl) => root.classList.remove('font-size-' + lvl));
+      if (fontSizeLevel.value !== 'normal') root.classList.add('font-size-' + fontSizeLevel.value);
+    }
+    function setFontSize(level) {
+      if (!FONT_SIZE_LEVELS.includes(level)) return;
+      fontSizeLevel.value = level;
+    }
+    watch(fontSizeLevel, () => {
+      applyFontSize();
+      try { localStorage.setItem(FONT_SIZE_KEY, fontSizeLevel.value); }
+      catch (e) { console.warn('Volbu velikosti písma se nepodařilo uložit.', e); }
+    });
+
     /* ---------- Vlastní akcentová barva appky ---------- */
     const ACCENT_KEY = 'studijniHubAccent_v1';
     function loadAccentId() {
@@ -4619,6 +4927,7 @@ const app = createApp({
       card.style.transform = '';
     }
     applyTheme(); // sladí stav appky s třídou nastavenou blokujícím skriptem v <head>
+    applyFontSize();
 
     /* ---------- Perzistentní data (předměty + zápisy) ----------
        subjects/stats/trash začínají prázdné a naplní se až asynchronně přes
@@ -5643,10 +5952,12 @@ const app = createApp({
      *  nikdy nedoporučují. */
     function subjectRecommendationScore(subject) {
       let score = 0;
-      const examDays = daysUntil(subject.examDate);
-      if (examDays !== null) {
-        if (examDays >= 0) score += Math.max(0, 60 - examDays * 4);
-        else score += 5; // zkouška těsně proběhla - lehká priorita na dozkoušení
+      // examInfo (definováno níž, viz collectExamMilestones) zahrnuje NEJBLIŽŠÍ
+      // ze VŠECH termínů předmětu - hlavní zkoušku i doplňkové termíny.
+      const exam = examInfo(subject);
+      if (exam) {
+        if (exam.days >= 0) score += Math.max(0, 60 - exam.days * 4);
+        else score += 5; // termín těsně proběhl - lehká priorita na dozkoušení
       }
       if (!subject.lastPracticedAt) {
         score += 25;
@@ -5674,9 +5985,9 @@ const app = createApp({
      *  vždy vybere ten NEJvýznamnější důvod, aby zpráva byla stručná. */
     function recommendationReason(subject) {
       if (!subject) return '';
-      const examDays = daysUntil(subject.examDate);
-      if (examDays !== null && examDays >= 0 && examDays <= 14) {
-        return `zkouška ${examCountdownShort(examDays)}`;
+      const exam = examInfo(subject);
+      if (exam && exam.days >= 0 && exam.days <= 14) {
+        return `${exam.label.toLowerCase()} ${examCountdownShort(exam.days)}`;
       }
       if (!subject.lastPracticedAt) return 'ještě jsi ho neprocvičoval/a';
       const daysSince = Math.floor((Date.now() - new Date(subject.lastPracticedAt).getTime()) / 86400000);
@@ -5712,14 +6023,14 @@ const app = createApp({
 
       return [...bySubject.values()]
         .map(({ subject, srsDue, weakCount }) => {
-          const examDays = daysUntil(subject.examDate);
-          const examSoon = examDays !== null && examDays >= 0 && examDays <= 7;
+          const exam = examInfo(subject);
+          const examSoon = exam && exam.days >= 0 && exam.days <= 7;
           let score = 0;
-          if (examSoon) score += Math.max(0, 40 - examDays * 4);
+          if (examSoon) score += Math.max(0, 40 - exam.days * 4);
           score += srsDue * 6;
           score += weakCount * 5;
           const reasons = [];
-          if (examSoon) reasons.push(`zkouška ${examCountdownShort(examDays)}`);
+          if (examSoon) reasons.push(`${exam.label.toLowerCase()} ${examCountdownShort(exam.days)}`);
           if (srsDue > 0) reasons.push(`${srsDue} ${pluralize(srsDue, 'položka k opakování', 'položky k opakování', 'položek k opakování')}`);
           if (weakCount > 0) reasons.push(`${weakCount} ${pluralize(weakCount, 'slabé místo', 'slabá místa', 'slabých míst')}`);
           return { subject, score, reasonText: reasons.join(' · ') };
@@ -5823,30 +6134,34 @@ const app = createApp({
      *  appka aspoň občas otevřená v prohlížeči). Ke každé zkoušce appka
      *  rovnou přidá i připomínku den předem (VALARM). */
     function exportExamDatesToIcs() {
-      const withExam = subjects.filter((s) => !s.archived && s.examDate);
-      if (!withExam.length) {
-        alert('Zatím nemáš u žádného předmětu nastavený termín zkoušky - nastavíš ho v detailu předmětu u „📅 Nastavit termín zkoušky".');
+      // collectExamMilestones (viz výš) zahrnuje hlavní zkoušku i doplňkové
+      // termíny (zápočet, dílčí test...) - appka exportuje úplně všechny.
+      const stamp = icsUtcStamp(new Date());
+      const events = [];
+      subjects.filter((s) => !s.archived).forEach((s) => {
+        collectExamMilestones(s).forEach((m) => {
+          const dateOnly = m.date.replace(/-/g, '');
+          const uid = `exam-${s.id}-${m.id}-${dateOnly}@studijni-hub`;
+          events.push([
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTAMP:${stamp}`,
+            `DTSTART;VALUE=DATE:${dateOnly}`,
+            icsFold(`SUMMARY:${icsEscape(m.label + ': ' + s.emoji + ' ' + s.name)}`),
+            icsFold(`DESCRIPTION:${icsEscape('Termín (' + m.label + ') z předmětu ' + s.name + ' - vytvořeno ve Studijním Hubu.')}`),
+            'BEGIN:VALARM',
+            'ACTION:DISPLAY',
+            icsFold(`DESCRIPTION:${icsEscape('Zítra máš ' + m.label.toLowerCase() + ': ' + s.name)}`),
+            'TRIGGER:-P1D',
+            'END:VALARM',
+            'END:VEVENT',
+          ].join('\r\n'));
+        });
+      });
+      if (!events.length) {
+        alert('Zatím nemáš u žádného předmětu nastavený termín - nastavíš ho v detailu předmětu u „📅 Nastavit termín zkoušky" nebo „➕ Přidat termín".');
         return;
       }
-      const stamp = icsUtcStamp(new Date());
-      const events = withExam.map((s) => {
-        const dateOnly = s.examDate.replace(/-/g, '');
-        const uid = `exam-${s.id}-${dateOnly}@studijni-hub`;
-        return [
-          'BEGIN:VEVENT',
-          `UID:${uid}`,
-          `DTSTAMP:${stamp}`,
-          `DTSTART;VALUE=DATE:${dateOnly}`,
-          icsFold(`SUMMARY:${icsEscape('Zkouška: ' + s.emoji + ' ' + s.name)}`),
-          icsFold(`DESCRIPTION:${icsEscape('Termín zkoušky z předmětu ' + s.name + ' - vytvořeno ve Studijním Hubu.')}`),
-          'BEGIN:VALARM',
-          'ACTION:DISPLAY',
-          icsFold(`DESCRIPTION:${icsEscape('Zítra máš zkoušku: ' + s.name)}`),
-          'TRIGGER:-P1D',
-          'END:VALARM',
-          'END:VEVENT',
-        ].join('\r\n');
-      });
       const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Studijni Hub//CS', 'CALSCALE:GREGORIAN', ...events, 'END:VCALENDAR'].join('\r\n');
       const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -5873,8 +6188,8 @@ const app = createApp({
         return info && info.days >= 0 && info.days <= EXAM_REMINDER_HORIZON_DAYS;
       });
       if (soonExams.length > 0 && meta.lastExamNotifyDate !== today) {
-        const names = soonExams.map((s) => `${s.emoji} ${s.name} (${examCountdownShort(examInfo(s).days)})`).join(', ');
-        sendLocalNotification('Blíží se zkouška 📅', names);
+        const names = soonExams.map((s) => `${s.emoji} ${s.name} — ${examInfo(s).label} (${examCountdownShort(examInfo(s).days)})`).join(', ');
+        sendLocalNotification('Blíží se termín 📅', names);
         meta.lastExamNotifyDate = today;
         saveNotifyMeta(meta);
       }
@@ -5893,14 +6208,43 @@ const app = createApp({
       if (!subject) return;
       subject.examDate = value || null;
     }
-    /** Vrátí info o odpočtu ke zkoušce daného předmětu, nebo null pokud
-     *  termín není nastavený - používá se v kartě předmětu i v panelu
-     *  nadcházejících termínů na dashboardu. */
+    /** Vrátí info o odpočtu k NEJBLIŽŠÍMU termínu daného předmětu (hlavní
+     *  zkouška i doplňkové termíny dohromady, viz collectExamMilestones),
+     *  nebo null pokud nemá nastavený žádný termín - používá se v kartě
+     *  předmětu i v panelu nadcházejících termínů na dashboardu. */
     function examInfo(subject) {
-      if (!subject || !subject.examDate) return null;
-      const d = daysUntil(subject.examDate);
-      if (d === null) return null;
-      return { days: d, shortLabel: examCountdownShort(d), cls: examUrgencyClass(d) };
+      const milestones = collectExamMilestones(subject);
+      let best = null;
+      for (const m of milestones) {
+        const d = daysUntil(m.date);
+        if (d === null) continue;
+        if (!best || d < best.days) best = { days: d, shortLabel: examCountdownShort(d), cls: examUrgencyClass(d), label: m.label, date: m.date };
+      }
+      return best;
+    }
+    /* ---------- Doplňkové termíny u předmětu (zápočet, dílčí test...) ----
+       Na rozdíl od subject.examDate výš (jedna hlavní zkouška) jde tohle
+       nastavit vícekrát u stejného předmětu - appka je se stejnou vahou
+       počítá do odpočtu (examInfo), upozornění (checkAndSendReminders),
+       plánování (subjectRecommendationScore/dailyPlanItems) i exportu do
+       kalendáře (exportExamDatesToIcs). */
+    const newExtraExamLabel = ref('');
+    function addExtraExamDate(subject) {
+      if (!subject) return;
+      const label = (newExtraExamLabel.value || '').trim() || 'Termín';
+      if (!Array.isArray(subject.extraExamDates)) subject.extraExamDates = [];
+      subject.extraExamDates.push({ id: Date.now() + Math.floor(Math.random() * 1000), label, date: null });
+      newExtraExamLabel.value = '';
+    }
+    function setExtraExamDate(subject, id, value) {
+      if (!subject) return;
+      const e = (subject.extraExamDates || []).find((x) => x.id === id);
+      if (e) e.date = value || null;
+    }
+    function removeExtraExamDate(subject, id) {
+      if (!subject) return;
+      const idx = (subject.extraExamDates || []).findIndex((x) => x.id === id);
+      if (idx !== -1) subject.extraExamDates.splice(idx, 1);
     }
     // Termíny, které stojí za zvýraznění přímo na kartě předmětu na dashboardu
     // (aby appka neukazovala barevný odznak i u zkoušky za tři měsíce).
@@ -5912,7 +6256,6 @@ const app = createApp({
     }
     const upcomingExams = computed(() =>
       subjects
-        .filter((s) => s.examDate)
         .map((s) => ({ subject: s, info: examInfo(s) }))
         .filter((x) => x.info)
         .sort((a, b) => a.info.days - b.info.days)
@@ -5953,6 +6296,7 @@ const app = createApp({
         lastPracticedAt: null,
         archived: false,
         examDate: null,
+        extraExamDates: [],
         difficulty: 'medium',
         customQuestions: [],
         sentenceAnalyses: [],
@@ -6017,10 +6361,10 @@ const app = createApp({
     /* ---------- Zápisy (CRUD) ---------- */
     // "kind" a "items" patří k checklist zápiskům (viz níže) - u běžného
     // textového zápisu zůstává items prázdné a nepoužívá se.
-    const noteForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
+    const noteForm = reactive({ title: '', content: '', images: [], voiceNotes: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
     const expandedNoteId = ref(null);
     const editingNoteId = ref(null);
-    const editForm = reactive({ title: '', content: '', images: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
+    const editForm = reactive({ title: '', content: '', images: [], voiceNotes: [], kind: 'text', items: [], newItemText: '', tagsInput: '' });
     const noteSearchQuery = ref('');
     const noteContentEl = ref(null);
     const editContentEl = ref(null);
@@ -6101,6 +6445,7 @@ const app = createApp({
         title,
         content: noteForm.kind === 'checklist' ? '' : noteForm.content.trim(),
         images: noteForm.images.map((img) => ({ ...img })),
+        voiceNotes: noteForm.voiceNotes.map((v) => ({ ...v })),
         createdAt: new Date().toISOString(),
         updatedAt: null,
         pinned: false,
@@ -6111,11 +6456,13 @@ const app = createApp({
       noteForm.title = '';
       noteForm.content = '';
       noteForm.images = [];
+      noteForm.voiceNotes = [];
       noteForm.kind = 'text';
       noteForm.items = [];
       noteForm.newItemText = '';
       noteForm.tagsInput = '';
       stopDictation();
+      if (isVoiceRecordingTarget(noteForm)) cancelVoiceRecording();
     }
     function toggleNote(id) {
       expandedNoteId.value = expandedNoteId.value === id ? null : id;
@@ -6125,12 +6472,13 @@ const app = createApp({
       editForm.title = n.title;
       editForm.content = n.content;
       editForm.images = (n.images || []).map((img) => ({ ...img }));
+      editForm.voiceNotes = (n.voiceNotes || []).map((v) => ({ ...v }));
       editForm.kind = n.kind || 'text';
       editForm.items = (n.items || []).map((it) => ({ ...it }));
       editForm.newItemText = '';
       editForm.tagsInput = (n.tags || []).join(', ');
     }
-    function cancelEdit() { editingNoteId.value = null; stopDictation(); }
+    function cancelEdit() { editingNoteId.value = null; stopDictation(); if (isVoiceRecordingTarget(editForm)) cancelVoiceRecording(); }
 
     /* ---------- Historie verzí zápisu ----------
        Appka si před KAŽDOU skutečnou úpravou (viz saveEditNote) uloží
@@ -6189,12 +6537,14 @@ const app = createApp({
       n.title = title;
       n.content = newContent;
       n.images = editForm.images.map((img) => ({ ...img }));
+      n.voiceNotes = editForm.voiceNotes.map((v) => ({ ...v }));
       n.kind = editForm.kind;
       n.items = newItems;
       n.tags = parseTagsInput(editForm.tagsInput);
       n.updatedAt = new Date().toISOString();
       editingNoteId.value = null;
       stopDictation();
+      if (isVoiceRecordingTarget(editForm)) cancelVoiceRecording();
     }
 
     /* ---------- Formátování textu zápisu (jednoduchý markdown) ---------- */
@@ -6297,6 +6647,125 @@ const app = createApp({
     function toggleDictation(state, key) {
       if (isDictatingTarget(state)) stopDictation();
       else startDictation(state, key);
+    }
+
+    /* ---------- Hlasové poznámky u zápisu ----------
+       Krátké zvukové nahrávky (MediaRecorder), uložené jako base64 data URL
+       přímo v zápisku (podobně jako obrázky) - fungují i offline, nic se
+       nikam neposílá. Appka drží (podobně jako u diktování) jen jednu
+       "živou" nahrávku najednou přes obyčejné (ne-reaktivní) proměnné a
+       reaktivní je jen UI stav (voiceRecordingActive/voiceRecordingSeconds). */
+    const MAX_VOICE_NOTES_PER_NOTE = 3;
+    const MAX_VOICE_NOTE_SECONDS = 120;
+    const voiceRecordingSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof MediaRecorder !== 'undefined');
+    const voiceRecordingActive = ref(false);
+    const voiceRecordingSeconds = ref(0);
+    let voiceMediaRecorder = null;
+    let voiceMediaStream = null;
+    let voiceRecordingChunks = [];
+    let voiceRecordingTargetState = null;
+    let voiceRecordingTimer = null;
+
+    function isVoiceRecordingTarget(state) {
+      return voiceRecordingActive.value && voiceRecordingTargetState === state;
+    }
+
+    function stopVoiceStream() {
+      if (voiceMediaStream) {
+        try { voiceMediaStream.getTracks().forEach((t) => t.stop()); } catch (e) { /* není kritické */ }
+      }
+      voiceMediaStream = null;
+    }
+
+    function cancelVoiceRecording() {
+      if (voiceRecordingTimer) { clearInterval(voiceRecordingTimer); voiceRecordingTimer = null; }
+      if (voiceMediaRecorder) {
+        try { voiceMediaRecorder.onstop = null; voiceMediaRecorder.stop(); } catch (e) { /* není kritické */ }
+      }
+      stopVoiceStream();
+      voiceMediaRecorder = null;
+      voiceRecordingChunks = [];
+      voiceRecordingTargetState = null;
+      voiceRecordingActive.value = false;
+      voiceRecordingSeconds.value = 0;
+    }
+
+    async function startVoiceRecording(state) {
+      if (!voiceRecordingSupported) return;
+      if (!state.voiceNotes) state.voiceNotes = [];
+      if (state.voiceNotes.length >= MAX_VOICE_NOTES_PER_NOTE) {
+        alert(`K jednomu zápisu lze přidat maximálně ${MAX_VOICE_NOTES_PER_NOTE} hlasové poznámky.`);
+        return;
+      }
+      if (voiceRecordingActive.value) cancelVoiceRecording(); // kdyby nahrával jiný formulář
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceMediaStream = stream;
+        voiceRecordingChunks = [];
+        const recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) voiceRecordingChunks.push(e.data); };
+        recorder.onstop = () => {
+          const mimeType = recorder.mimeType || 'audio/webm';
+          const blob = new Blob(voiceRecordingChunks, { type: mimeType });
+          voiceRecordingChunks = [];
+          stopVoiceStream();
+          const targetState = voiceRecordingTargetState;
+          if (voiceRecordingTimer) { clearInterval(voiceRecordingTimer); voiceRecordingTimer = null; }
+          const durationSec = voiceRecordingSeconds.value;
+          voiceRecordingActive.value = false;
+          voiceRecordingSeconds.value = 0;
+          voiceMediaRecorder = null;
+          voiceRecordingTargetState = null;
+          if (!targetState || blob.size === 0) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (!targetState.voiceNotes) targetState.voiceNotes = [];
+            if (targetState.voiceNotes.length >= MAX_VOICE_NOTES_PER_NOTE) return;
+            targetState.voiceNotes.push({
+              id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+              dataUrl: reader.result,
+              duration: durationSec,
+              createdAt: new Date().toISOString(),
+            });
+          };
+          reader.readAsDataURL(blob);
+        };
+        voiceMediaRecorder = recorder;
+        voiceRecordingTargetState = state;
+        voiceRecordingActive.value = true;
+        voiceRecordingSeconds.value = 0;
+        recorder.start();
+        voiceRecordingTimer = setInterval(() => {
+          voiceRecordingSeconds.value += 1;
+          if (voiceRecordingSeconds.value >= MAX_VOICE_NOTE_SECONDS) stopVoiceRecording();
+        }, 1000);
+      } catch (e) {
+        console.warn('Nahrávání hlasové poznámky se nepodařilo spustit.', e);
+        alert('Nahrávání se nepodařilo spustit - zkontroluj prosím oprávnění k mikrofonu.');
+        cancelVoiceRecording();
+      }
+    }
+
+    function stopVoiceRecording() {
+      if (!voiceMediaRecorder) return;
+      try { voiceMediaRecorder.stop(); } catch (e) { cancelVoiceRecording(); }
+    }
+
+    function toggleVoiceRecording(state) {
+      if (isVoiceRecordingTarget(state)) stopVoiceRecording();
+      else startVoiceRecording(state);
+    }
+
+    function removeVoiceNote(state, index) {
+      if (!state.voiceNotes) return;
+      state.voiceNotes.splice(index, 1);
+    }
+
+    function formatVoiceDuration(sec) {
+      const s = Math.max(0, Math.round(sec || 0));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${String(r).padStart(2, '0')}`;
     }
 
     /* ---------- Rozpoznávání textu z fotky (OCR) ----------
@@ -6699,6 +7168,29 @@ const app = createApp({
       }
       printWindow.document.open();
       printWindow.document.write(buildFlashcardsPrintHtml(subject));
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); }, 350);
+    }
+
+    /** Otevře tiskový náhled taháku ke zkoušce (viz buildCheatSheetHtml) -
+     *  stejný vzor jako exportSubjectFlashcardsToPrint výš. */
+    function exportSubjectCheatSheet(subject) {
+      if (!subject) return;
+      const hasContent = (subject.notes || []).some((n) => n && n.examPrep)
+        || (subject.customQuestions || []).length > 0
+        || (subject.sentenceAnalyses || []).length > 0;
+      if (!hasContent) {
+        alert('Tenhle předmět zatím nemá žádné zápisy označené „Do zkoušky“ (🎓), vlastní otázky ani rozbory vět, ze kterých by šel tahák sestavit.');
+        return;
+      }
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Prohlížeč zablokoval vyskakovací okno potřebné pro tisk taháku. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildCheatSheetHtml(subject, stats, subjects));
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => { printWindow.print(); }, 350);
@@ -7288,6 +7780,87 @@ const app = createApp({
       stats.practiceLog = [];
     }
 
+    /* ---------- Kdy se mi nejlíp daří (výkon podle denní doby) ----------
+       Appka rozdělí záznamy z deníku procvičování (stats.practiceLog, viz
+       výš) do pěti hrubších částí dne a spočítá úspěšnost v každé z nich -
+       jednotlivé hodiny by u běžného množství dat byly moc řídké na to, aby
+       z nich šlo něco spolehlivě vyčíst. Noční pásmo (23-5) schválně
+       "obtéká" půlnoc. */
+    const PRACTICE_TIME_PERIODS = [
+      { id: 'morning', label: '🌅 Ráno', range: '5–11', from: 5, to: 11 },
+      { id: 'midday', label: '☀️ Dopoledne/poledne', range: '11–15', from: 11, to: 15 },
+      { id: 'afternoon', label: '🌤️ Odpoledne', range: '15–19', from: 15, to: 19 },
+      { id: 'evening', label: '🌆 Večer', range: '19–23', from: 19, to: 23 },
+      { id: 'night', label: '🌙 Noc', range: '23–5', from: 23, to: 5 },
+    ];
+    const MIN_TIME_OF_DAY_SAMPLE = 8;
+    function isHourInPeriod(hour, period) {
+      return period.from <= period.to
+        ? (hour >= period.from && hour < period.to)
+        : (hour >= period.from || hour < period.to);
+    }
+    const practiceByTimeOfDay = computed(() => {
+      const buckets = PRACTICE_TIME_PERIODS.map((p) => ({ ...p, count: 0, correct: 0 }));
+      for (const entry of stats.practiceLog) {
+        const d = new Date(entry.ts);
+        if (isNaN(d.getTime())) continue;
+        const hour = d.getHours();
+        const bucket = buckets.find((b) => isHourInPeriod(hour, b));
+        if (bucket) { bucket.count += 1; if (entry.correct) bucket.correct += 1; }
+      }
+      return buckets.map((b) => ({ ...b, accuracy: b.count > 0 ? Math.round((b.correct / b.count) * 100) : null }));
+    });
+    const timeOfDayInsight = computed(() => {
+      const eligible = practiceByTimeOfDay.value.filter((b) => b.count >= MIN_TIME_OF_DAY_SAMPLE);
+      if (eligible.length < 2) return null;
+      const best = eligible.reduce((a, b) => (b.accuracy > a.accuracy ? b : a));
+      const worst = eligible.reduce((a, b) => (b.accuracy < a.accuracy ? b : a));
+      if (best.id === worst.id || best.accuracy === worst.accuracy) return null;
+      return { best, worst };
+    });
+    const showTimeOfDayInsight = ref(false);
+
+    /* ---------- Tlačítko Zpět po omylu ----------
+       Uchová si stav TĚSNĚ PŘED poslední zaznamenanou odpovědí (jen jednu
+       úroveň zpět, ne celou historii) - hodí se, když si omylem klikneš na
+       špatnou odpověď nebo "Neumím" u kartičky. Schválně dostupné jen ve
+       volném procvičování a u kartiček (ne v časované/testové session, kde
+       by dílčí vrácení jedné odpovědi rozházelo počítadla té session). */
+    const lastAnswerSnapshot = ref(null);
+    function captureAnswerSnapshot() {
+      lastAnswerSnapshot.value = {
+        stats: {
+          totalSolved: stats.totalSolved, totalAttempts: stats.totalAttempts,
+          currentStreak: stats.currentStreak, bestStreak: stats.bestStreak,
+          dailyHistory: JSON.parse(JSON.stringify(stats.dailyHistory)),
+          dailyAttempts: JSON.parse(JSON.stringify(stats.dailyAttempts)),
+          mistakeCounts: JSON.parse(JSON.stringify(stats.mistakeCounts)),
+          srs: JSON.parse(JSON.stringify(stats.srs)),
+          practiceLog: stats.practiceLog.slice(),
+        },
+        subjectId: quizSourceSubject.value ? quizSourceSubject.value.id : null,
+        subjectSolvedCount: quizSourceSubject.value ? (quizSourceSubject.value.solvedCount || 0) : null,
+        subjectAttemptsCount: quizSourceSubject.value ? (quizSourceSubject.value.attemptsCount || 0) : null,
+        subjectLastPracticedAt: quizSourceSubject.value ? quizSourceSubject.value.lastPracticedAt : null,
+      };
+    }
+    const canUndoLastAnswer = computed(() => !!lastAnswerSnapshot.value && !timedSession.active && !quizSession.active);
+    function undoLastAnswer() {
+      const snap = lastAnswerSnapshot.value;
+      if (!snap) return;
+      Object.assign(stats, snap.stats);
+      if (snap.subjectId != null) {
+        const s = subjects.find((x) => x.id === snap.subjectId);
+        if (s) {
+          s.solvedCount = snap.subjectSolvedCount;
+          s.attemptsCount = snap.subjectAttemptsCount;
+          s.lastPracticedAt = snap.subjectLastPracticedAt;
+        }
+      }
+      lastAnswerSnapshot.value = null;
+      generateNewQuiz();
+    }
+
     function recordCorrect() {
       stats.totalSolved++;
       stats.currentStreak++;
@@ -7327,6 +7900,7 @@ const app = createApp({
 
     function checkQuizAnswer() {
       if (!quiz.userInput.trim() || !quiz._check) return;
+      captureAnswerSnapshot();
       stats.totalAttempts++;
       if (quiz._check(quiz.userInput)) {
         quiz.solved = true;
@@ -7436,11 +8010,26 @@ const app = createApp({
     function flipFlashcard() {
       flashcardFlipped.value = true;
     }
-    /** Sebehodnocení u kartičky - uživatel sám řekne, jestli odpověď znal. */
-    function gradeFlashcard(knewIt) {
+    /** Sebehodnocení u kartičky - 4 úrovně jistoty (0 = Neumím ... 3 = Umím
+     *  skvěle), stejný princip jako v opravdové appce Anki. Appka nejdřív
+     *  proženě odpověď obyčejným recordCorrect/recordWrong (stejné počítání
+     *  statistik, chybovosti i deníku procvičování jako u psaných odpovědí -
+     *  quality >= 2 se počítá jako "správně"), a až POTOM přepíše záznam v
+     *  rozloženém opakování jemnějším srsGradeQuality, který na rozdíl od
+     *  binárního srsGrade (použitého uvnitř recordCorrect/recordWrong)
+     *  rozlišuje jistou odpověď od tak tak uhodnuté. */
+    function gradeFlashcardQuality(quality) {
+      captureAnswerSnapshot();
       stats.totalAttempts++;
-      if (knewIt) recordCorrect();
+      const key = quiz.key;
+      const wasEligible = !!(key && isSrsEligibleKey(key));
+      const priorRecord = wasEligible ? (stats.srs && stats.srs[key]) : null;
+      if (quality >= 2) recordCorrect();
       else recordWrong();
+      if (wasEligible) {
+        if (!stats.srs) stats.srs = {};
+        stats.srs[key] = srsGradeQuality(priorRecord, quality);
+      }
       generateNewQuiz();
     }
 
@@ -7627,10 +8216,13 @@ const app = createApp({
       showWeakSpots, weakestSpotsOverview,
       showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel,
       showPracticeLog, practiceLogRecent, formatPracticeLogTime, clearPracticeLog,
+      showTimeOfDayInsight, practiceByTimeOfDay, timeOfDayInsight, MIN_TIME_OF_DAY_SAMPLE,
+      canUndoLastAnswer, undoLastAnswer,
       showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, storageEstimate, formatBytes, subjectsBySizeDesc, trashUsageBytes,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
       toggleTheme,
+      fontSizeLevel, setFontSize, FONT_SIZE_LEVELS, FONT_SIZE_LABELS, applyFontSize,
       openSubject, closeSubject, scrollCarousel, updateScrollState,
       onSubjectDragStart, onSubjectDragOver, onSubjectDrop, onSubjectDragEnd,
       toggleArchiveSubject,
@@ -7642,14 +8234,17 @@ const app = createApp({
       shareModal, shareSubject, closeShareModal, copyShareLink, shareView,
       progressReportModal, shareProgressReport, closeProgressReportModal, copyProgressReportLink, reportView,
       dictationSupported, isDictatingTarget, toggleDictation,
+      voiceRecordingSupported, voiceRecordingActive, voiceRecordingSeconds, isVoiceRecordingTarget,
+      toggleVoiceRecording, removeVoiceNote, formatVoiceDuration, startVoiceRecording, stopVoiceRecording, cancelVoiceRecording,
       generateNewQuiz, checkQuizAnswer,
-      useFlashcardMode, flipFlashcard, gradeFlashcard,
+      useFlashcardMode, flipFlashcard, gradeFlashcardQuality,
       startSession, stopSession, continuePractice, pluralize,
       addCustomQuestion, deleteCustomQuestion,
       chartBarHeight,
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
       exportBackup, triggerImportFile, handleImportFile,
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet, exportSubjectToAnki,
+      exportSubjectCheatSheet,
       importAnkiFileEl, triggerImportAnkiFile, handleImportAnkiFile,
       exportSubjectFlashcardsToPrint,
       exportExamDatesToIcs,
@@ -7657,6 +8252,7 @@ const app = createApp({
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
       importTextFileEl, openImportTextPicker, handleImportTextFile,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
+      newExtraExamLabel, addExtraExamDate, setExtraExamDate, removeExtraExamDate,
       showWeeklyPlan, weeklyPlan,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
