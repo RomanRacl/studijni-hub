@@ -5,6 +5,54 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Studijní Hub | Předměty, zápisy a procvičování</title>
 
+<!-- POJISTKA PROTI "InvalidCharacterError: Invalid qualified name" (WebKit):
+     na reálném iPhonu (Safari i Chrome - obě běží na stejném enginu WebKit)
+     se opakovaně objevovala chyba přímo uvnitř Vue při vykreslování seznamu
+     karet předmětů - setAttribute s neplatným názvem atributu. Chrome (na
+     počítači i v jeho mobilní simulaci) tohle nikdy nereprodukoval, takže se
+     to nedalo najít vzdáleně, a přetrvávalo to i po snížení verze Vue.
+     Místo dalšího pátrání po přesné příčině (Vue interně, přes stovky
+     minifikovaných funkcí, kolem 400 kB kódu) appka teď tenhle konkrétní typ
+     chyby rovnou "odchytí" na úrovni prohlížeče: pokud kdykoliv cokoliv
+     zavolá setAttribute s neplatným názvem, appka to tiše přeskočí (ten
+     jeden konkrétní atribut se nenastaví) a POKRAČUJE dál, místo aby spadla
+     celá stránka. Musí to být úplně první script v <head>, ještě před Vue
+     i Tailwind, aby platilo od úplného začátku. -->
+<script>
+  (function () {
+    var origSetAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name, value) {
+      try {
+        return origSetAttribute.call(this, name, value);
+      } catch (err) {
+        if (err && err.name === 'InvalidCharacterError') {
+          window.__suppressedAttrErrors = (window.__suppressedAttrErrors || 0) + 1;
+          if (window.console && console.warn) {
+            console.warn('Potlačena neplatná setAttribute("' + name + '", ...) na', this, err);
+          }
+          return;
+        }
+        throw err;
+      }
+    };
+    var origSetAttributeNS = Element.prototype.setAttributeNS;
+    Element.prototype.setAttributeNS = function (ns, name, value) {
+      try {
+        return origSetAttributeNS.call(this, ns, name, value);
+      } catch (err) {
+        if (err && err.name === 'InvalidCharacterError') {
+          window.__suppressedAttrErrors = (window.__suppressedAttrErrors || 0) + 1;
+          if (window.console && console.warn) {
+            console.warn('Potlačena neplatná setAttributeNS("' + name + '", ...) na', this, err);
+          }
+          return;
+        }
+        throw err;
+      }
+    };
+  })();
+</script>
+
 <!-- Nastaví uloženou volbu světlý/tmavý režim ještě PŘED vykreslením stránky,
      aby nedošlo ke krátkému probliknutí tmavým (výchozím) vzhledem u lidí,
      kteří si dříve zvolili světlý režim. -->
