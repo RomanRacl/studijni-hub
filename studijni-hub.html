@@ -787,6 +787,27 @@
   }
   .composing-thumb-remove:hover { background: rgba(244, 63, 94, 0.85); }
 
+  /* Obal jednoho nahraného obrázku v editoru zápisu - náhled + popisek +
+     tlačítko na vložení fotky přímo do textu (viz insertImageToken). */
+  .composing-thumb-card { display: flex; flex-direction: column; gap: 0.3rem; width: 7rem; }
+  .composing-thumb-caption {
+    width: 100%; font-size: 0.68rem; background: var(--surface-1);
+    border: 1px solid var(--border-strong); border-radius: 0.4rem;
+    padding: 0.25rem 0.4rem; color: var(--page-text); outline: none;
+  }
+  .composing-thumb-caption:focus { border-color: #22d3ee; }
+  .composing-thumb-insert {
+    font-size: 0.62rem; font-weight: 600; color: var(--text-muted);
+    background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-border);
+    border-radius: 0.4rem; padding: 0.2rem 0.35rem; white-space: nowrap;
+  }
+  .composing-thumb-insert:hover { color: var(--page-text); }
+
+  /* Obrázek vložený přímo do textu zápisu (viz [[img:N]] v renderNoteContent) */
+  .note-inline-image { margin: 0.6rem 0; }
+  .note-inline-image img { max-width: 100%; max-height: 22rem; border-radius: 0.6rem; display: block; }
+  .note-inline-image figcaption { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem; }
+
   /* Náhledy obrázků u již uloženého (rozbaleného) zápisu */
   .note-thumb-link { display: block; width: 6rem; height: 6rem; border-radius: 0.7rem; overflow: hidden; border: 1px solid rgba(148,163,184,0.2); transition: transform 0.15s; }
   .note-thumb-link:hover { transform: scale(1.04); }
@@ -1441,7 +1462,7 @@
             <template v-else>
               <div v-if="flashcardFlipped" class="flashcard-answer">
                 <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Správná odpověď</p>
-                <p class="text-lg font-bold text-cyan-300">{{ quiz.answerText }}</p>
+                <p class="text-lg font-bold text-cyan-300" :class="{ 'whitespace-pre-line !font-normal !text-base leading-relaxed': quiz.type === 'notes' }">{{ quiz.answerText }}</p>
               </div>
               <div class="mt-4">
                 <button v-if="!flashcardFlipped" @click="flipFlashcard" class="btn-primary w-full">🔄 Otočit kartu a zobrazit odpověď</button>
@@ -1488,6 +1509,42 @@
               </div>
             </Transition>
           </div>
+
+          <!-- Rozbory vět - jen u předmětů typu čeština -->
+          <div v-if="activeSubjectIsCzech" class="mt-5 border-t border-slate-800 pt-4">
+            <button @click="showSentenceAnalyses = !showSentenceAnalyses" class="hint-toggle !mt-0 !text-slate-300">
+              📖 Rozbor vět ({{ activeSubject.sentenceAnalyses.length }}) <span>{{ showSentenceAnalyses ? '▲' : '▼' }}</span>
+            </button>
+            <Transition name="fade">
+              <div v-if="showSentenceAnalyses" class="mt-3">
+                <div v-if="activeSubject.sentenceAnalyses.length > 0" class="space-y-2 mb-4">
+                  <div v-for="q in activeSubject.sentenceAnalyses" :key="q.id" class="custom-question-item">
+                    <div class="min-w-0">
+                      <p class="text-sm text-slate-200 truncate">„{{ q.sentence }}“</p>
+                      <p class="text-xs text-slate-500 truncate">
+                        <span v-if="q.subjectPart">podmět: {{ q.subjectPart }}</span>
+                        <span v-if="q.predicatePart"> · přísudek: {{ q.predicatePart }}</span>
+                        <span v-if="q.sentenceType"> · druh věty: {{ q.sentenceType }}</span>
+                      </p>
+                    </div>
+                    <button @click="deleteSentenceAnalysis(q.id)" class="btn-ghost danger shrink-0" title="Smazat rozbor">🗑️</button>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Appka se u každé věty pokaždé zeptá jen na jednu z vyplněných částí (klidně vyplň i jen některé pole) - míchá se to mezi ostatní procvičování.</p>
+                <div class="space-y-2">
+                  <input v-model="newSentenceAnalysis.sentence" class="input" placeholder="Věta (např. Pes běhal po zahradě.)" />
+                  <input v-model="newSentenceAnalysis.subjectPart" class="input" placeholder="Podmět (nepovinné, např. pes)" />
+                  <input v-model="newSentenceAnalysis.predicatePart" class="input" placeholder="Přísudek (nepovinné, např. běhal)" />
+                  <input v-model="newSentenceAnalysis.sentenceType" @keyup.enter="addSentenceAnalysis" class="input" placeholder="Druh věty / souvětí (nepovinné, např. věta jednoduchá)" />
+                  <button
+                    @click="addSentenceAnalysis"
+                    :disabled="!newSentenceAnalysis.sentence.trim() || !(newSentenceAnalysis.subjectPart.trim() || newSentenceAnalysis.predicatePart.trim() || newSentenceAnalysis.sentenceType.trim())"
+                    class="btn-primary w-full"
+                  >➕ Přidat rozbor věty</button>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </section>
 
         <!-- ===================== ZÁPISY ===================== -->
@@ -1518,10 +1575,14 @@
                 rows="4" class="input"
                 placeholder="Obsah zápisu… (podporuje **tučně**, *kurzívu*, řádky s „- “ jako odrážky a „## “ jako nadpis)"
               ></textarea>
-              <div v-if="noteForm.images.length > 0" class="flex flex-wrap gap-2">
-                <div v-for="(img, i) in noteForm.images" :key="i" class="composing-thumb">
-                  <img :src="img" alt="Náhled obrázku k zápisu" />
-                  <button type="button" @click="removeComposingImage(noteForm, i)" class="composing-thumb-remove" title="Odebrat obrázek">✕</button>
+              <div v-if="noteForm.images.length > 0" class="flex flex-wrap gap-3">
+                <div v-for="(img, i) in noteForm.images" :key="i" class="composing-thumb-card">
+                  <div class="composing-thumb">
+                    <img :src="img.src" alt="Náhled obrázku k zápisu" />
+                    <button type="button" @click="removeComposingImage(noteForm, i)" class="composing-thumb-remove" title="Odebrat obrázek">✕</button>
+                  </div>
+                  <input v-model="img.caption" class="composing-thumb-caption" placeholder="Popisek (nepovinné)" />
+                  <button type="button" @click="insertImageToken(noteForm, i, noteContentEl)" class="composing-thumb-insert" title="Vloží fotku do textu na místo kurzoru">➕ do textu</button>
                 </div>
               </div>
             </template>
@@ -1608,10 +1669,14 @@
                     </ul>
                   </template>
 
-                  <div v-if="editForm.images.length > 0" class="flex flex-wrap gap-2 mb-3">
-                    <div v-for="(img, i) in editForm.images" :key="i" class="composing-thumb">
-                      <img :src="img" alt="Náhled obrázku k zápisu" />
-                      <button type="button" @click="removeComposingImage(editForm, i)" class="composing-thumb-remove" title="Odebrat obrázek">✕</button>
+                  <div v-if="editForm.images.length > 0" class="flex flex-wrap gap-3 mb-3">
+                    <div v-for="(img, i) in editForm.images" :key="i" class="composing-thumb-card">
+                      <div class="composing-thumb">
+                        <img :src="img.src" alt="Náhled obrázku k zápisu" />
+                        <button type="button" @click="removeComposingImage(editForm, i)" class="composing-thumb-remove" title="Odebrat obrázek">✕</button>
+                      </div>
+                      <input v-model="img.caption" class="composing-thumb-caption" placeholder="Popisek (nepovinné)" />
+                      <button type="button" @click="insertImageToken(editForm, i, editContentEl)" class="composing-thumb-insert" title="Vloží fotku do textu na místo kurzoru">➕ do textu</button>
                     </div>
                   </div>
                   <div class="flex justify-end gap-2">
@@ -1653,11 +1718,16 @@
                           <span :class="{ 'checklist-done': it.done }">{{ it.text }}</span>
                         </label>
                       </div>
-                      <div v-else class="note-content" v-html="renderNoteContent(n.content)"></div>
-                      <div v-if="n.images && n.images.length" class="flex flex-wrap gap-2 mt-3">
-                        <a v-for="(img, i) in n.images" :key="i" :href="img" target="_blank" rel="noopener" class="note-thumb-link">
-                          <img :src="img" alt="Obrázek k zápisu" class="note-thumb" />
-                        </a>
+                      <div v-else class="note-content" v-html="renderNoteContent(n.content, n.images)"></div>
+                      <!-- Obrázky vložené přímo do textu (viz [[img:N]]) se tu znovu
+                           nezobrazují - appka je ukazuje jen jednou, na místě v textu. -->
+                      <div v-if="n.images && n.images.some((img, i) => !isImageInlined(n.content, i))" class="flex flex-wrap gap-3 mt-3">
+                        <div v-for="(img, i) in n.images" :key="i" v-show="!isImageInlined(n.content, i)" class="flex flex-col items-center gap-1">
+                          <a :href="img.src" target="_blank" rel="noopener" class="note-thumb-link">
+                            <img :src="img.src" alt="Obrázek k zápisu" class="note-thumb" />
+                          </a>
+                          <span v-if="img.caption" class="text-xs text-slate-500 max-w-[7rem] text-center truncate" :title="img.caption">{{ img.caption }}</span>
+                        </div>
                       </div>
                     </div>
                   </Transition>
@@ -2003,13 +2073,26 @@ function inlineFormat(escapedText) {
  *  "## " nadpis) na bezpečné HTML. Text se nejprve escapuje, teprve poté se do
  *  něj vkládají vlastní (pevně dané) značky, takže obsah zápisu nemůže vložit
  *  žádné cizí HTML ani spustit JavaScript. */
-function renderNoteContent(raw) {
+function renderNoteContent(raw, images) {
+  const imgs = Array.isArray(images) ? images : [];
   const lines = escapeHtml(raw || '').split('\n');
   let html = '';
   let inList = false;
   const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
 
   for (const line of lines) {
+    // Řádek "[[img:N]]" appka vkládá sama (viz insertImageToken) při vložení
+    // fotky přímo do textu - při vykreslení se nahradí obrázkem s popiskem
+    // na místě, kam byl vložen, místo aby se ukazoval jen jako text.
+    const imgMatch = line.trim().match(/^\[\[img:(\d+)\]\]$/);
+    if (imgMatch) {
+      closeList();
+      const img = imgs[Number(imgMatch[1])];
+      if (img && img.src) {
+        html += `<figure class="note-inline-image"><img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.caption || '')}">${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}</figure>`;
+      }
+      continue;
+    }
     const bulletMatch = line.match(/^-\s+(.*)$/);
     const headingMatch = line.match(/^##\s+(.*)$/);
 
@@ -2056,8 +2139,8 @@ function buildSubjectPdfHtml(subject) {
     <section class="pdf-note">
       <h2>${escapeHtml(n.title)}</h2>
       <p class="pdf-date">${escapeHtml(formatDateCs(n.createdAt))}${n.updatedAt ? ' · upraveno ' + escapeHtml(formatDateCs(n.updatedAt)) : ''}</p>
-      <div class="pdf-content">${n.kind === 'checklist' ? renderChecklistHtml(n.items) : renderNoteContent(n.content)}</div>
-      ${(n.images && n.images.length) ? `<div class="pdf-images">${n.images.map((img) => `<img src="${img}" alt="">`).join('')}</div>` : ''}
+      <div class="pdf-content">${n.kind === 'checklist' ? renderChecklistHtml(n.items) : renderNoteContent(n.content, n.images)}</div>
+      ${(n.images && n.images.some((img, i) => !isImageInlined(n.content, i))) ? `<div class="pdf-images">${n.images.map((img, i) => isImageInlined(n.content, i) ? '' : `<figure class="pdf-image-item"><img src="${img.src}" alt="">${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
     </section>
   `).join('');
 
@@ -2077,7 +2160,9 @@ function buildSubjectPdfHtml(subject) {
   .pdf-content .note-heading { font-weight: 700; margin: 0.5rem 0 0.2rem; }
   .pdf-content .note-list { padding-left: 1.25rem; }
   .pdf-images { margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .pdf-image-item { margin: 0; max-width: 220px; }
   .pdf-images img { max-width: 220px; max-height: 220px; object-fit: cover; border-radius: 0.4rem; border: 1px solid #e2e8f0; }
+  .pdf-images figcaption { font-size: 0.7rem; color: #64748b; margin-top: 0.2rem; }
   @media print { body { margin: 0; padding: 1rem; } }
 </style>
 </head>
@@ -2103,8 +2188,8 @@ function buildAllSubjectsPdfHtml(subjects) {
       <section class="pdf-note">
         <h3>${escapeHtml(n.title)}</h3>
         <p class="pdf-date">${escapeHtml(formatDateCs(n.createdAt))}${n.updatedAt ? ' · upraveno ' + escapeHtml(formatDateCs(n.updatedAt)) : ''}</p>
-        <div class="pdf-content">${n.kind === 'checklist' ? renderChecklistHtml(n.items) : renderNoteContent(n.content)}</div>
-        ${(n.images && n.images.length) ? `<div class="pdf-images">${n.images.map((img) => `<img src="${img}" alt="">`).join('')}</div>` : ''}
+        <div class="pdf-content">${n.kind === 'checklist' ? renderChecklistHtml(n.items) : renderNoteContent(n.content, n.images)}</div>
+        ${(n.images && n.images.some((img, i) => !isImageInlined(n.content, i))) ? `<div class="pdf-images">${n.images.map((img, i) => isImageInlined(n.content, i) ? '' : `<figure class="pdf-image-item"><img src="${img.src}" alt="">${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
       </section>
     `).join('');
 
@@ -2139,7 +2224,9 @@ function buildAllSubjectsPdfHtml(subjects) {
   .pdf-content .note-heading { font-weight: 700; margin: 0.5rem 0 0.2rem; }
   .pdf-content .note-list { padding-left: 1.25rem; }
   .pdf-images { margin-top: 0.6rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .pdf-image-item { margin: 0; max-width: 220px; }
   .pdf-images img { max-width: 220px; max-height: 220px; object-fit: cover; border-radius: 0.4rem; border: 1px solid #e2e8f0; }
+  .pdf-images figcaption { font-size: 0.7rem; color: #64748b; margin-top: 0.2rem; }
   @media print { body { margin: 0; padding: 1rem; } .pdf-toc a { color: #0e7490; } }
 </style>
 </head>
@@ -2170,11 +2257,24 @@ const GRADIENTS = [
   { id: 'sky',     label: 'Nebeská',   classes: 'bg-gradient-to-br from-sky-400 to-indigo-600' },
 ];
 
+/** Pár ukázkových vět s rozborem pro předmět Čeština, aby uživatel hned věděl,
+ *  jak má vyplněný rozbor vypadat. Appka je doplní automaticky jen jednou -
+ *  jakmile je uživatel smaže (nebo si je upraví), appka mu je zpátky nevrací
+ *  (viz normalizeSubject níže - kontroluje, jestli pole vůbec kdy existovalo). */
+function sampleSentenceAnalyses(baseId) {
+  const b = (typeof baseId === 'number' && Number.isFinite(baseId)) ? baseId : Date.now();
+  return [
+    { id: b + 5001, sentence: 'Pes běhal po zahradě.', subjectPart: 'pes', predicatePart: 'běhal', sentenceType: 'věta jednoduchá' },
+    { id: b + 5002, sentence: 'Když skončilo vyučování, děti odešly domů.', subjectPart: 'děti', predicatePart: 'odešly', sentenceType: 'souvětí podřadné - vedlejší věta příslovečná časová' },
+    { id: b + 5003, sentence: 'Maminka vařila oběd a tatínek uklízel dům.', subjectPart: 'maminka, tatínek', predicatePart: 'vařila, uklízel', sentenceType: 'souvětí souřadné (poměr slučovací)' },
+  ];
+}
+
 function defaultSubjects() {
   return [
-    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [] },
-    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [] },
-    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [] },
+    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [] },
+    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: sampleSentenceAnalyses(2) },
+    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [] },
   ];
 }
 
@@ -2186,9 +2286,14 @@ const DIFFICULTY_LABELS = { easy: '🟢 Lehká', medium: '🟡 Střední', hard:
 function normalizeSubject(raw, fallbackId) {
   const notesArr = Array.isArray(raw && raw.notes) ? raw.notes : [];
   const customArr = Array.isArray(raw && raw.customQuestions) ? raw.customQuestions : [];
+  const name = (raw && String(raw.name || '').trim()) || 'Bez názvu';
+  const hasStoredAnalyses = Array.isArray(raw && raw.sentenceAnalyses);
+  const analysesSource = hasStoredAnalyses
+    ? raw.sentenceAnalyses
+    : (detectSubjectType(name) === 'czech' ? sampleSentenceAnalyses(fallbackId) : []);
   return {
     id: (raw && (raw.id || raw.id === 0)) ? raw.id : fallbackId,
-    name: (raw && String(raw.name || '').trim()) || 'Bez názvu',
+    name,
     emoji: (raw && raw.emoji) || EMOJIS[0],
     gradient: (raw && raw.gradient) || GRADIENTS[0].classes,
     image: (raw && typeof raw.image === 'string' && raw.image) ? raw.image : null,
@@ -2202,7 +2307,14 @@ function normalizeSubject(raw, fallbackId) {
       id: (n && (n.id || n.id === 0)) ? n.id : fallbackId + i + 1,
       title: (n && String(n.title || '').trim()) || 'Bez názvu',
       content: (n && n.content) || '',
-      images: Array.isArray(n && n.images) ? n.images : [],
+      // Obrázky se dřív ukládaly jako pole čistých data-URL řetězců - appka je
+      // teď umí i s popiskem, takže starší tvar (holý řetězec) se při načtení
+      // potichu převede na { src, caption: '' }, ať funguje zpětně i dopředně.
+      images: (Array.isArray(n && n.images) ? n.images : [])
+        .map((img) => (typeof img === 'string'
+          ? { src: img, caption: '' }
+          : { src: (img && typeof img.src === 'string') ? img.src : '', caption: (img && typeof img.caption === 'string') ? img.caption : '' }))
+        .filter((img) => img.src),
       createdAt: (n && n.createdAt) || new Date().toISOString(),
       updatedAt: (n && n.updatedAt) || null,
       pinned: !!(n && n.pinned),
@@ -2220,6 +2332,15 @@ function normalizeSubject(raw, fallbackId) {
       question: (q && String(q.question || '').trim()) || '',
       answers: Array.isArray(q && q.answers) ? q.answers : (q && q.answer ? [String(q.answer)] : []),
     })).filter((q) => q.question && q.answers.length > 0),
+    /** Vlastní rozbory vět (podmět, přísudek, druh věty) - appka z nich sama
+     *  sestavuje zkušební otázky, viz generateFromSentenceAnalysis. */
+    sentenceAnalyses: analysesSource.map((q, i) => ({
+      id: (q && (q.id || q.id === 0)) ? q.id : fallbackId + 3000 + i,
+      sentence: (q && String(q.sentence || '').trim()) || '',
+      subjectPart: (q && String(q.subjectPart || '').trim()) || '',
+      predicatePart: (q && String(q.predicatePart || '').trim()) || '',
+      sentenceType: (q && String(q.sentenceType || '').trim()) || '',
+    })).filter((q) => q.sentence && (q.subjectPart || q.predicatePart || q.sentenceType)),
   };
 }
 
@@ -2554,22 +2675,196 @@ function generateFromCustom(item) {
   };
 }
 
-/** Sestaví jeden příklad/otázku pro daný předmět. Pokud má předmět vlastní
- *  otázky, s 50% pravděpodobností se zamíchá jedna z nich mezi automaticky
- *  generované příklady - jinak (nebo když žádné vlastní otázky nejsou) se
- *  použije generátor podle rozpoznaného typu předmětu. */
-function buildQuiz(subject, mistakeCounts) {
+/** Převede jednoduchý zápisový "markdown" (viz renderNoteContent) na čistý
+ *  prostý text - používá se k automatickému vytváření zkušebních otázek přímo
+ *  z vlastních zápisů (viz "Zkoušet ze zápisků" v sekci procvičování). */
+function noteContentToPlainText(raw) {
+  return String(raw || '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .split('\n')
+    .map((line) => line.replace(/^##\s+/, '').replace(/^-\s+/, '• '))
+    .join('\n')
+    .trim();
+}
+
+/** Rozdělí text na věty BEZ použití "lookbehind" regulárních výrazů (na
+ *  starších verzích WebKitu/Safari s nimi appka měla už jednou problémy) -
+ *  místo toho se za koncem věty vloží dočasná neviditelná značka a text se
+ *  podle ní rozseká. */
+function splitSentences(text) {
+  return String(text || '')
+    .split('\n')
+    .join(' ')
+    .replace(/([.!?])\s+/g, '$1')
+    .split('')
+    .map((s) => s.replace(/^•\s*/, '').trim())
+    .filter((s) => s.length >= 12);
+}
+
+/** Zamíchá pořadí indexů 0..n-1 (Fisher-Yates) - používá se místo řazení
+ *  podle Math.random(), aby se každý index prošel nejvýš jednou. */
+function shuffledIndices(n) {
+  const arr = [];
+  for (let i = 0; i < n; i++) arr.push(i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = randInt(0, i);
+    const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+const CZ_LETTER_CLASS = 'A-Za-zÁáČčĎďÉéĚěÍíŇňÓóŘřŠšŤťÚúŮůÝýŽž';
+// Krátká, běžná slova appka při hledání "slova k doplnění" přeskakuje, ať
+// nekončí u otázky typu "doplň slovo: ... _____ jsou ...".
+const CZ_STOPWORDS = new Set([
+  'a','i','o','u','v','s','z','k','na','do','za','po','ze','se','si','ale','nebo','jako','tak','proto','protoze',
+  'je','jsou','byl','byla','bylo','byli','byly','bude','budou','jsem','jsi','jsme','jste',
+  'ten','ta','to','ti','ty','tato','tento','toto','tyto','tem','tim','nej',
+  'ktery','ktera','ktere','kteri','jenz','muj','tvuj','jeho','jeji','nas','vas','jejich',
+  'pro','pri','nad','pod','mezi','bez','od','ani','coz','jen','jenom','uz','vice','tedy','tady','tam',
+  'kde','kdy','jak','proc','kdo','kam','ma','maji','mit','byt','ne','ano','nebot','avsak','vsak',
+]);
+
+/** Najde ve větě vhodné (delší, ne zas tak obecné) slovo, které appka schová
+ *  a nechá uživatele doplnit - viz "doplňovačka" u zkoušení ze zápisků. */
+function pickBlankCandidate(plain) {
+  const sentences = splitSentences(plain);
+  if (!sentences.length) return null;
+  const wordRe = new RegExp('[' + CZ_LETTER_CLASS + ']{5,}', 'g');
+  for (const idx of shuffledIndices(sentences.length)) {
+    const sentence = sentences[idx];
+    wordRe.lastIndex = 0;
+    const matches = [];
+    let m;
+    while ((m = wordRe.exec(sentence))) {
+      const w = m[0];
+      if (!CZ_STOPWORDS.has(normalizeAnswer(w))) matches.push({ word: w, index: m.index });
+    }
+    if (!matches.length) continue;
+    const picked = choice(matches);
+    const blankedSentence = sentence.slice(0, picked.index) + '_____' + sentence.slice(picked.index + picked.word.length);
+    return { sentence, word: picked.word, blankedSentence };
+  }
+  return null;
+}
+
+/** Sestaví ze zápisů daného předmětu dvě sady možných otázek:
+ *  - cardItems: celý zápis jako kartička (název = otázka, obsah = odpověď) -
+ *    dává smysl jen v kartičkovém režimu, kde se uživatel ohodnotí sám/sama.
+ *  - blankItems: jedna věta ze zápisu se schovaným slovem - dá se použít i
+ *    v normálním (psaném) i časovaném režimu, protože má ověřitelnou odpověď. */
+function buildNotesPool(subject) {
+  const notes = (subject && Array.isArray(subject.notes)) ? subject.notes : [];
+  const cardItems = [];
+  const blankItems = [];
+  for (const n of notes) {
+    if (!n || n.kind === 'checklist') continue;
+    const plain = noteContentToPlainText(n.content);
+    if (plain.replace(/\s+/g, '').length < 10) continue;
+    cardItems.push({ id: n.id, title: n.title, content: plain });
+    if (plain.length >= 120) {
+      const candidate = pickBlankCandidate(plain);
+      if (candidate) blankItems.push({ id: n.id, title: n.title, word: candidate.word, blankedSentence: candidate.blankedSentence });
+    }
+  }
+  return { cardItems, blankItems };
+}
+
+/** Kartička vytvořená přímo ze zápisu - jen pro kartičkový režim (appka
+ *  neumí ověřit psanou odpověď na "celý obsah zápisu", proto se tu uživatel
+ *  ohodnotí sám/sama stejně jako u vlastních kartiček). */
+function generateFromNoteCard(item) {
+  return {
+    key: `notes:card:${item.id}`,
+    answerText: item.content,
+    prompt: `📝 Co si pamatuješ ze zápisu „${item.title}“? Zkus si obsah vybavit, pak kartičku otoč a porovnej.`,
+    hintTitle: 'Zdroj otázky',
+    hintBody: [
+      `Tahle kartička vznikla přímo z tvého zápisu „${item.title}“ - odpovědí je jeho obsah.`,
+      'Nejde o to opakovat text doslova, ale vybavit si hlavní myšlenky a fakta, která zápis obsahuje.',
+    ],
+    check: null,
+  };
+}
+
+/** Doplňovačka se schovaným slovem přímo z věty v zápisu. */
+function generateFromNoteBlank(item) {
+  return {
+    key: `notes:blank:${item.id}`,
+    answerText: item.word,
+    prompt: `📝 Doplň chybějící slovo (ze zápisu „${item.title}“):\n\n${item.blankedSentence}`,
+    hintTitle: 'Nápověda ze zápisu',
+    hintBody: [
+      `Přesnou odpověď najdeš v zápisu „${item.title}“.`,
+      `Chybějící slovo má ${item.word.length} písmen a začíná na „${item.word.charAt(0).toUpperCase()}“.`,
+    ],
+    check: (input) => normalizeAnswer(input) === normalizeAnswer(item.word),
+  };
+}
+
+/** Cvičení na rozbor věty - appka se pokaždé zeptá jen na jednu (náhodně
+ *  vybranou) z částí rozboru, které uživatel u dané věty vyplnil. */
+function generateFromSentenceAnalysis(item) {
+  const fields = [];
+  if (item.subjectPart) fields.push({ label: 'podmět', value: item.subjectPart, key: 'subject' });
+  if (item.predicatePart) fields.push({ label: 'přísudek', value: item.predicatePart, key: 'predicate' });
+  if (item.sentenceType) fields.push({ label: 'druh věty (větný vzorec)', value: item.sentenceType, key: 'type' });
+  const picked = choice(fields);
+  return {
+    key: `sentence:${item.id}:${picked.key}`,
+    answerText: picked.value,
+    prompt: `📖 Rozbor věty — urči ${picked.label} v této větě:\n\n„${item.sentence}“`,
+    hintTitle: 'Jak na rozbor věty',
+    hintBody: [
+      'Podmět odpovídá na otázku „kdo, co?“ a shoduje se s přísudkem v čísle a osobě.',
+      'Přísudek vyjadřuje, co podmět dělá nebo v jakém je stavu - nejčastěji je to určitý slovesný tvar.',
+      'U souvětí nejdřív urči, kolik obsahuje vět (podle určitých slovesných tvarů), pak poměr mezi nimi a u vedlejší věty i to, na jakou otázku odpovídá.',
+    ],
+    check: (input) => normalizeAnswer(input) === normalizeAnswer(picked.value),
+  };
+}
+
+/** Sestaví jeden příklad/otázku pro daný předmět. Appka umí čerpat hned z
+ *  několika zdrojů se stejnou vahou - čím víc si toho uživatel sám přidá, tím
+ *  pestřejší procvičování dostane:
+ *   - automaticky generované příklady podle rozpoznaného typu předmětu,
+ *   - vlastní otázky (Vlastní otázky),
+ *   - otázky vytvořené přímo z vlastních zápisů (viz buildNotesPool - mode
+ *     rozhoduje, jestli jde o kartičku, nebo o doplňovačku s ověřitelnou
+ *     odpovědí),
+ *   - u češtiny i vlastní rozbory vět. */
+function buildQuiz(subject, mistakeCounts, mode) {
   const mc = mistakeCounts || {};
   const name = typeof subject === 'string' ? subject : subject.name;
-  const customQuestions = (subject && subject.customQuestions) || [];
+  const isObj = subject && typeof subject === 'object';
+  const customQuestions = (isObj && subject.customQuestions) || [];
+  const sentenceAnalyses = (isObj && Array.isArray(subject.sentenceAnalyses)) ? subject.sentenceAnalyses : [];
+  const notesPool = isObj ? buildNotesPool(subject) : { cardItems: [], blankItems: [] };
+  const relevantNoteItems = mode === 'flashcard' ? notesPool.cardItems : notesPool.blankItems;
 
-  if (customQuestions.length > 0 && Math.random() < 0.5) {
+  const pools = ['generator'];
+  if (customQuestions.length > 0) pools.push('custom');
+  if (relevantNoteItems.length > 0) pools.push('notes');
+  if (sentenceAnalyses.length > 0) pools.push('sentence');
+  const chosenPool = pools.length > 1 ? choice(pools) : pools[0];
+
+  if (chosenPool === 'custom') {
     const picked = weightedChoice(customQuestions, (q) => mistakeWeight(mc, `custom:${q.id}`));
     return { type: 'custom', ...generateFromCustom(picked) };
   }
+  if (chosenPool === 'notes') {
+    const noteKeyPrefix = mode === 'flashcard' ? 'notes:card:' : 'notes:blank:';
+    const picked = weightedChoice(relevantNoteItems, (it) => mistakeWeight(mc, noteKeyPrefix + it.id));
+    return { type: 'notes', ...(mode === 'flashcard' ? generateFromNoteCard(picked) : generateFromNoteBlank(picked)) };
+  }
+  if (chosenPool === 'sentence') {
+    const picked = weightedChoice(sentenceAnalyses, (q) => mistakeWeight(mc, `sentence:${q.id}`));
+    return { type: 'sentence', ...generateFromSentenceAnalysis(picked) };
+  }
 
   const type = detectSubjectType(name);
-  const difficulty = (subject && typeof subject === 'object' && subject.difficulty) || 'medium';
+  const difficulty = (isObj && subject.difficulty) || 'medium';
   let gen;
   if (type === 'math') gen = generateMath(mc, difficulty);
   else if (type === 'czech') gen = generateCzech(mc);
@@ -2584,6 +2879,8 @@ const CATEGORY_LABELS = {
   english: 'Automaticky generovaná cvičení z angličtiny (členy, předložky, nepravidelná slovesa, slovní zásoba).',
   generic: 'Obecné znalostní otázky přizpůsobené libovolnému předmětu.',
   custom: 'Tvoje vlastní otázka přidaná k tomuto předmětu.',
+  notes: 'Otázka vygenerovaná přímo z tvých vlastních zápisů u tohoto předmětu.',
+  sentence: 'Rozbor věty, kterou sis sám/sama přidal/a k tomuto předmětu.',
 };
 
 /* =====================================================================
@@ -3275,6 +3572,7 @@ const app = createApp({
         examDate: null,
         difficulty: 'medium',
         customQuestions: [],
+        sentenceAnalyses: [],
       });
       showAddModal.value = false;
       nextTick(updateScrollState);
@@ -3402,7 +3700,7 @@ const app = createApp({
         id: Date.now() + Math.floor(Math.random() * 1000),
         title,
         content: noteForm.kind === 'checklist' ? '' : noteForm.content.trim(),
-        images: [...noteForm.images],
+        images: noteForm.images.map((img) => ({ ...img })),
         createdAt: new Date().toISOString(),
         updatedAt: null,
         pinned: false,
@@ -3423,7 +3721,7 @@ const app = createApp({
       editingNoteId.value = n.id;
       editForm.title = n.title;
       editForm.content = n.content;
-      editForm.images = [...(n.images || [])];
+      editForm.images = (n.images || []).map((img) => ({ ...img }));
       editForm.kind = n.kind || 'text';
       editForm.items = (n.items || []).map((it) => ({ ...it }));
       editForm.newItemText = '';
@@ -3439,7 +3737,7 @@ const app = createApp({
       }
       n.title = title;
       n.content = editForm.kind === 'checklist' ? '' : editForm.content.trim();
-      n.images = [...editForm.images];
+      n.images = editForm.images.map((img) => ({ ...img }));
       n.kind = editForm.kind;
       n.items = editForm.kind === 'checklist' ? editForm.items.map((it) => ({ ...it })) : [];
       n.updatedAt = new Date().toISOString();
@@ -3507,7 +3805,7 @@ const app = createApp({
       for (const file of toProcess) {
         try {
           const dataUrl = await compressImageFile(file);
-          targetState.images.push(dataUrl);
+          targetState.images.push({ src: dataUrl, caption: '' });
         } catch (e) {
           console.warn('Obrázek se nepodařilo přidat:', e);
           alert('Jeden z obrázků se nepodařilo zpracovat a nebyl přidán.');
@@ -3519,6 +3817,37 @@ const app = createApp({
     }
     function removeComposingImage(targetState, index) {
       targetState.images.splice(index, 1);
+    }
+    /** Vloží na pozici kurzoru v textu odkaz na obrázek (podle jeho pořadí v
+     *  poli images) - appka ho pak vykreslí přímo v textu na tomhle místě,
+     *  místo jen jako přílohu dole pod zápisem (viz renderNoteContent). Hodí
+     *  se hlavně u odborných zápisů s obrázky, kde je potřeba popsat
+     *  konkrétní části přímo vedle obrázku. */
+    function insertImageToken(targetState, index, elRef) {
+      const el = elRef && elRef.value;
+      const token = `[[img:${index}]]`;
+      if (!el) {
+        const sep = targetState.content && !targetState.content.endsWith('\n') ? '\n' : '';
+        targetState.content = `${targetState.content}${sep}${token}\n`;
+        return;
+      }
+      const start = el.selectionStart || 0;
+      const end = el.selectionEnd || 0;
+      const value = targetState.content;
+      const needsNewlineBefore = start > 0 && value[start - 1] !== '\n';
+      const insertion = `${needsNewlineBefore ? '\n' : ''}${token}\n`;
+      targetState.content = value.slice(0, start) + insertion + value.slice(end);
+      nextTick(() => {
+        el.focus();
+        const pos = start + insertion.length;
+        el.setSelectionRange(pos, pos);
+      });
+    }
+    /** Zjistí, jestli je daný obrázek (podle pořadí) už vložený přímo v
+     *  textu - takové obrázky appka pak nezobrazuje ještě jednou navíc jako
+     *  přílohu pod textem. */
+    function isImageInlined(content, index) {
+      return typeof content === 'string' && content.indexOf(`[[img:${index}]]`) !== -1;
     }
 
     /* ---------- Vlastní obrázek předmětu (pozadí karty) ---------- */
@@ -3744,7 +4073,7 @@ const app = createApp({
     function generateNewQuiz() {
       if (!activeSubject.value) return;
       stopSpeaking(); // nová otázka - případné přehrávání předchozího zadání už nedává smysl
-      const built = buildQuiz(activeSubject.value, stats.mistakeCounts);
+      const built = buildQuiz(activeSubject.value, stats.mistakeCounts, practiceMode.value);
       quiz.type = built.type;
       quiz.prompt = built.prompt;
       quiz.hintTitle = built.hintTitle;
@@ -3919,6 +4248,10 @@ const app = createApp({
     // Obtížnost zatím reálně ovlivňuje jen matematické příklady (rozsahy čísel),
     // takže přepínač obtížnosti se v UI zobrazuje jen u matematických předmětů.
     const activeSubjectIsMath = computed(() => !!activeSubject.value && detectSubjectType(activeSubject.value.name) === 'math');
+    // Rozbor vět dává smysl jen u předmětu typu čeština - stejný princip jako
+    // u activeSubjectIsMath výš (přepínač obtížnosti se taky zobrazuje jen
+    // tam, kde má reálný efekt).
+    const activeSubjectIsCzech = computed(() => !!activeSubject.value && detectSubjectType(activeSubject.value.name) === 'czech');
 
     /* ---------- Statistiky za právě otevřený předmět ---------- */
     const activeSubjectStats = computed(() => {
@@ -4024,6 +4357,32 @@ const app = createApp({
       if (!activeSubject.value) return;
       const idx = activeSubject.value.customQuestions.findIndex((q) => q.id === id);
       if (idx !== -1) activeSubject.value.customQuestions.splice(idx, 1);
+    }
+
+    /* ---------- Rozbory vět (jen u předmětů typu čeština) ---------- */
+    const showSentenceAnalyses = ref(false);
+    const newSentenceAnalysis = reactive({ sentence: '', subjectPart: '', predicatePart: '', sentenceType: '' });
+
+    function addSentenceAnalysis() {
+      const sentence = newSentenceAnalysis.sentence.trim();
+      const subjectPart = newSentenceAnalysis.subjectPart.trim();
+      const predicatePart = newSentenceAnalysis.predicatePart.trim();
+      const sentenceType = newSentenceAnalysis.sentenceType.trim();
+      if (!activeSubject.value || !sentence || !(subjectPart || predicatePart || sentenceType)) return;
+      if (!Array.isArray(activeSubject.value.sentenceAnalyses)) activeSubject.value.sentenceAnalyses = [];
+      activeSubject.value.sentenceAnalyses.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        sentence, subjectPart, predicatePart, sentenceType,
+      });
+      newSentenceAnalysis.sentence = '';
+      newSentenceAnalysis.subjectPart = '';
+      newSentenceAnalysis.predicatePart = '';
+      newSentenceAnalysis.sentenceType = '';
+    }
+    function deleteSentenceAnalysis(id) {
+      if (!activeSubject.value || !Array.isArray(activeSubject.value.sentenceAnalyses)) return;
+      const idx = activeSubject.value.sentenceAnalyses.findIndex((q) => q.id === id);
+      if (idx !== -1) activeSubject.value.sentenceAnalyses.splice(idx, 1);
     }
 
     /* ---------- Klávesa Escape zavírá modální okna ---------- */
@@ -4144,12 +4503,14 @@ const app = createApp({
       speechSupported, speakingNoteId, isSpeakingQuizPrompt, stopSpeaking, speakNote, speakQuizPrompt,
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
       setDifficulty, activeSubjectIsMath, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
+      activeSubjectIsCzech, showSentenceAnalyses, newSentenceAnalysis, addSentenceAnalysis, deleteSentenceAnalysis,
       recommendedSubject, recommendationReason,
       addChecklistItem, removeChecklistItem, toggleChecklistItem,
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
       togglePinNote,
       handleSubjectImageUpload, removeSubjectImage,
       syncStatus, syncStatusLabel,
+      insertImageToken, isImageInlined,
     };
   },
 });
