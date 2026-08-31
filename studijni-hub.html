@@ -853,6 +853,19 @@
   .quiz-mode-btn:hover { background: var(--btn-secondary-bg-hover); color: var(--btn-secondary-text); }
   .quiz-mode-active { background: rgba(34, 211, 238, 0.18); border-color: rgba(34, 211, 238, 0.5); color: var(--accent-text); }
 
+  .quiz-option-btn {
+    text-align: left;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.7rem 1rem;
+    border-radius: 0.6rem;
+    background: var(--btn-secondary-bg);
+    border: 1px solid var(--btn-secondary-border);
+    color: var(--page-text);
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .quiz-option-btn:hover { background: var(--btn-secondary-bg-hover); border-color: rgba(34, 211, 238, 0.5); transform: translateY(-1px); }
+
   .custom-question-item {
     display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
     background: var(--surface-3);
@@ -894,6 +907,10 @@
     transition: height 0.3s ease;
   }
   .chart-bar-label { font-size: 0.6rem; color: var(--text-faint); margin-top: 0.35rem; white-space: nowrap; }
+  .chart-bar-rate-good { background: linear-gradient(180deg, #34d399, #059669); }
+  .chart-bar-rate-mid { background: linear-gradient(180deg, #fbbf24, #d97706); }
+  .chart-bar-rate-low { background: linear-gradient(180deg, #fb7185, #e11d48); }
+  .chart-bar-rate-none { background: var(--border-mid); min-height: 2px !important; }
 
   /* ---------- Kalendářní mapa aktivity (heatmap) ---------- */
   .heatmap-scroll { overflow-x: auto; padding-bottom: 0.25rem; }
@@ -1013,6 +1030,7 @@
 <body class="font-sans antialiased">
 
 <div id="app" class="min-h-screen">
+<template v-if="!shareView.active">
 
   <!-- ============================================================= -->
   <!-- HORNÍ LIŠTA -->
@@ -1143,6 +1161,9 @@
           <button @click="showProgressChart = !showProgressChart" class="btn-ghost !text-cyan-300">
             📈 {{ showProgressChart ? 'Skrýt graf pokroku' : 'Zobrazit graf pokroku' }}
           </button>
+          <button @click="showWeeklyProgress = !showWeeklyProgress" class="btn-ghost !text-emerald-300">
+            📊 {{ showWeeklyProgress ? 'Skrýt úspěšnost v čase' : 'Úspěšnost v čase' }}
+          </button>
           <button @click="showActivityHeatmap = !showActivityHeatmap" class="btn-ghost !text-cyan-300">
             🗓️ {{ showActivityHeatmap ? 'Skrýt mapu aktivity' : 'Zobrazit mapu aktivity' }}
           </button>
@@ -1155,8 +1176,16 @@
           <button v-if="weeklyPlan.length > 0" @click="showWeeklyPlan = !showWeeklyPlan" class="btn-ghost !text-emerald-300">
             🗓️ {{ showWeeklyPlan ? 'Skrýt plánovač' : 'Týdenní plánovač' }}
           </button>
+          <button @click="showPomodoro = !showPomodoro" class="btn-ghost !text-amber-300" :class="{ 'quiz-mode-active': pomodoro.active }">
+            ⏱️ {{ pomodoro.active ? (pomodoro.phase === 'work' ? 'Práce' : 'Přestávka') + ' ' + pomodoroTimeLabel : 'Časovač' }}
+          </button>
 
           <div class="flex items-center gap-2 ml-auto">
+            <span
+              v-if="dailyStreak > 0"
+              class="text-xs px-2 py-1 rounded-full border border-orange-800/60 text-orange-300 flex items-center gap-1 select-none"
+              :title="`Procvičuješ ${dailyStreak} ${pluralize(dailyStreak, 'den', 'dny', 'dní')} v řadě! Nejdelší dosažená studijní série: ${bestDailyStreak} ${pluralize(bestDailyStreak, 'den', 'dny', 'dní')}.`"
+            >📅 {{ dailyStreak }} {{ pluralize(dailyStreak, 'den', 'dny', 'dní') }} v řadě</span>
             <button
               v-if="notificationsSupported && notificationPermission === 'default'"
               @click="enableNotifications"
@@ -1202,6 +1231,36 @@
                 </div>
               </div>
             </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showWeeklyProgress" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Úspěšnost po týdnech (posledních {{ weeklyProgressWeeks.length }} týdnů)</p>
+            <div v-if="!weeklyProgressHasData" class="text-slate-500 text-sm py-6 text-center">
+              Zatím žádná historie procvičování — vyřeš dnes první příklad a graf se začne plnit.
+            </div>
+            <template v-else>
+              <div class="chart-frame">
+                <div class="chart-bars">
+                  <div v-for="w in weeklyProgressWeeks" :key="w.key" class="chart-bar-wrap">
+                    <div
+                      class="chart-bar"
+                      :class="weeklyProgressBarClass(w)"
+                      :style="{ height: weeklyProgressBarHeight(w) + '%' }"
+                      :title="weeklyProgressTitle(w)"
+                    ></div>
+                    <span class="chart-bar-label">{{ w.label }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 mt-3 text-xs text-slate-500 flex-wrap">
+                <span class="flex items-center gap-1"><span class="heatmap-legend-swatch" style="background: linear-gradient(180deg, #34d399, #059669);"></span> 80 %+</span>
+                <span class="flex items-center gap-1"><span class="heatmap-legend-swatch" style="background: linear-gradient(180deg, #fbbf24, #d97706);"></span> 50–79 %</span>
+                <span class="flex items-center gap-1"><span class="heatmap-legend-swatch" style="background: linear-gradient(180deg, #fb7185, #e11d48);"></span> pod 50 %</span>
+                <span class="flex items-center gap-1"><span class="heatmap-legend-swatch" style="background: var(--border-mid);"></span> bez procvičování</span>
+              </div>
+            </template>
           </div>
         </Transition>
 
@@ -1283,6 +1342,35 @@
                 <span class="text-sm font-semibold flex items-center gap-1.5">{{ d.subject.emoji }} {{ d.subject.name }}</span>
                 <span class="text-xs text-slate-500 truncate">{{ d.reason }}</span>
               </button>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showPomodoro" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">⏱️ Časovač na soustředěné učení</p>
+            <p class="text-xs text-slate-500 mb-3">Střídej bloky soustředěné práce a krátké přestávky - nezávisle na kvízu, klidně u čtení zápisků.</p>
+            <div class="flex flex-wrap items-center gap-4">
+              <div class="text-4xl font-bold tabular-nums" :class="pomodoro.phase === 'work' ? 'text-amber-300' : 'text-emerald-300'">
+                {{ pomodoroTimeLabel }}
+              </div>
+              <div class="text-sm text-slate-400">
+                {{ pomodoro.phase === 'work' ? '💪 Blok práce' : '☕ Přestávka' }}
+                <span v-if="pomodoro.completedWorkBlocks > 0" class="text-slate-500"> · dnes dokončeno {{ pomodoro.completedWorkBlocks }} {{ pluralize(pomodoro.completedWorkBlocks, 'blok', 'bloky', 'bloků') }}</span>
+              </div>
+              <div class="flex items-center gap-2 ml-auto">
+                <button v-if="!pomodoro.active" @click="startPomodoro" class="btn-primary !py-1.5 !px-4">▶️ Start</button>
+                <button v-else @click="pausePomodoro" class="btn-secondary !py-1.5 !px-4">⏸️ Pauza</button>
+                <button @click="resetPomodoro" class="btn-ghost !py-1.5 !px-3" title="Vynulovat na začátek">↺ Reset</button>
+              </div>
+            </div>
+            <div v-if="!pomodoro.active" class="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-500">
+              <label class="flex items-center gap-1.5">Práce (min):
+                <input type="number" min="1" max="120" v-model.number="pomodoro.workMinutes" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+              </label>
+              <label class="flex items-center gap-1.5">Přestávka (min):
+                <input type="number" min="1" max="60" v-model.number="pomodoro.breakMinutes" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+              </label>
             </div>
           </div>
         </Transition>
@@ -1416,6 +1504,7 @@
           </button>
           <button @click="exportSubjectToPdf(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled všech zápisů předmětu, ze kterého jde uložit PDF">🖨️ Export do PDF</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
+          <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
         </div>
       </div>
@@ -1438,6 +1527,19 @@
             <button @click="stopSession" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'normal' && !quizSession.active && !quizSession.showSummary && !timedSession.active && !timedSession.showSummary }">🔓 Volně</button>
             <button v-for="n in [5, 10, 15]" :key="n" @click="startSession(n)" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'normal' && quizSession.active && quizSession.total === n }">🏁 Test na {{ n }}</button>
             <button @click="useFlashcardMode" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'flashcard' }" title="Otázka na líci, odpověď na rubu - sám/sama se ohodnotíš">🃏 Kartičky</button>
+            <button
+              v-if="subjects.filter((s) => !s.archived).length > 1"
+              @click="toggleMixedQuiz"
+              class="quiz-mode-btn"
+              :class="{ 'quiz-mode-active': mixedQuizMode }"
+              title="Kvíz bude náhodně střídat otázky ze všech tvých (nearchivovaných) předmětů, ne jen z tohoto"
+            >🔀 Mix předmětů</button>
+            <button
+              @click="toggleMultipleChoice"
+              class="quiz-mode-btn"
+              :class="{ 'quiz-mode-active': multipleChoiceMode }"
+              title="Místo psaní odpovědi appka nabídne 4 možnosti, ze kterých vybíráš"
+            >🔘 Výběr z možností</button>
           </div>
           <div class="flex flex-wrap gap-2 mb-4">
             <button
@@ -1488,6 +1590,7 @@
             <p v-if="quizSession.active" class="text-xs uppercase tracking-wider text-cyan-400 font-semibold mb-2">Otázka {{ quizSession.index + 1 }} / {{ quizSession.total }}</p>
             <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">⏱️ Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
             <p v-if="quiz.wasReview" class="review-badge">🔁 Opakování — tohle ti nedávno nešlo</p>
+            <p v-if="mixedQuizMode && quizSourceSubject" class="text-xs uppercase tracking-wider text-fuchsia-400 font-semibold mb-2">🔀 {{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }}</p>
             <div class="flex items-start gap-2">
               <p class="quiz-prompt flex-1">{{ quiz.prompt }}</p>
               <button
@@ -1501,7 +1604,14 @@
             <!-- Normální režim: psaná odpověď -->
             <template v-if="practiceMode === 'normal'">
               <div v-if="!quiz.solved" class="mt-4">
-                <div :key="quiz.shakeToken" class="flex flex-col sm:flex-row gap-2" :class="{ 'anim-shake': quiz.wrongAttempt }">
+                <div v-if="multipleChoiceMode && quiz.options.length > 1" :key="quiz.shakeToken" class="grid grid-cols-1 sm:grid-cols-2 gap-2" :class="{ 'anim-shake': quiz.wrongAttempt }">
+                  <button
+                    v-for="opt in quiz.options" :key="opt"
+                    @click="selectMultipleChoiceOption(opt)"
+                    class="quiz-option-btn"
+                  >{{ opt }}</button>
+                </div>
+                <div v-else :key="quiz.shakeToken" class="flex flex-col sm:flex-row gap-2" :class="{ 'anim-shake': quiz.wrongAttempt }">
                   <input
                     v-model="quiz.userInput"
                     @keyup.enter="checkQuizAnswer"
@@ -1637,6 +1747,14 @@
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'code')" class="fmt-btn" title="Blok kódu (text se zobrazí přesně tak, jak je napsaný)">{ } Kód</button>
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'math-inline')" class="fmt-btn" title="Matematický vzorec v textu řádku (LaTeX, mezi $ $)">Σ Vzorec</button>
                 <button type="button" @click="applyFormat(noteForm, 'content', noteContentEl, 'math-block')" class="fmt-btn" title="Matematický vzorec na samostatném řádku (LaTeX, mezi $$ $$)">Σ Vzorec (blok)</button>
+                <button
+                  v-if="dictationSupported"
+                  type="button"
+                  @click="toggleDictation(noteForm, 'content')"
+                  class="fmt-btn"
+                  :class="{ 'quiz-mode-active': isDictatingTarget(noteForm) }"
+                  title="Diktovat text zápisku mikrofonem (čeština)"
+                >{{ isDictatingTarget(noteForm) ? '⏹️ Stop' : '🎙️ Diktovat' }}</button>
                 <label class="fmt-btn cursor-pointer" title="Přidat obrázek (max. 4 na zápis)">
                   📎 Obrázek
                   <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, noteForm)" />
@@ -1721,6 +1839,14 @@
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'code')" class="fmt-btn" title="Blok kódu">{ } Kód</button>
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'math-inline')" class="fmt-btn" title="Matematický vzorec v textu řádku (LaTeX, mezi $ $)">Σ Vzorec</button>
                       <button type="button" @click="applyFormat(editForm, 'content', editContentEl, 'math-block')" class="fmt-btn" title="Matematický vzorec na samostatném řádku (LaTeX, mezi $$ $$)">Σ Vzorec (blok)</button>
+                      <button
+                        v-if="dictationSupported"
+                        type="button"
+                        @click="toggleDictation(editForm, 'content')"
+                        class="fmt-btn"
+                        :class="{ 'quiz-mode-active': isDictatingTarget(editForm) }"
+                        title="Diktovat text zápisku mikrofonem (čeština)"
+                      >{{ isDictatingTarget(editForm) ? '⏹️ Stop' : '🎙️ Diktovat' }}</button>
                       <label class="fmt-btn cursor-pointer" title="Přidat obrázek (max. 4 na zápis)">
                         📎 Obrázek
                         <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, editForm)" />
@@ -1944,6 +2070,87 @@
     </div>
   </Transition>
 
+  <!-- ============================================================= -->
+  <!-- MODAL: SDÍLENÍ PŘEDMĚTU PŘES ODKAZ -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="shareModal.open" class="modal-overlay" @click.self="closeShareModal">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">🔗 Sdílet předmět</h3>
+        <p class="text-slate-400 text-sm mb-4">
+          Kdokoliv s tímto odkazem si přečte zápisky tohoto předmětu (bez hesla nebo účtu), bez možnosti cokoliv upravit. Odkaz zůstane platný, dokud ho ve sdíleném prohlížeči sami nesmažeš/nepřepíšeš novým sdílením.
+        </p>
+
+        <div v-if="shareModal.loading" class="text-slate-500 text-sm py-6 text-center">Vytvářím odkaz…</div>
+
+        <div v-else-if="shareModal.error" class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-2">{{ shareModal.error }}</div>
+
+        <div v-else-if="shareModal.url" class="mb-2">
+          <div class="flex gap-2">
+            <input type="text" readonly :value="shareModal.url" class="input flex-1 text-xs" @click="$event.target.select()">
+            <button @click="copyShareLink" class="btn-primary text-sm shrink-0">{{ shareModal.copied ? '✅ Zkopírováno' : '📋 Kopírovat' }}</button>
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-4">
+          <button @click="closeShareModal" class="btn-secondary text-sm">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+</template>
+<template v-else>
+
+  <!-- ============================================================= -->
+  <!-- READ-ONLY PROHLÍŽEČ SDÍLENÉHO PŘEDMĚTU (?share=<id> v adrese) -->
+  <!-- Zobrazí se místo celé appky, když appku otevřeš přes odkaz na sdílení -->
+  <!-- (viz shareSubject/shareView v hlavním JS bloku níž) - žádná editace, -->
+  <!-- žádný kvíz, jen zápisky ke čtení. -->
+  <!-- ============================================================= -->
+  <div class="max-w-3xl mx-auto px-6 md:px-12 py-10">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
+      <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
+      <span class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 ml-2">🔗 sdílený předmět · jen ke čtení</span>
+    </div>
+
+    <div v-if="shareView.loading" class="text-center py-20 text-slate-400">Načítám sdílené zápisky…</div>
+
+    <div v-else-if="shareView.error" class="bg-rose-950/30 border border-rose-800/50 rounded-xl p-6 text-center">
+      <p class="text-rose-300 font-semibold mb-1">Sdílení se nepodařilo načíst</p>
+      <p class="text-slate-400 text-sm">{{ shareView.error }}</p>
+    </div>
+
+    <div v-else-if="shareView.subject">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-3xl">{{ shareView.subject.emoji }}</span>
+        <h1 class="text-2xl font-bold">{{ shareView.subject.name }}</h1>
+      </div>
+      <p class="text-slate-500 text-sm mb-8">{{ shareView.subject.notes.length }} {{ noteWord(shareView.subject.notes.length) }} · sdíleno {{ formatDate(new Date(shareView.subject.sharedAt).toISOString()) }}</p>
+
+      <div v-if="shareView.subject.notes.length === 0" class="text-slate-500 text-center py-16">Tento předmět zatím nemá žádné zápisy.</div>
+
+      <div v-for="n in shareView.subject.notes" :key="n.id" class="bg-slate-900/40 border border-slate-800 rounded-xl p-5 mb-4">
+        <h3 class="font-semibold text-lg mb-1">{{ n.title }}</h3>
+        <div class="flex flex-wrap gap-1 mb-3" v-if="n.tags && n.tags.length">
+          <span v-for="t in n.tags" :key="t" class="note-tag-chip">🏷️ {{ t }}</span>
+        </div>
+        <div v-if="n.kind === 'checklist'" class="note-content" v-html="renderChecklistHtml(n.items)"></div>
+        <div v-else class="note-content" v-html="renderNoteContent(n.content, n.images)"></div>
+        <div v-if="n.images && n.images.some((img, i) => !isImageInlined(n.content, i))" class="flex flex-wrap gap-3 mt-3">
+          <figure v-for="(img, i) in n.images.filter((im, ix) => !isImageInlined(n.content, ix))" :key="i" class="max-w-[200px]">
+            <img :src="img.src" class="rounded-lg border border-slate-800">
+            <figcaption v-if="img.caption" class="text-xs text-slate-500 mt-1">{{ img.caption }}</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-10">Vytvořeno ve <a href="?" class="text-cyan-400 hover:underline">Studijním Hubu</a> — appce na procvičování a zápisky do školy.</p>
+  </div>
+
+</template>
 </div>
 
 <script>
@@ -1974,6 +2181,28 @@ const SYNC_SECRET = '75b708c4e04eb242d512b0eb7734a8f4';
 const SYNC_PATH = `/studijniHub_${SYNC_SECRET}.json`;
 const SYNC_META_KEY = 'studijniHubSyncMeta_v1';
 const SYNC_PUSH_DEBOUNCE_MS = 1500;
+
+// Sdílení JEDNOHO předmětu přes odkaz (read-only, bez hesla/účtu) - úplně
+// samostatný uzel v databázi, NEZÁVISLÝ na SYNC_PATH výš. Schválně tak, aby
+// poslání odkazu na sdílení nikdy neprozradilo tajný synchronizační klíč
+// (kdyby sdílení žilo pod stejnou cestou jako SYNC_PATH, příjemce odkazu by
+// se tím pádem dostal ke všem předmětům a mohl by je i přepisovat). Stejný
+// princip "utajení přes neuhodnutelnost" jako u SYNC_SECRET - je ale potřeba
+// mít ve Firebase konzoli nastavená pravidla, která povolují čtení/zápis i
+// pod cestou "publicShares", jinak sdílení nebude fungovat (appka o tom
+// uživatele informuje přímo v UI, kdyby se sdílení nepodařilo vytvořit).
+const SHARE_PATH_PREFIX = '/publicShares/';
+function generateShareId() {
+  const bytes = new Uint8Array(12);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+function buildShareUrl(shareId) {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '?share=' + shareId;
+  return url.toString();
+}
 
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function choice(arr) { return arr[randInt(0, arr.length - 1)]; }
@@ -2039,6 +2268,79 @@ function dateKey(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/** Kolik dní PO SOBĚ JDOUCÍCH (včetně dneška, pokud už dnes appka
+ *  zaznamenala aspoň jednu vyřešenou otázku) uživatel procvičoval - na rozdíl
+ *  od stats.currentStreak, což je série správných odpovědí V RÁMCI kvízu.
+ *  Dokud dnešek ještě neskončil, série se nepočítá jako přerušená jen proto,
+ *  že dnes appka ještě nebyla otevřená - počítá se od včerejška zpátky. */
+function computeDailyStreak(dailyHistory, referenceDate) {
+  const hist = dailyHistory || {};
+  const cursor = new Date(referenceDate);
+  cursor.setHours(0, 0, 0, 0);
+  let count = 0;
+  if ((hist[dateKey(cursor)] || 0) > 0) {
+    count = 1;
+  }
+  cursor.setDate(cursor.getDate() - 1);
+  while ((hist[dateKey(cursor)] || 0) > 0) {
+    count++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
+}
+
+/** Sestaví posledních `weeksCount` týdnů (ne-so, stejná konvence jako
+ *  kalendářní mapa aktivity) s celkovým počtem vyřešených otázek, pokusů a
+ *  z toho spočítanou úspěšností za daný týden (null = ten týden appka vůbec
+ *  nepoužil, ne 0 %, aby to graf mohl zobrazit jinak než "nulovou úspěšnost"). */
+function computeWeeklyProgress(dailyHistory, dailyAttempts, weeksCount, referenceDate) {
+  const hist = dailyHistory || {};
+  const att = dailyAttempts || {};
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const currentWeekStart = new Date(today);
+  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+  const weeks = [];
+  for (let w = weeksCount - 1; w >= 0; w--) {
+    const start = new Date(currentWeekStart);
+    start.setDate(start.getDate() - w * 7);
+    let solved = 0;
+    let attempts = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      if (d > today) break;
+      const key = dateKey(d);
+      solved += hist[key] || 0;
+      attempts += att[key] || 0;
+    }
+    weeks.push({
+      key: dateKey(start),
+      label: `${start.getDate()}.${start.getMonth() + 1}.`,
+      solved,
+      attempts,
+      successRate: attempts > 0 ? Math.round((solved / attempts) * 100) : null,
+    });
+  }
+  return weeks;
+}
+
+/** Nejdelší historická série po sobě jdoucích dní s aspoň jednou vyřešenou
+ *  otázkou - na rozdíl od computeDailyStreak, která počítá jen tu AKTUÁLNÍ. */
+function computeBestDailyStreak(dailyHistory) {
+  const days = Object.keys(dailyHistory || {}).filter((k) => (dailyHistory[k] || 0) > 0).sort();
+  if (!days.length) return 0;
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < days.length; i++) {
+    const prevPlusOne = new Date(days[i - 1] + 'T00:00:00');
+    prevPlusOne.setDate(prevPlusOne.getDate() + 1);
+    run = (dateKey(prevPlusOne) === days[i]) ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
 }
 
 /** Počet kalendářních dní od dneška (lokální půlnoc) do zadaného data
@@ -3277,7 +3579,7 @@ const app = createApp({
     }
 
     function loadStats() {
-      const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
+      const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
       try {
         const raw = localStorage.getItem(STATS_KEY);
         if (raw) {
@@ -3286,6 +3588,11 @@ const app = createApp({
             ...fallback,
             ...parsed,
             dailyHistory: (parsed && typeof parsed.dailyHistory === 'object' && parsed.dailyHistory) || {},
+            // dailyAttempts (pokusy za den, ne jen správné odpovědi) je novější
+            // pole než dailyHistory - u appek aktualizovaných ze starší verze
+            // prostě chybí a začne se plnit od nuly, graf úspěšnosti bude jen
+            // zpočátku mít méně dat, nic víc se tím nerozbije.
+            dailyAttempts: (parsed && typeof parsed.dailyAttempts === 'object' && parsed.dailyAttempts) || {},
             mistakeCounts: (parsed && typeof parsed.mistakeCounts === 'object' && parsed.mistakeCounts) || {},
             celebratedBadges: Array.isArray(parsed && parsed.celebratedBadges) ? parsed.celebratedBadges : [],
             // srs = záznamy rozloženého opakování (viz srsGrade) - u appek
@@ -3405,6 +3712,7 @@ const app = createApp({
               currentStreak: remote.stats.currentStreak || 0,
               bestStreak: remote.stats.bestStreak || 0,
               dailyHistory: (remote.stats.dailyHistory && typeof remote.stats.dailyHistory === 'object') ? remote.stats.dailyHistory : {},
+              dailyAttempts: (remote.stats.dailyAttempts && typeof remote.stats.dailyAttempts === 'object') ? remote.stats.dailyAttempts : {},
               mistakeCounts: (remote.stats.mistakeCounts && typeof remote.stats.mistakeCounts === 'object') ? remote.stats.mistakeCounts : {},
               perfectSessions: remote.stats.perfectSessions || 0,
               celebratedBadges: Array.isArray(remote.stats.celebratedBadges) ? remote.stats.celebratedBadges : [],
@@ -3458,6 +3766,92 @@ const app = createApp({
     function syncNow() {
       if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
       pullFromCloudAndMerge();
+    }
+
+    /* ---------- Sdílení jednoho předmětu přes odkaz (read-only) -----------
+       shareModal = stav dialogu při VYTVÁŘENÍ odkazu (tlačítko "🔗 Sdílet" u
+       předmětu, viz níž). shareView = stav PROHLÍŽENÍ, když appku někdo otevře
+       přes takový odkaz (?share=<id>) - viz detekce v onMounted a šablona
+       "v-else" hned pod <div id="app"> nahoře. Jde o dva různé, nezávislé
+       stavy - appka je nikdy nepoužívá zároveň. */
+    const shareModal = reactive({ open: false, loading: false, error: '', url: '', copied: false });
+
+    async function shareSubject(subject) {
+      if (!subject) return;
+      shareModal.open = true;
+      shareModal.loading = true;
+      shareModal.error = '';
+      shareModal.url = '';
+      shareModal.copied = false;
+      try {
+        const shareId = generateShareId();
+        const payload = {
+          name: subject.name,
+          emoji: subject.emoji,
+          sharedAt: Date.now(),
+          notes: JSON.parse(JSON.stringify(subject.notes || [])).map((n) => ({
+            id: n.id,
+            title: n.title,
+            content: n.content || '',
+            images: n.images || [],
+            kind: n.kind || 'text',
+            items: n.items || [],
+            tags: n.tags || [],
+          })),
+        };
+        const res = await fetch(FIREBASE_DB_URL + SHARE_PATH_PREFIX + shareId + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        shareModal.url = buildShareUrl(shareId);
+      } catch (e) {
+        console.warn('Sdílení se nepodařilo vytvořit.', e);
+        shareModal.error = 'Odkaz na sdílení se teď nepodařilo vytvořit. Zkontroluj připojení k internetu, případně to, jestli má appka ve Firebase konzoli povolený i uzel "publicShares" (viz nastavení sdílení).';
+      } finally {
+        shareModal.loading = false;
+      }
+    }
+    function closeShareModal() { shareModal.open = false; }
+    async function copyShareLink() {
+      if (!shareModal.url) return;
+      try {
+        await navigator.clipboard.writeText(shareModal.url);
+        shareModal.copied = true;
+        setTimeout(() => { shareModal.copied = false; }, 2500);
+      } catch (e) {
+        // Kopírování do schránky appka nemá jak vynutit (chybějící oprávnění
+        // apod.) - odkaz je vypsaný i v textovém poli, jde označit a zkopírovat ručně.
+      }
+    }
+
+    /* Prohlížení sdíleného předmětu (?share=<id> v adrese appky) - viz šablona
+       "v-else" pod <div id="app">. Detekce a načtení běží v onMounted níž. */
+    const shareView = reactive({ active: false, loading: false, error: '', subject: null });
+    async function loadSharedSubjectFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const shareId = params.get('share');
+      if (!shareId || !/^[a-f0-9]+$/i.test(shareId)) return;
+      shareView.active = true;
+      shareView.loading = true;
+      try {
+        const res = await fetch(FIREBASE_DB_URL + SHARE_PATH_PREFIX + shareId + '.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || !Array.isArray(data.notes)) throw new Error('Sdílení nenalezeno');
+        shareView.subject = {
+          name: data.name || 'Bez názvu',
+          emoji: data.emoji || '📚',
+          sharedAt: data.sharedAt || Date.now(),
+          notes: data.notes,
+        };
+      } catch (e) {
+        console.warn('Sdílený předmět se nepodařilo načíst.', e);
+        shareView.error = 'Tento odkaz na sdílení je buď neplatný, nebo už neexistuje (majitel předmětu ho mohl mezitím smazat).';
+      } finally {
+        shareView.loading = false;
+      }
     }
 
     /* ---------- Koš (dočasně smazané předměty a zápisy) ---------- */
@@ -3561,6 +3955,10 @@ const app = createApp({
       return count;
     });
 
+    /* ---------- Studijní série (kolik dní v řadě appka zaznamenala procvičování) ---------- */
+    const dailyStreak = computed(() => computeDailyStreak(stats.dailyHistory, new Date()));
+    const bestDailyStreak = computed(() => computeBestDailyStreak(stats.dailyHistory));
+
     /* ---------- Odznaky za pokrok ---------- */
     const showBadges = ref(false);
     const badgeStatus = computed(() =>
@@ -3603,6 +4001,25 @@ const app = createApp({
     const chartHasData = computed(() => chartDays.value.some((d) => d.count > 0));
     function chartBarHeight(count) {
       return Math.round((count / chartMax.value) * 100);
+    }
+
+    /* ---------- Graf úspěšnosti v čase (týdenní) ---------- */
+    const showWeeklyProgress = ref(false);
+    const WEEKLY_PROGRESS_WEEKS = 10;
+    const weeklyProgressWeeks = computed(() => computeWeeklyProgress(stats.dailyHistory, stats.dailyAttempts, WEEKLY_PROGRESS_WEEKS, new Date()));
+    const weeklyProgressHasData = computed(() => weeklyProgressWeeks.value.some((w) => w.attempts > 0));
+    function weeklyProgressBarClass(w) {
+      if (w.successRate === null) return 'chart-bar-rate-none';
+      if (w.successRate >= 80) return 'chart-bar-rate-good';
+      if (w.successRate >= 50) return 'chart-bar-rate-mid';
+      return 'chart-bar-rate-low';
+    }
+    function weeklyProgressBarHeight(w) {
+      return w.successRate === null ? 3 : Math.max(3, w.successRate);
+    }
+    function weeklyProgressTitle(w) {
+      if (w.attempts === 0) return `týden od ${w.label} — bez procvičování`;
+      return `týden od ${w.label} — úspěšnost ${w.successRate} % (${w.solved} z ${w.attempts} ${w.attempts === 1 ? 'pokusu' : 'pokusů'})`;
     }
 
     /* ---------- Kalendářní mapa aktivity (heatmap, dlouhodobý přehled) ---------- */
@@ -3700,7 +4117,7 @@ const app = createApp({
       stopTimedSession();
       generateNewQuiz();
     }
-    function closeSubject() { activeSubjectId.value = null; stopSpeaking(); stopTimedSession(); }
+    function closeSubject() { activeSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); }
 
     /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ---------- */
     const globalSearchQuery = ref('');
@@ -4205,6 +4622,7 @@ const app = createApp({
       noteForm.items = [];
       noteForm.newItemText = '';
       noteForm.tagsInput = '';
+      stopDictation();
     }
     function toggleNote(id) {
       expandedNoteId.value = expandedNoteId.value === id ? null : id;
@@ -4219,7 +4637,7 @@ const app = createApp({
       editForm.newItemText = '';
       editForm.tagsInput = (n.tags || []).join(', ');
     }
-    function cancelEdit() { editingNoteId.value = null; }
+    function cancelEdit() { editingNoteId.value = null; stopDictation(); }
     function saveEditNote(n) {
       const title = editForm.title.trim();
       if (!title) return;
@@ -4236,6 +4654,7 @@ const app = createApp({
       n.tags = parseTagsInput(editForm.tagsInput);
       n.updatedAt = new Date().toISOString();
       editingNoteId.value = null;
+      stopDictation();
     }
 
     /* ---------- Formátování textu zápisu (jednoduchý markdown) ---------- */
@@ -4265,6 +4684,79 @@ const app = createApp({
         const pos = start + insertion.length;
         el.setSelectionRange(pos, pos);
       });
+    }
+
+    /* ---------- Diktování poznámek hlasem (Web Speech API) --------------
+       Na rozdíl od hlasitého ČTENÍ nahlas (viz speechSupported/speakRaw výš -
+       to je opačný směr, appka mluví) jde tady o PŘEPIS řeči do textu - appka
+       poslouchá mikrofon a rozpoznaný text průběžně přidává do pole se zápisem.
+       Funguje jen v prohlížečích s podporou SpeechRecognition (typicky Chrome/
+       Edge; Firefox a některé mobilní prohlížeče podporu nemají) - appka tlačítko
+       "Diktovat" v takovém případě jen vůbec nezobrazí, stejně jako u hlasitého
+       čtení výš. Najednou může diktovat jen jeden formulář (přidání NEBO úprava
+       zápisku), proto appka drží jen jednu společnou instanci rozpoznávání. */
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const dictationSupported = !!SpeechRecognitionCtor;
+    const dictationActive = ref(false);
+    let dictationRecognition = null;
+    let dictationTargetState = null;
+    let dictationTargetKey = null;
+
+    function isDictatingTarget(state) {
+      return dictationActive.value && dictationTargetState === state;
+    }
+
+    function stopDictation() {
+      if (dictationRecognition) {
+        try { dictationRecognition.stop(); } catch (e) { /* není kritické */ }
+      }
+      dictationRecognition = null;
+      dictationActive.value = false;
+      dictationTargetState = null;
+      dictationTargetKey = null;
+    }
+
+    function startDictation(state, key) {
+      if (!dictationSupported) return;
+      stopDictation(); // kdyby náhodou diktoval jiný formulář, ukončí ho
+      try {
+        const recognition = new SpeechRecognitionCtor();
+        recognition.lang = 'cs-CZ';
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.onresult = (event) => {
+          let finalText = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          }
+          finalText = finalText.trim();
+          if (finalText && dictationTargetState && dictationTargetKey) {
+            const current = dictationTargetState[dictationTargetKey] || '';
+            const needsSpace = current && !/[\s\n]$/.test(current);
+            dictationTargetState[dictationTargetKey] = current + (needsSpace ? ' ' : '') + finalText;
+          }
+        };
+        recognition.onerror = () => { stopDictation(); };
+        recognition.onend = () => {
+          // Appka poslech sama neukončuje (continuous: true), ale prohlížeč
+          // ho po chvíli ticha nebo ztrátě oprávnění stejně může ukončit sám -
+          // appka na to jen zareaguje úpravou stavu tlačítka.
+          if (dictationRecognition === recognition) stopDictation();
+        };
+        dictationRecognition = recognition;
+        dictationTargetState = state;
+        dictationTargetKey = key;
+        dictationActive.value = true;
+        recognition.start();
+      } catch (e) {
+        console.warn('Diktování se nepodařilo spustit.', e);
+        stopDictation();
+      }
+    }
+
+    function toggleDictation(state, key) {
+      if (isDictatingTarget(state)) stopDictation();
+      else startDictation(state, key);
     }
 
     /* ---------- Obrázky u zápisů (uloženy jako komprimovaný base64 v localStorage) ---------- */
@@ -4545,11 +5037,20 @@ const app = createApp({
         confirmState.onConfirm = () => {
           subjects.splice(0, subjects.length, ...importedSubjects);
           if (importedStats) {
+            // Doplněno o dailyHistory/dailyAttempts/mistakeCounts/srs/celebratedBadges -
+            // dřív import zálohy obnovil jen holé součty, ale mapu aktivity, graf
+            // pokroku, sledování chyb i rozložené opakování nechal prázdné.
             Object.assign(stats, {
               totalSolved: Number(importedStats.totalSolved) || 0,
               totalAttempts: Number(importedStats.totalAttempts) || 0,
               currentStreak: Number(importedStats.currentStreak) || 0,
               bestStreak: Number(importedStats.bestStreak) || 0,
+              dailyHistory: (importedStats.dailyHistory && typeof importedStats.dailyHistory === 'object') ? importedStats.dailyHistory : {},
+              dailyAttempts: (importedStats.dailyAttempts && typeof importedStats.dailyAttempts === 'object') ? importedStats.dailyAttempts : {},
+              mistakeCounts: (importedStats.mistakeCounts && typeof importedStats.mistakeCounts === 'object') ? importedStats.mistakeCounts : {},
+              srs: (importedStats.srs && typeof importedStats.srs === 'object') ? importedStats.srs : {},
+              celebratedBadges: Array.isArray(importedStats.celebratedBadges) ? importedStats.celebratedBadges : [],
+              perfectSessions: Number(importedStats.perfectSessions) || 0,
             });
           }
           activeSubjectId.value = null;
@@ -4565,13 +5066,89 @@ const app = createApp({
     const quiz = reactive({
       type: 'generic', prompt: '', hintTitle: '', hintBody: [],
       userInput: '', solved: false, wrongAttempt: false, showHint: false, _check: null,
-      key: null, wasReview: false, answerText: '', shakeToken: 0,
+      key: null, wasReview: false, answerText: '', shakeToken: 0, options: [],
     });
+
+    /* ---------- Kvíz s výběrem z možností (multiple choice) ---------------
+       Alternativa k psané odpovědi - appka nabídne 4 možnosti místo prázdného
+       pole. Chybné možnosti (distraktory) appka nemá odkud vzít předem
+       připravené (otázky jsou z velké části generované za běhu), tak si je
+       "vypůjčí" tak, že si u stejného předmětu/poolu vygeneruje pár dalších
+       náhodných otázek a použije jejich odpovědi - u některých typů otázek to
+       nemusí být úplně nejtěžší distraktor, ale mechanika "vyber ze 4 možností"
+       funguje spolehlivě napříč úplně všemi typy otázek v appce. */
+    const multipleChoiceMode = ref(false);
+    function toggleMultipleChoice() {
+      multipleChoiceMode.value = !multipleChoiceMode.value;
+      if (multipleChoiceMode.value) practiceMode.value = 'normal';
+      generateNewQuiz();
+    }
+    function buildMultipleChoiceOptions(subject, correctAnswerText) {
+      const correct = String(correctAnswerText || '').trim();
+      if (!correct) return [];
+      const seen = new Set([normalizeAnswer(correct)]);
+      const options = [correct];
+      let tries = 0;
+      while (options.length < 4 && tries < 15) {
+        tries++;
+        const candidate = buildQuiz(subject, stats.mistakeCounts, practiceMode.value, stats.srs);
+        const candAnswer = String(candidate.answerText || '').trim();
+        if (!candAnswer) continue;
+        const norm = normalizeAnswer(candAnswer);
+        if (seen.has(norm)) continue;
+        seen.add(norm);
+        options.push(candAnswer);
+      }
+      // Míň než 2 možnosti (u opravdu malého předmětu se skoro žádnými
+      // otázkami) by nedávalo smysl nabízet jako "výběr" - appka se v tom
+      // případě prostě vrátí k psané odpovědi jen pro tuhle jednu otázku.
+      if (options.length < 2) return [];
+      const shuffled = options.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = randInt(0, i);
+        const tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+      }
+      return shuffled;
+    }
+    function selectMultipleChoiceOption(option) {
+      if (quiz.solved) return;
+      quiz.userInput = option;
+      checkQuizAnswer();
+    }
+
+    /* ---------- Míchaný kvíz napříč předměty ------------------------------
+       Normálně appka kvízuje jen z aktuálně otevřeného předmětu (activeSubject).
+       V míchaném režimu si generateNewQuiz pro KAŽDOU otázku náhodně vybere
+       jeden z nearchivovaných předmětů - quizSourceSubject pak ukazuje, odkud
+       aktuální otázka doopravdy je (pro zápočet do statistik daného předmětu
+       i pro zobrazení v kartě otázky), zatímco zbytek stránky (zápisky,
+       statistiky předmětu...) dál patří otevřenému activeSubject beze změny. */
+    const mixedQuizMode = ref(false);
+    const mixedQuizSubjectId = ref(null);
+    const quizSourceSubject = computed(() => {
+      if (mixedQuizMode.value && mixedQuizSubjectId.value) {
+        return subjects.find((s) => s.id === mixedQuizSubjectId.value) || activeSubject.value;
+      }
+      return activeSubject.value;
+    });
+    function toggleMixedQuiz() {
+      mixedQuizMode.value = !mixedQuizMode.value;
+      if (!mixedQuizMode.value) mixedQuizSubjectId.value = null;
+      generateNewQuiz();
+    }
 
     function generateNewQuiz() {
       if (!activeSubject.value) return;
       stopSpeaking(); // nová otázka - případné přehrávání předchozího zadání už nedává smysl
-      const built = buildQuiz(activeSubject.value, stats.mistakeCounts, practiceMode.value, stats.srs);
+      let sourceSubject = activeSubject.value;
+      if (mixedQuizMode.value) {
+        const candidates = subjects.filter((s) => !s.archived);
+        if (candidates.length > 0) {
+          sourceSubject = candidates[Math.floor(Math.random() * candidates.length)];
+          mixedQuizSubjectId.value = sourceSubject.id;
+        }
+      }
+      const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs);
       quiz.type = built.type;
       quiz.prompt = built.prompt;
       quiz.hintTitle = built.hintTitle;
@@ -4584,6 +5161,7 @@ const app = createApp({
       quiz.solved = false;
       quiz.wrongAttempt = false;
       quiz.showHint = false;
+      quiz.options = multipleChoiceMode.value ? buildMultipleChoiceOptions(sourceSubject, quiz.answerText) : [];
       flashcardFlipped.value = false;
       quizSession.mistakesThisQuestion = 0;
     }
@@ -4679,14 +5257,111 @@ const app = createApp({
       return Math.round((timedSession.correctCount / timedSession.totalSeconds) * 60 * 10) / 10;
     });
 
+    /* ---------- Časovač/Pomodoro na soustředěné učení -----------------------
+       Na rozdíl od timedSession výše (odpočet v rámci jednoho konkrétního
+       kvízu, s vlastními body/skóre) jde o obecný časovač na střídání bloků
+       soustředěné práce a přestávek, nezávislý na tom, jestli uživatel zrovna
+       kvízuje, čte zápisky nebo dělá cokoliv jiného. */
+    const showPomodoro = ref(false);
+    const pomodoro = reactive({
+      active: false,
+      phase: 'work', // 'work' | 'break'
+      workMinutes: 25,
+      breakMinutes: 5,
+      secondsLeft: 25 * 60,
+      completedWorkBlocks: 0,
+    });
+    let pomodoroIntervalId = null;
+    function pomodoroPhaseSeconds(phase) {
+      return Math.max(1, Math.round((phase === 'work' ? pomodoro.workMinutes : pomodoro.breakMinutes) * 60));
+    }
+    function clearPomodoroInterval() {
+      if (pomodoroIntervalId !== null) { clearInterval(pomodoroIntervalId); pomodoroIntervalId = null; }
+    }
+    /** Krátké pípnutí přes Web Audio API - appka kvůli tomu nemusí tahat žádný
+     *  zvukový soubor navíc, a funguje i offline. Když Web Audio z nějakého
+     *  důvodu není k dispozici (starý prohlížeč), appka jen potichu pokračuje. */
+    function playPomodoroBeep() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.65);
+        setTimeout(() => { ctx.close().catch(() => {}); }, 800);
+      } catch (e) { /* zvuk není kritický pro fungování appky */ }
+    }
+    function startPomodoro() {
+      if (pomodoro.active) return;
+      pomodoro.active = true;
+      showPomodoro.value = true;
+      clearPomodoroInterval();
+      pomodoroIntervalId = setInterval(() => {
+        pomodoro.secondsLeft--;
+        if (pomodoro.secondsLeft <= 0) advancePomodoroPhase();
+      }, 1000);
+    }
+    function pausePomodoro() {
+      pomodoro.active = false;
+      clearPomodoroInterval();
+    }
+    function resetPomodoro() {
+      pausePomodoro();
+      pomodoro.phase = 'work';
+      pomodoro.completedWorkBlocks = 0;
+      pomodoro.secondsLeft = pomodoroPhaseSeconds('work');
+    }
+    /** Blok skončil (práce nebo přestávka) - přepne fázi, upozorní zvukem a
+     *  (pokud má uživatel povolené) i notifikací, a rovnou spustí další fázi. */
+    function advancePomodoroPhase() {
+      if (pomodoro.phase === 'work') {
+        pomodoro.completedWorkBlocks++;
+        pomodoro.phase = 'break';
+      } else {
+        pomodoro.phase = 'work';
+      }
+      pomodoro.secondsLeft = pomodoroPhaseSeconds(pomodoro.phase);
+      playPomodoroBeep();
+      if (typeof sendLocalNotification === 'function') {
+        sendLocalNotification(
+          pomodoro.phase === 'break' ? '⏱️ Čas na přestávku' : '⏱️ Přestávka skončila',
+          pomodoro.phase === 'break' ? 'Blok soustředěného učení je hotový - dej si pauzu.' : 'Pauza skončila, pokračuj dalším blokem učení.'
+        );
+      }
+    }
+    const pomodoroTimeLabel = computed(() => {
+      const m = Math.floor(pomodoro.secondsLeft / 60);
+      const s = pomodoro.secondsLeft % 60;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    });
+    // Když si uživatel upraví délku bloku a časovač zrovna neběží, projeví se
+    // to hned (dokud běží, nemá smysl mu odpočet "pod rukama" přepočítávat).
+    watch(() => pomodoro.workMinutes, () => {
+      if (!pomodoro.active && pomodoro.phase === 'work') pomodoro.secondsLeft = pomodoroPhaseSeconds('work');
+    });
+    watch(() => pomodoro.breakMinutes, () => {
+      if (!pomodoro.active && pomodoro.phase === 'break') pomodoro.secondsLeft = pomodoroPhaseSeconds('break');
+    });
+
     /** Zaznamená správnou odpověď do statistik - sdíleno mezi psaným ověřením
      *  (checkQuizAnswer) i sebehodnocením u kartiček (gradeFlashcard). */
     /** Poznamená si u aktivního předmětu, že v něm právě proběhl pokus o odpověď
      *  (ať už úspěšný nebo ne) - slouží pro statistiky za jednotlivý předmět. */
     function touchSubjectPractice() {
-      if (!activeSubject.value) return;
-      activeSubject.value.attemptsCount = (activeSubject.value.attemptsCount || 0) + 1;
-      activeSubject.value.lastPracticedAt = new Date().toISOString();
+      const today = dateKey(new Date());
+      if (!stats.dailyAttempts) stats.dailyAttempts = {};
+      stats.dailyAttempts[today] = (stats.dailyAttempts[today] || 0) + 1;
+      if (!quizSourceSubject.value) return;
+      quizSourceSubject.value.attemptsCount = (quizSourceSubject.value.attemptsCount || 0) + 1;
+      quizSourceSubject.value.lastPracticedAt = new Date().toISOString();
     }
     function recordCorrect() {
       stats.totalSolved++;
@@ -4694,8 +5369,8 @@ const app = createApp({
       if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
       const today = dateKey(new Date());
       stats.dailyHistory[today] = (stats.dailyHistory[today] || 0) + 1;
-      if (activeSubject.value) {
-        activeSubject.value.solvedCount = (activeSubject.value.solvedCount || 0) + 1;
+      if (quizSourceSubject.value) {
+        quizSourceSubject.value.solvedCount = (quizSourceSubject.value.solvedCount || 0) + 1;
       }
       touchSubjectPractice();
       // Správná odpověď snižuje "váhu k opakování" - po dvou úspěších v řadě
@@ -4824,6 +5499,7 @@ const app = createApp({
 
     function useFlashcardMode() {
       practiceMode.value = 'flashcard';
+      multipleChoiceMode.value = false;
       quizSession.active = false;
       quizSession.showSummary = false;
       stopTimedSession();
@@ -4911,6 +5587,7 @@ const app = createApp({
         else if (confirmState.show) cancelConfirm();
         else if (showTrashModal.value) showTrashModal.value = false;
         else if (showShortcutsHelp.value) showShortcutsHelp.value = false;
+        else if (shareModal.open) closeShareModal();
         return;
       }
 
@@ -4945,6 +5622,13 @@ const app = createApp({
       }
     }
     onMounted(() => {
+      // Odkaz na sdílený předmět (?share=<id>) appku přepne do čistě
+      // read-only prohlížeče (viz šablona) - zbytek běžné inicializace appky
+      // (klávesové zkratky, synchronizace, připomínky...) v tom případě nemá
+      // smysl spouštět. loadSharedSubjectFromUrl nastaví shareView.active
+      // synchronně ještě před prvním await, takže je hned jisté, jak pokračovat.
+      loadSharedSubjectFromUrl();
+      if (shareView.active) return;
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
       // Při startu appky se zkusí porovnat lokální data s cloudem a použije se
@@ -4967,12 +5651,14 @@ const app = createApp({
     onBeforeUnmount(() => {
       window.removeEventListener('keydown', onKeydown);
       clearTimedInterval();
+      clearPomodoroInterval();
+      stopDictation();
     });
 
     return {
       // data
       theme, greeting, heroVideoEl, prefersReducedMotion, onCardTilt, onCardTiltLeave,
-      subjects, EMOJIS, GRADIENTS, stats, successRate, reviewCount, dueReviewCount,
+      subjects, EMOJIS, GRADIENTS, stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak,
       showBadges, badgeStatus, unlockedBadgeCount,
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
@@ -4985,8 +5671,11 @@ const app = createApp({
       noteContentEl, editContentEl,
       quiz, quizCategoryLabel, quizSession, totalSessionMistakes, activeSubjectStats,
       practiceMode, flashcardFlipped,
+      mixedQuizMode, quizSourceSubject, toggleMixedQuiz,
+      multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption,
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
+      showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
       toggleTheme,
@@ -4997,12 +5686,15 @@ const app = createApp({
       requestDeleteSubject, requestDeleteNote, confirmYes, cancelConfirm,
       daysLeft, restoreTrashItem, emptyTrash,
       addNote, toggleNote, startEditNote, cancelEdit, saveEditNote, formatDate, noteWord,
-      renderNoteContent, applyFormat, handleNoteImageUpload, removeComposingImage,
+      renderNoteContent, renderChecklistHtml, applyFormat, handleNoteImageUpload, removeComposingImage,
+      shareModal, shareSubject, closeShareModal, copyShareLink, shareView,
+      dictationSupported, isDictatingTarget, toggleDictation,
       generateNewQuiz, checkQuizAnswer,
       useFlashcardMode, flipFlashcard, gradeFlashcard,
       startSession, stopSession, continuePractice, pluralize,
       addCustomQuestion, deleteCustomQuestion,
       chartBarHeight,
+      weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
       exportBackup, triggerImportFile, handleImportFile,
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
@@ -5013,6 +5705,7 @@ const app = createApp({
       exportSubjectData, triggerImportSubjectFile, handleImportSubjectFile,
       speechSupported, speakingNoteId, isSpeakingQuizPrompt, stopSpeaking, speakNote, speakQuizPrompt,
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
+      showPomodoro, pomodoro, pomodoroTimeLabel, startPomodoro, pausePomodoro, resetPomodoro,
       setDifficulty, activeSubjectIsMath, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
       activeSubjectIsCzech, showSentenceAnalyses, newSentenceAnalysis, addSentenceAnalysis, deleteSentenceAnalysis,
       recommendedSubject, recommendationReason,

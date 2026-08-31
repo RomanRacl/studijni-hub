@@ -20,7 +20,7 @@
 // bez problémů. Jediné, co se pořád stahuje z internetu, je font (Google
 // Fonts) - a ten není kritický, appka bez něj jen použije náhradní písmo.
 
-const CACHE_NAME = 'studijni-hub-cache-v6';
+const CACHE_NAME = 'studijni-hub-cache-v7';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
