@@ -219,6 +219,13 @@
 <link rel="stylesheet" href="katex/katex.min.css">
 <script src="katex/katex.min.js"></script>
 
+<!-- Tesseract.js (rozpoznávání textu z fotky/OCR) - stejně jako KaTeX výš
+     samostatně hostováno ve složce tesseract/ vedle studijni-hub.html.
+     Appka bez něj dál normálně funguje, jen tlačítko "OCR z fotky" v tom
+     případě vypíše chybovou hlášku místo rozpoznaného textu (viz getOcrWorker) -
+     proto ani tady není onerror hlášení jako u Tailwindu/Vue. -->
+<script src="tesseract/tesseract.min.js"></script>
+
 <style>
   /* ===================== BAREVNÉ PROMĚNNÉ (TMAVÝ / SVĚTLÝ REŽIM) =====================
      Výchozí (:root) hodnoty jsou tmavé - appka byla od začátku navržená jako tmavá.
@@ -251,6 +258,14 @@
     --danger-border: rgba(244, 63, 94, 0.35);
     --accent-text: #67e8f9;
     --accent-text-hover: #a5f3fc;
+    /* Výchozí (azurové) RGB trojice pro vlastní akcentovou barvu appky - přepisuje
+       je JS applyAccent() při startu/změně volby (viz #53 "Vlastní barva appky"),
+       stejně jako --accent-text/--accent-text-hover výše. Nejsou theme-závislé -
+       stejné odstíny 300/400/500/600 fungují jak ve tmavém, tak světlém režimu. */
+    --accent-300-rgb: 103, 232, 249;
+    --accent-400-rgb: 34, 211, 238;
+    --accent-500-rgb: 6, 182, 212;
+    --accent-600-rgb: 8, 145, 178;
     --success-text: #6ee7b7;
     --success-bg: rgba(16, 185, 129, 0.12);
     --success-bg-hover: rgba(16, 185, 129, 0.22);
@@ -441,10 +456,10 @@
     font-family: inherit;
   }
   .input::placeholder { color: var(--text-faint); }
-  .input:focus { border-color: #22d3ee; box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.18); }
+  .input:focus { border-color: rgb(var(--accent-400-rgb)); box-shadow: 0 0 0 3px rgba(var(--accent-400-rgb), 0.18); }
 
   .btn-primary {
-    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    background: linear-gradient(135deg, rgb(var(--accent-500-rgb)), rgb(var(--accent-600-rgb)));
     padding: 0.65rem 1.25rem;
     border-radius: 0.75rem;
     font-weight: 600;
@@ -452,7 +467,7 @@
     transition: filter 0.2s, transform 0.2s, box-shadow 0.2s;
     white-space: nowrap;
   }
-  .btn-primary:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px) scale(1.045); box-shadow: 0 14px 30px -8px rgba(6, 182, 212, 0.6); }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px) scale(1.045); box-shadow: 0 14px 30px -8px rgba(var(--accent-500-rgb), 0.6); }
   .btn-primary:active:not(:disabled) { transform: translateY(0) scale(0.97); }
   .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -799,7 +814,7 @@
     gap: 0.25rem;
     transition: background 0.15s, color 0.15s;
   }
-  .fmt-btn:hover { background: rgba(34, 211, 238, 0.15); color: var(--accent-text); }
+  .fmt-btn:hover { background: rgba(var(--accent-400-rgb), 0.15); color: var(--accent-text); }
   .fmt-btn.italic { font-style: italic; }
 
   /* Náhledy obrázků při psaní/úpravě zápisu (s tlačítkem na odebrání) */
@@ -851,7 +866,7 @@
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
   .quiz-mode-btn:hover { background: var(--btn-secondary-bg-hover); color: var(--btn-secondary-text); }
-  .quiz-mode-active { background: rgba(34, 211, 238, 0.18); border-color: rgba(34, 211, 238, 0.5); color: var(--accent-text); }
+  .quiz-mode-active { background: rgba(var(--accent-400-rgb), 0.18); border-color: rgba(var(--accent-400-rgb), 0.5); color: var(--accent-text); }
 
   .quiz-option-btn {
     text-align: left;
@@ -1016,10 +1031,18 @@
   :root.light [class*="bg-slate-900/95"],
   :root.light [class*="bg-slate-950/50"] { background-color: var(--surface-2) !important; }
   :root.light [class*="bg-slate-800/70"] { background-color: var(--border-soft) !important; }
-  :root.light [class*="text-cyan-300"],
-  :root.light [class*="text-cyan-400"] { color: var(--accent-text) !important; }
   :root.light [class*="text-amber-300"] { color: var(--review-text) !important; }
   :root.light [class*="text-rose-400"] { color: var(--danger-text) !important; }
+  /* Vlastní akcentová barva appky (viz #53) - na rozdíl od pravidel výše platí
+     v OBOU režimech (tmavém i světlém), protože --accent-text/--accent-text-hover
+     už samy o sobě mají pro každý režim správný odstín (viz applyAccent() ve
+     setup() a proměnné v :root/:root.light výše). Nejde o vyčerpávající přebarvení
+     každého azurového pixelu appky - jen o nejvýraznější, nejčastěji vidět prvky. */
+  [class*="text-cyan-300"],
+  [class*="text-cyan-400"] { color: var(--accent-text) !important; }
+  [class*="border-cyan-800"],
+  [class*="border-cyan-600"] { border-color: rgba(var(--accent-600-rgb), 0.5) !important; }
+  [class*="bg-cyan-950"] { background-color: rgba(var(--accent-600-rgb), 0.12) !important; }
   /* Nadpis "Moje předměty" má pastelový gradient laděný na tmavé pozadí - ve světlém
      režimu by byl na bílé nečitelný, proto se ve světlém režimu ztmaví. */
   :root.light [class*="from-cyan-300"][class*="via-sky-300"][class*="to-violet-300"] {
@@ -1044,6 +1067,24 @@
         class="ml-auto btn-ghost !text-lg !p-2 rounded-full"
         title="Klávesové zkratky (nebo stiskni ?)"
       >⌨️</button>
+      <div class="relative">
+        <button
+          @click="showAccentPicker = !showAccentPicker"
+          class="btn-ghost !text-lg !p-2 rounded-full"
+          title="Vlastní barva appky"
+        >🎨</button>
+        <div v-if="showAccentPicker" class="absolute right-0 top-full mt-2 z-20 flex gap-1.5 p-2 rounded-xl border border-slate-800 bg-slate-900/95 shadow-xl">
+          <button
+            v-for="preset in ACCENT_PRESETS"
+            :key="preset.id"
+            @click="setAccentColor(preset.id); showAccentPicker = false"
+            class="w-7 h-7 rounded-full border-2 transition"
+            :class="accentId === preset.id ? 'border-white scale-110' : 'border-transparent'"
+            :style="{ background: `rgb(${preset.rgb500})` }"
+            :title="preset.label"
+          ></button>
+        </div>
+      </div>
       <button
         @click="toggleTheme"
         class="btn-ghost !text-lg !p-2 rounded-full"
@@ -1135,6 +1176,32 @@
         </div>
       </div>
 
+      <!-- Dnešní přehled - souhrn zkoušek/opakování/doporučení na jeden pohled -->
+      <div v-if="todayOverviewVisible" class="flex flex-wrap gap-3 mb-4 entrance entrance-delay-5">
+        <button v-if="soonExamsForOverview.length > 0" @click="showUpcomingExams = true" class="flex items-center gap-2 rounded-xl border border-rose-800/40 bg-rose-950/20 hover:bg-rose-950/35 transition px-4 py-2.5 text-sm">
+          <span class="text-lg">📅</span>
+          <span>{{ soonExamsForOverview.length }} {{ pluralize(soonExamsForOverview.length, 'zkouška', 'zkoušky', 'zkoušek') }} do týdne</span>
+        </button>
+        <span v-if="totalDueReviewCount > 0" class="flex items-center gap-2 rounded-xl border border-amber-800/40 bg-amber-950/20 px-4 py-2.5 text-sm">
+          <span class="text-lg">🔁</span>
+          <span>{{ totalDueReviewCount }} {{ pluralize(totalDueReviewCount, 'otázka', 'otázky', 'otázek') }} k opakování</span>
+        </span>
+        <span v-if="recommendedSubject" class="flex items-center gap-2 rounded-xl border border-cyan-800/40 bg-cyan-950/20 px-4 py-2.5 text-sm">
+          <span class="text-lg">🎯</span>
+          <span>Doporučeno: {{ recommendedSubject.emoji }} {{ recommendedSubject.name }}</span>
+        </span>
+      </div>
+
+      <!-- Naposledy otevřené předměty - rychlá zkratka mimo pořadí v karuselu -->
+      <div v-if="recentSubjects.length > 0" class="flex flex-wrap items-center gap-2 mb-6 entrance entrance-delay-5">
+        <span class="text-xs text-slate-500 shrink-0">🕓 Naposledy otevřené:</span>
+        <button
+          v-for="s in recentSubjects" :key="s.id"
+          @click="openSubject(s.id)"
+          class="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 transition px-3 py-1 text-xs"
+        >{{ s.emoji }} {{ s.name }}</button>
+      </div>
+
       <!-- Chytré doporučení, co dnes procvičit -->
       <button
         v-if="recommendedSubject"
@@ -1203,15 +1270,46 @@
               :title="(syncStatus === 'error' ? 'Data zůstávají bezpečně uložená v appce, do cloudu se jen teď nepodařilo odeslat/stáhnout (např. bez internetu) - zkusí se to znovu při další změně nebo dalším otevření appky.' : 'Data se automaticky ukládají i do cloudu, aby byla stejná na počítači i na mobilu/tabletu.') + (lastSyncedLabel ? ` · naposledy ${lastSyncedLabel}` : '')"
             >{{ syncStatusLabel }}<span v-if="lastSyncedLabel" class="opacity-70 hidden sm:inline"> · {{ lastSyncedLabel }}</span></span>
             <button @click="syncNow" class="btn-ghost !text-xs !p-1.5" title="Synchronizovat teď ručně" :disabled="syncStatus === 'syncing'">🔄</button>
+            <button
+              @click="showStorageDetail = !showStorageDetail"
+              class="text-xs px-2 py-1 rounded-full border flex items-center gap-1 select-none"
+              :class="{
+                'border-slate-700 text-slate-400': storageUsageLevel === 'ok',
+                'border-amber-800 text-amber-400': storageUsageLevel === 'warning',
+                'border-rose-800 text-rose-400': storageUsageLevel === 'critical',
+              }"
+              :title="`Odhadované využití úložiště appky v tomto prohlížeči: ${formatBytes(storageUsageBytes)} (~${storageUsagePercent} % z běžného limitu ~5 MB). Skutečný limit se liší podle prohlížeče/zařízení. Klikni pro podrobnosti.`"
+            >💾 {{ storageUsagePercent }} %</button>
             <button @click="showTrashModal = true" class="btn-secondary text-xs !py-1.5 !px-3" title="Smazané předměty a zápisy zůstávají dočasně v koši, odkud je jde obnovit">🗑️ Koš<span v-if="trash.length"> ({{ trash.length }})</span></button>
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
             <button @click="triggerImportFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Nahraje dříve staženou zálohu a nahradí jí aktuální data">⬆️ Import zálohy</button>
             <input ref="importFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportFile" />
+            <input ref="ocrFileEl" type="file" accept="image/*" capture="environment" class="hidden" @change="handleOcrFile" />
             <button @click="triggerImportSubjectFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Přidá nový předmět ze souboru vyexportovaného přes „Export předmětu" - nic stávajícího nepřepíše">📥 Naimportovat předmět</button>
             <input ref="importSubjectFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportSubjectFile" />
           </div>
         </div>
+
+        <Transition name="fade">
+          <div v-if="showStorageDetail" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Využití úložiště appky</p>
+            <p class="text-sm text-slate-400 mb-3">
+              Appka si všechna svá data (zápisy, obrázky, statistiky) ukládá přímo v tomto prohlížeči/zařízení. Aktuálně je to přibližně <strong class="text-slate-200">{{ formatBytes(storageUsageBytes) }}</strong>, tedy zhruba <strong class="text-slate-200">{{ storageUsagePercent }} %</strong> z běžného limitu prohlížečů (~5 MB — skutečný limit se liší podle zařízení).
+            </p>
+            <p v-if="storageUsageLevel !== 'ok'" class="text-sm mb-3" :class="storageUsageLevel === 'critical' ? 'text-rose-400' : 'text-amber-400'">
+              {{ storageUsageLevel === 'critical' ? '⚠️ Úložiště appky je téměř plné — hrozí, že se nepodaří uložit nové změny.' : '⚠️ Úložiště appky se plní.' }}
+              Zkus odebrat staré obrázky u předmětů (tlačítko „Odebrat obrázek"), archivovat nebo smazat nepoužívané předměty, případně vysypat koš.
+            </p>
+            <div v-if="subjectsBySizeDesc.length" class="space-y-1.5">
+              <p class="text-xs text-slate-500 mb-1">Největší předměty (odhad):</p>
+              <div v-for="item in subjectsBySizeDesc" :key="item.subject.id" class="flex items-center justify-between text-sm">
+                <span>{{ item.subject.emoji }} {{ item.subject.name }}</span>
+                <span class="text-slate-500">{{ formatBytes(item.bytes) }}</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
 
         <Transition name="fade">
           <div v-if="showProgressChart" class="px-5 pb-5 pt-1 border-t border-slate-800">
@@ -1503,6 +1601,7 @@
             {{ activeSubject.archived ? '📤 Obnovit z archivu' : '📥 Archivovat' }}
           </button>
           <button @click="exportSubjectToPdf(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled všech zápisů předmětu, ze kterého jde uložit PDF">🖨️ Export do PDF</button>
+          <button @click="exportSubjectWorksheet(activeSubject, 15)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový pracovní list s 15 otázkami bez odpovědí (a klíčem řešení na konci) - hodí se na procvičování na papíře">📝 Pracovní list</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
           <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
@@ -1759,6 +1858,7 @@
                   📎 Obrázek
                   <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, noteForm)" />
                 </label>
+                <button type="button" @click="openOcrPicker(noteForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
               </div>
               <textarea
                 ref="noteContentEl"
@@ -1851,6 +1951,7 @@
                         📎 Obrázek
                         <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, editForm)" />
                       </label>
+                      <button type="button" @click="openOcrPicker(editForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
                     </div>
                     <textarea ref="editContentEl" v-model="editForm.content" rows="4" class="input mb-2" placeholder="Obsah zápisu"></textarea>
                   </template>
@@ -2099,6 +2200,70 @@
     </div>
   </Transition>
 
+  <!-- ============================================================= -->
+  <!-- MODAL: PŘIJETÍ SDÍLENÉHO TEXTU/ODKAZU Z JINÉ APPKY (Web Share Target) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="incomingShare.active" class="modal-overlay" @click.self="dismissIncomingShare">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">📥 Uložit sdílený obsah</h3>
+        <p class="text-slate-400 text-sm mb-4">Někdo (nebo ty sám/sama z jiné appky) sdílel/a do Studijního Hubu tohle - vyber předmět a ulož to jako nový zápis.</p>
+
+        <div v-if="subjects.length === 0" class="bg-amber-950/20 border border-amber-800/40 rounded-lg p-3 text-amber-300 text-sm mb-2">
+          Nejdřív si musíš přidat alespoň jeden předmět, teprve pak jde sdílený obsah uložit.
+        </div>
+        <template v-else>
+          <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Uložit do předmětu</label>
+          <select v-model="incomingShare.subjectId" class="input mb-3">
+            <option v-for="s in subjects.filter(x => !x.archived)" :key="s.id" :value="s.id">{{ s.emoji }} {{ s.name }}</option>
+          </select>
+        </template>
+
+        <div class="rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-sm space-y-1 mb-2 max-h-48 overflow-y-auto">
+          <p v-if="incomingShare.title" class="font-semibold">{{ incomingShare.title }}</p>
+          <p v-if="incomingShare.text" class="text-slate-300 whitespace-pre-wrap">{{ incomingShare.text }}</p>
+          <p v-if="incomingShare.url" class="text-cyan-300 break-all">{{ incomingShare.url }}</p>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-4">
+          <button @click="dismissIncomingShare" class="btn-secondary text-sm">Zahodit</button>
+          <button v-if="subjects.length > 0" @click="saveIncomingShareAsNote" class="btn-primary text-sm">💾 Uložit jako zápis</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: ROZPOZNÁVÁNÍ TEXTU Z FOTKY (OCR) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="ocrModal.open" class="modal-overlay" @click.self="ocrModal.status !== 'loading' && ocrModal.status !== 'recognizing' && closeOcrModal()">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">📷 Rozpoznávání textu z fotky</h3>
+
+        <div v-if="ocrModal.status === 'loading'" class="text-slate-400 text-sm py-6 text-center">
+          Připravuji rozpoznávání textu (poprvé to trvá o něco déle - stahuje se čeština)…
+        </div>
+        <div v-else-if="ocrModal.status === 'recognizing'" class="py-6 text-center">
+          <p class="text-slate-400 text-sm mb-2">Rozpoznávám text z fotky… {{ ocrModal.progress }} %</p>
+          <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div class="h-full bg-cyan-400 transition-all" :style="{ width: ocrModal.progress + '%' }"></div>
+          </div>
+        </div>
+        <div v-else-if="ocrModal.status === 'error'" class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-2">{{ ocrModal.error }}</div>
+        <template v-else-if="ocrModal.status === 'done'">
+          <p class="text-slate-400 text-sm mb-2">Appka rozpoznala tenhle text (zkontroluj ho, rozpoznávání není vždy 100% přesné):</p>
+          <textarea v-model="ocrModal.text" rows="8" class="input text-sm mb-2"></textarea>
+        </template>
+
+        <div class="flex justify-end gap-2 mt-4">
+          <button @click="closeOcrModal" class="btn-secondary text-sm" :disabled="ocrModal.status === 'loading' || ocrModal.status === 'recognizing'">Zavřít</button>
+          <button v-if="ocrModal.status === 'done'" @click="insertOcrTextIntoNote" class="btn-primary text-sm" :disabled="!ocrModal.text.trim()">➕ Vložit do zápisu</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
 </template>
 <template v-else>
 
@@ -2237,6 +2402,54 @@ function normalizeAnswer(str) {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+/* =====================================================================
+   TOLERANTN\u00cd VYHLED\u00c1V\u00c1N\u00cd (p\u0159eklepy) - viz #56.
+   Pou\u017e\u00edv\u00e1 se ve vyhled\u00e1v\u00e1n\u00ed v z\u00e1pisc\u00edch (filteredNotes) i nap\u0159\u00ed\u010d v\u0161emi
+   p\u0159edm\u011bty (globalSearchResults). Nejd\u0159\u00edv se v\u017edy zkus\u00ed oby\u010dejn\u00e9 "obsahuje"
+   (rychlej\u0161\u00ed a bez fale\u0161n\u00fdch shod) - teprve kdy\u017e to sel\u017ee, zkus\u00ed se, jestli
+   text obsahuje n\u011bjak\u00e9 slovo dost PODOBN\u00c9 hledan\u00e9mu v\u00fdrazu (Levenshteinova
+   vzd\u00e1lenost = kolik p\u00edsmen by se muselo zm\u011bnit/p\u0159idat/ubrat, aby byla dv\u011b
+   slova stejn\u00e1). Tolerance roste s d\u00e9lkou hledan\u00e9ho slova, aby kr\u00e1tk\u00e9 dotazy
+   (2-3 p\u00edsmena) nezp\u016fsobovaly spoustu nesmysln\u00fdch shod.
+   ===================================================================== */
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    const tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[n];
+}
+function fuzzyTolerance(len) {
+  if (len <= 3) return 0; // kr\u00e1tk\u00e1 slova mus\u00ed sed\u011bt p\u0159esn\u011b - jinak moc fale\u0161n\u00fdch shod
+  if (len <= 6) return 1;
+  return 2;
+}
+/** Tolerantn\u00ed "obsahuje" - haystack i query se p\u0159ed\u00e1vaj\u00ed u\u017e normalizovan\u00e9
+ *  (viz normalizeAnswer). Funguje jen na jednotliv\u00e1 slova dotazu (v\u00edceslovn\u00ed
+ *  fr\u00e1ze se tolerantn\u011b nezkou\u0161\u00ed) - sta\u010d\u00ed, aby ALESPO\u0147 JEDNO slovo dotazu bylo
+ *  bu\u010f p\u0159esn\u011b obsa\u017een\u00e9, nebo dost podobn\u00e9 n\u011bjak\u00e9mu slovu v textu. */
+function fuzzyIncludes(haystackNormalized, queryNormalized) {
+  if (!queryNormalized) return true;
+  if (haystackNormalized.includes(queryNormalized)) return true;
+  const haystackWords = haystackNormalized.split(/[^a-z0-9]+/).filter(Boolean);
+  const queryWords = queryNormalized.split(/[^a-z0-9]+/).filter(Boolean);
+  return queryWords.some((qw) => {
+    const tolerance = fuzzyTolerance(qw.length);
+    if (tolerance === 0) return false;
+    return haystackWords.some((hw) => Math.abs(hw.length - qw.length) <= tolerance && levenshteinDistance(hw, qw) <= tolerance);
+  });
 }
 
 /** Rozpozná typ předmětu podle jeho názvu (bez ohledu na diakritiku/velikost písmen). */
@@ -2776,6 +2989,68 @@ function buildAllSubjectsPdfHtml(subjects) {
 </html>`;
 }
 
+/** Poskládá tiskový pracovní list (worksheet) pro daný předmět - N vygenerovaných
+ *  otázek na test/procvičování BEZ odpovědí (jen číslované řádky s prázdným
+ *  místem na doplnění), a na konci samostatná stránka s klíčem správných
+ *  odpovědí (aby šlo vytisknout, dát žákovi/sobě k vyplnění a klíč si nechat
+ *  stranou). Používá stejný generátor otázek jako živý kvíz (buildQuiz), takže
+ *  otázky odpovídají tomu, co appka běžně dává k procvičování u daného předmětu. */
+function buildWorksheetHtml(subject, mistakeCounts, srs, count) {
+  const name = typeof subject === 'string' ? subject : subject.name;
+  const seenPrompts = new Set();
+  const questions = [];
+  let attempts = 0;
+  while (questions.length < count && attempts < count * 8) {
+    attempts++;
+    const built = buildQuiz(subject, mistakeCounts, 'normal', srs);
+    const promptText = String(built.prompt || '').trim();
+    if (!promptText || seenPrompts.has(promptText)) continue;
+    seenPrompts.add(promptText);
+    questions.push(built);
+  }
+
+  const questionsHtml = questions.map((q, i) => `
+    <li class="ws-question">
+      <div class="ws-prompt">${escapeHtml(q.prompt).replace(/\n/g, '<br>')}</div>
+      <div class="ws-answer-line"></div>
+    </li>
+  `).join('');
+
+  const answerKeyHtml = questions.map((q, i) => `
+    <li><strong>${i + 1}.</strong> ${escapeHtml(q.answerText || '—')}</li>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(name)} — Pracovní list</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 760px; margin: 2rem auto; padding: 0 1.5rem; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  .ws-subtitle { color: #64748b; margin-bottom: 0.5rem; font-size: 0.85rem; }
+  .ws-namefield { color: #64748b; margin: 1.2rem 0 1.8rem; font-size: 0.9rem; border-bottom: 1px solid #cbd5e1; padding-bottom: 1.5rem; }
+  .ws-questions { list-style: none; padding: 0; margin: 0; counter-reset: ws-counter; }
+  .ws-question { counter-increment: ws-counter; padding: 0.9rem 0; border-bottom: 1px dashed #e2e8f0; page-break-inside: avoid; }
+  .ws-question::before { content: counter(ws-counter) ". "; font-weight: 700; }
+  .ws-prompt { display: inline; font-size: 0.98rem; line-height: 1.6; white-space: pre-wrap; }
+  .ws-answer-line { margin: 0.6rem 0 0 1.3rem; height: 1.6rem; border-bottom: 1px solid #94a3b8; max-width: 420px; }
+  .ws-answerkey { page-break-before: always; }
+  .ws-answerkey h2 { font-size: 1.2rem; margin: 0 0 1rem; }
+  .ws-answerkey ol { padding-left: 1.1rem; font-size: 0.9rem; line-height: 1.9; }
+  @media print { body { margin: 0; padding: 1rem; } }
+</style>
+</head>
+<body>
+  <h1>${subject && subject.emoji ? escapeHtml(subject.emoji) + ' ' : ''}${escapeHtml(name)} — Pracovní list</h1>
+  <p class="ws-subtitle">${questions.length} ${pluralize(questions.length, 'otázka', 'otázky', 'otázek')} · vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu</p>
+  <p class="ws-namefield">Jméno: ______________________________&nbsp;&nbsp;&nbsp;&nbsp; Datum: ____________</p>
+  ${questions.length ? `<ol class="ws-questions">${questionsHtml}</ol>` : '<p>Pro tento předmět se nepodařilo vygenerovat žádné otázky.</p>'}
+  ${questions.length ? `<section class="ws-answerkey"><h2>🔑 Klíč správných odpovědí</h2><ol>${answerKeyHtml}</ol></section>` : ''}
+</body>
+</html>`;
+}
+
 /* =====================================================================
    NASTAVENÍ / KONSTANTY (ikony a barvy pro předměty)
    ===================================================================== */
@@ -2791,6 +3066,28 @@ const GRADIENTS = [
   { id: 'rose',    label: 'Růžová',    classes: 'bg-gradient-to-br from-rose-500 to-pink-600' },
   { id: 'amber',   label: 'Jantarová', classes: 'bg-gradient-to-br from-amber-400 to-orange-500' },
   { id: 'sky',     label: 'Nebeská',   classes: 'bg-gradient-to-br from-sky-400 to-indigo-600' },
+];
+
+/** Předvolby vlastní akcentové barvy appky (viz #53 "Vlastní barva appky").
+ *  Appka místo jedné natvrdo zapsané azurové barvy (cyan) používá napříč
+ *  rozhraním hrstku CSS proměnných (--accent-text, --accent-text-hover,
+ *  --accent-300-rgb až --accent-600-rgb - viz applyAccent() ve setup() a
+ *  odpovídající pravidla v <style>). Každá předvolba tu proto nese hotové
+ *  hex/RGB odstíny stejné barevné rodiny z Tailwindu (300-700), aby šly
+ *  přímo dosadit bez počítání barev za běhu. Nejde o kompletní přebarvení
+ *  úplně každého pixelu appky (spousta drobných dekorativních detailů
+ *  zůstává napevno azurová), ale nejvýraznější prvky (hlavní tlačítka,
+ *  zvýrazněný text, rámečky u vstupních polí, aktivní stavy) se řídí touto
+ *  volbou. */
+const ACCENT_PRESETS = [
+  { id: 'cyan',    label: 'Azurová',    rgb300: '103,232,249', rgb400: '34,211,238',  rgb500: '6,182,212',   rgb600: '8,145,178',   dark300: '#67e8f9', dark200: '#a5f3fc', light700: '#0e7490', light600: '#0891b2' },
+  { id: 'violet',  label: 'Fialová',    rgb300: '196,181,253', rgb400: '167,139,250', rgb500: '139,92,246',  rgb600: '124,58,237',  dark300: '#c4b5fd', dark200: '#ddd6fe', light700: '#6d28d9', light600: '#7c3aed' },
+  { id: 'emerald', label: 'Smaragdová', rgb300: '110,231,183', rgb400: '52,211,153',  rgb500: '16,185,129',  rgb600: '5,150,105',   dark300: '#6ee7b7', dark200: '#a7f3d0', light700: '#047857', light600: '#059669' },
+  { id: 'rose',    label: 'Malinová',   rgb300: '253,164,175', rgb400: '251,113,133', rgb500: '244,63,94',   rgb600: '225,29,72',   dark300: '#fda4af', dark200: '#fecdd3', light700: '#be123c', light600: '#e11d48' },
+  { id: 'amber',   label: 'Jantarová',  rgb300: '252,211,77',  rgb400: '251,191,36',  rgb500: '245,158,11',  rgb600: '217,119,6',   dark300: '#fcd34d', dark200: '#fde68a', light700: '#b45309', light600: '#d97706' },
+  { id: 'blue',    label: 'Modrá',      rgb300: '147,197,253', rgb400: '96,165,250',  rgb500: '59,130,246',  rgb600: '37,99,235',   dark300: '#93c5fd', dark200: '#bfdbfe', light700: '#1d4ed8', light600: '#2563eb' },
+  { id: 'pink',    label: 'Růžová',     rgb300: '249,168,212', rgb400: '244,114,182', rgb500: '236,72,153',  rgb600: '219,39,119',  dark300: '#f9a8d4', dark200: '#fbcfe8', light700: '#be185d', light600: '#db2777' },
+  { id: 'teal',    label: 'Tyrkysová',  rgb300: '94,234,212',  rgb400: '45,212,191',  rgb500: '20,184,166',  rgb600: '13,148,136',  dark300: '#5eead4', dark200: '#99f6e4', light700: '#0f766e', light600: '#0d9488' },
 ];
 
 /** Pár ukázkových vět s rozborem pro předmět Čeština, aby uživatel hned věděl,
@@ -3529,7 +3826,38 @@ const app = createApp({
       applyTheme();
       try { localStorage.setItem(THEME_KEY, theme.value); }
       catch (e) { console.warn('Volbu vzhledu se nepodařilo uložit.', e); }
+      applyAccent(); // --accent-text/--accent-text-hover se liší podle světlého/tmavého režimu
     });
+
+    /* ---------- Vlastní akcentová barva appky ---------- */
+    const ACCENT_KEY = 'studijniHubAccent_v1';
+    function loadAccentId() {
+      try {
+        const saved = localStorage.getItem(ACCENT_KEY);
+        if (saved && ACCENT_PRESETS.some((p) => p.id === saved)) return saved;
+      } catch (e) { /* localStorage nedostupné - použije se výchozí azurová */ }
+      return 'cyan';
+    }
+    const accentId = ref(loadAccentId());
+    const showAccentPicker = ref(false);
+    function applyAccent() {
+      const preset = ACCENT_PRESETS.find((p) => p.id === accentId.value) || ACCENT_PRESETS[0];
+      const root = document.documentElement.style;
+      root.setProperty('--accent-300-rgb', preset.rgb300);
+      root.setProperty('--accent-400-rgb', preset.rgb400);
+      root.setProperty('--accent-500-rgb', preset.rgb500);
+      root.setProperty('--accent-600-rgb', preset.rgb600);
+      root.setProperty('--accent-text', theme.value === 'light' ? preset.light700 : preset.dark300);
+      root.setProperty('--accent-text-hover', theme.value === 'light' ? preset.light600 : preset.dark200);
+    }
+    function setAccentColor(id) {
+      if (!ACCENT_PRESETS.some((p) => p.id === id)) return;
+      accentId.value = id;
+      applyAccent();
+      try { localStorage.setItem(ACCENT_KEY, id); }
+      catch (e) { console.warn('Volbu akcentové barvy se nepodařilo uložit.', e); }
+    }
+    applyAccent(); // sladí barvu appky s uloženou volbou hned při startu
 
     /* ---------- Velký pozdrav na dashboardu podle denní doby ---------- */
     const greeting = computed(() => greetingForHour(new Date().getHours()));
@@ -3826,6 +4154,60 @@ const app = createApp({
       }
     }
 
+    /* ---------- Přijetí sdíleného textu/odkazu z jiné appky (Web Share Target) ----------
+       Když si uživatel v telefonu/počítači v systémovém menu "Sdílet" zvolí
+       Studijní Hub jako cíl (u nainstalované appky - viz share_target v
+       manifest.json), prohlížeč appku otevře s parametry v adrese (shared-title/
+       shared-text/shared-url podle toho, co manifest.json deklaruje). Appka to
+       detekuje hned při startu a nabídne uložení jako nový zápis u zvoleného
+       předmětu - nic se needitovaně/automaticky neuloží, uživatel si vždy zvolí
+       předmět a obsah potvrdí. Úmyslně jde jen o GET (text/odkaz/název stránky) -
+       sdílení fotek/souborů by vyžadovalo POST a servisní workera navíc, což je
+       mimo rozsah této dávky. */
+    const incomingShare = reactive({ active: false, title: '', text: '', url: '', subjectId: null });
+    function detectIncomingShare() {
+      const params = new URLSearchParams(window.location.search);
+      const title = (params.get('shared-title') || '').trim();
+      const text = (params.get('shared-text') || '').trim();
+      const url = (params.get('shared-url') || '').trim();
+      if (!title && !text && !url) return;
+      incomingShare.active = true;
+      incomingShare.title = title;
+      incomingShare.text = text;
+      incomingShare.url = url;
+      incomingShare.subjectId = subjects.length > 0 ? subjects[0].id : null;
+      // Vyčistí adresní řádek, ať appka po refreshi/dalším otevření znovu
+      // nenabízí uložení už jednou vyřešeného sdílení.
+      try { window.history.replaceState({}, '', window.location.pathname); } catch (e) { /* nevadí */ }
+    }
+    function saveIncomingShareAsNote() {
+      const subject = subjects.find((s) => s.id === incomingShare.subjectId);
+      if (!subject) return;
+      const bodyParts = [];
+      if (incomingShare.text) bodyParts.push(incomingShare.text);
+      if (incomingShare.url) bodyParts.push(incomingShare.url);
+      subject.notes.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        title: incomingShare.title || 'Sdílený obsah',
+        content: bodyParts.join('\n\n'),
+        images: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        pinned: false,
+        kind: 'text',
+        items: [],
+        tags: [],
+      });
+      dismissIncomingShare();
+    }
+    function dismissIncomingShare() {
+      incomingShare.active = false;
+      incomingShare.title = '';
+      incomingShare.text = '';
+      incomingShare.url = '';
+      incomingShare.subjectId = null;
+    }
+
     /* Prohlížení sdíleného předmětu (?share=<id> v adrese appky) - viz šablona
        "v-else" pod <div id="app">. Detekce a načtení běží v onMounted níž. */
     const shareView = reactive({ active: false, loading: false, error: '', subject: null });
@@ -3933,19 +4315,22 @@ const app = createApp({
     /** Kolik otázek u AKTUÁLNÍHO předmětu je podle rozloženého opakování
      *  (viz srsGrade) právě teď "splatných" - appka jim dává přednost při
      *  výběru další otázky, tohle číslo jen dělá tenhle mechanismus viditelný. */
-    const dueReviewCount = computed(() => {
-      if (!activeSubject.value) return 0;
-      const srs = stats.srs || {};
+    /** Kolik otázek U JEDNOHO KONKRÉTNÍHO předmětu je podle rozloženého
+     *  opakování (SRS) právě teď "na řadě" - sdíleno mezi dueReviewCount
+     *  (jen aktivní předmět, viz níž) a totalDueReviewCount (úplně všechny
+     *  nearchivované předměty najednou, pro "Dnešní přehled" na dashboardu). */
+    function dueReviewCountForSubject(subject, srs) {
+      if (!subject) return 0;
       const now = Date.now();
       const isDue = (key) => { const r = srs[key]; return !!(r && typeof r.dueAt === 'number' && r.dueAt <= now); };
       let count = 0;
-      for (const q of activeSubject.value.customQuestions || []) {
+      for (const q of subject.customQuestions || []) {
         if (isDue(`custom:${q.id}`)) count++;
       }
-      for (const q of activeSubject.value.sentenceAnalyses || []) {
+      for (const q of subject.sentenceAnalyses || []) {
         if (isDue(`sentence:${q.id}:subject`) || isDue(`sentence:${q.id}:predicate`) || isDue(`sentence:${q.id}:type`)) count++;
       }
-      const notesPool = buildNotesPool(activeSubject.value);
+      const notesPool = buildNotesPool(subject);
       for (const it of notesPool.blankItems) {
         if (isDue(`notes:blank:${it.id}`)) count++;
       }
@@ -3953,6 +4338,11 @@ const app = createApp({
         if (isDue(`notes:card:${it.id}`)) count++;
       }
       return count;
+    }
+    const dueReviewCount = computed(() => dueReviewCountForSubject(activeSubject.value, stats.srs || {}));
+    const totalDueReviewCount = computed(() => {
+      const srs = stats.srs || {};
+      return subjects.filter((s) => !s.archived).reduce((sum, s) => sum + dueReviewCountForSubject(s, srs), 0);
     });
 
     /* ---------- Studijní série (kolik dní v řadě appka zaznamenala procvičování) ---------- */
@@ -3978,6 +4368,43 @@ const app = createApp({
         }
       });
     }, { deep: true });
+
+    /* ---------- Ukazatel využitého úložiště ----------
+       Appka ukládá všechna svá data (studijniHubData_v1, studijniHubStats_v1)
+       do localStorage v prohlížeči, který má omezenou kapacitu (typicky
+       kolem 5 MB, liší se podle prohlížeče/zařízení). Aby uživatel nebyl
+       nemile překvapen, že se mu jednoho dne přestanou ukládat změny (bez
+       jasné chybové hlášky), appka si spočítá hrubý odhad zabraného místa
+       (dominantní část tvoří base64 obrázky u předmětů a v zápiscích) a
+       zobrazí ho jako procentuální ukazatel, který zežloutne/zčervená, když
+       se blíží limitu - s tipy na uvolnění místa. */
+    const STORAGE_QUOTA_ESTIMATE_BYTES = 5 * 1024 * 1024;
+    const storageUsageBytes = computed(() => {
+      try {
+        return (JSON.stringify(subjects).length + JSON.stringify(stats).length) * 2;
+      } catch (e) {
+        return 0;
+      }
+    });
+    const storageUsagePercent = computed(() => Math.min(100, Math.round((storageUsageBytes.value / STORAGE_QUOTA_ESTIMATE_BYTES) * 100)));
+    const storageUsageLevel = computed(() => {
+      const p = storageUsagePercent.value;
+      if (p >= 85) return 'critical';
+      if (p >= 60) return 'warning';
+      return 'ok';
+    });
+    function formatBytes(n) {
+      if (!n || n < 1024) return `${n || 0} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    const showStorageDetail = ref(false);
+    const subjectsBySizeDesc = computed(() => {
+      return [...subjects]
+        .map((s) => ({ subject: s, bytes: JSON.stringify(s).length * 2 }))
+        .sort((a, b) => b.bytes - a.bytes)
+        .slice(0, 5);
+    });
 
     /* ---------- Graf pokroku za posledních 14 dní ---------- */
     const showProgressChart = ref(false);
@@ -4100,8 +4527,41 @@ const app = createApp({
     const activeSubjectId = ref(null);
     const activeSubject = computed(() => subjects.find((s) => s.id === activeSubjectId.value) || null);
 
+    /* ---------- Naposledy otevřené předměty (rychlá navigace na dashboardu) ---------
+       Čistě lokální/zařízení-specifická pomůcka (na rozdíl od subjects/stats se
+       NESYNCHRONIZUJE přes Firebase) - jde jen o pořadí kliků na TOMHLE zařízení,
+       ne o data samotná, takže by nedávalo smysl vnucovat ho jiným zařízením. */
+    const RECENT_SUBJECTS_KEY = 'studijniHubRecent_v1';
+    const MAX_RECENT_SUBJECTS = 6;
+    function loadRecentSubjectIds() {
+      try {
+        const raw = localStorage.getItem(RECENT_SUBJECTS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) { console.warn('Naposledy otevřené předměty se nepodařilo načíst.', e); }
+      return [];
+    }
+    const recentSubjectIds = ref(loadRecentSubjectIds());
+    function touchRecentSubject(id) {
+      const withoutId = recentSubjectIds.value.filter((x) => x !== id);
+      withoutId.unshift(id);
+      recentSubjectIds.value = withoutId.slice(0, MAX_RECENT_SUBJECTS);
+      try { localStorage.setItem(RECENT_SUBJECTS_KEY, JSON.stringify(recentSubjectIds.value)); }
+      catch (e) { console.warn('Naposledy otevřené předměty se nepodařilo uložit.', e); }
+    }
+    // Řadí se přesně podle recentSubjectIds (nejnovější první) - .map/.filter
+    // zachovává pořadí zdrojového pole, takže netřeba řadit ještě jednou.
+    const recentSubjects = computed(() =>
+      recentSubjectIds.value
+        .map((id) => subjects.find((s) => s.id === id))
+        .filter(Boolean)
+    );
+
     function openSubject(id) {
       activeSubjectId.value = id;
+      touchRecentSubject(id);
       expandedNoteId.value = null;
       editingNoteId.value = null;
       noteForm.title = '';
@@ -4122,15 +4582,15 @@ const app = createApp({
     /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ---------- */
     const globalSearchQuery = ref('');
     const globalSearchResults = computed(() => {
-      const q = globalSearchQuery.value.trim().toLowerCase();
+      const q = normalizeAnswer(globalSearchQuery.value);
       if (!q) return [];
       const results = [];
       for (const s of subjects) {
         for (const n of s.notes) {
-          const titleMatch = n.title.toLowerCase().includes(q);
-          const contentLower = n.content.toLowerCase();
-          const contentMatch = contentLower.includes(q);
-          const tagMatch = (n.tags || []).find((t) => t.toLowerCase().includes(q));
+          const titleMatch = fuzzyIncludes(normalizeAnswer(n.title), q);
+          const contentLower = normalizeAnswer(n.content);
+          const contentMatch = fuzzyIncludes(contentLower, q);
+          const tagMatch = (n.tags || []).find((t) => fuzzyIncludes(normalizeAnswer(t), q));
           if (!titleMatch && !contentMatch && !tagMatch) continue;
 
           const flat = n.content.replace(/\s+/g, ' ').trim();
@@ -4439,6 +4899,13 @@ const app = createApp({
         .sort((a, b) => a.info.days - b.info.days)
     );
     const showUpcomingExams = ref(false);
+    // "Dnešní přehled" na dashboardu ukazuje jen zkoušky, které jsou opravdu
+    // blízko (na rozdíl od upcomingExams výš, což je úplně všechno do
+    // budoucna) - ať ten souhrn nepůsobí poplašně kvůli zkoušce za dva měsíce.
+    const soonExamsForOverview = computed(() => upcomingExams.value.filter((x) => x.info.days <= 7));
+    const todayOverviewVisible = computed(() =>
+      soonExamsForOverview.value.length > 0 || totalDueReviewCount.value > 0 || !!recommendedSubject.value
+    );
 
     /* ---------- Přidání / mazání předmětu ---------- */
     const showAddModal = ref(false);
@@ -4557,10 +5024,10 @@ const app = createApp({
       const q = normalizeAnswer(noteSearchQuery.value);
       if (!q) return sortedNotes.value;
       return sortedNotes.value.filter(
-        (n) => normalizeAnswer(n.title).includes(q)
-          || normalizeAnswer(n.content).includes(q)
-          || (n.items || []).some((it) => normalizeAnswer(it.text).includes(q))
-          || (n.tags || []).some((t) => normalizeAnswer(t).includes(q))
+        (n) => fuzzyIncludes(normalizeAnswer(n.title), q)
+          || fuzzyIncludes(normalizeAnswer(n.content), q)
+          || (n.items || []).some((it) => fuzzyIncludes(normalizeAnswer(it.text), q))
+          || (n.tags || []).some((t) => fuzzyIncludes(normalizeAnswer(t), q))
       );
     });
 
@@ -4759,6 +5226,81 @@ const app = createApp({
       else startDictation(state, key);
     }
 
+    /* ---------- Rozpoznávání textu z fotky (OCR) ----------
+       Self-hostovaný Tesseract.js (viz složka tesseract/ vedle studijni-hub.html) -
+       appka i tady nesmí za běhu záviset na žádném externím CDN, stejně jako u
+       KaTeX/Tailwind/Vue (viz komentář v sw.js). Podporovaná jen čeština -
+       natrénovaná data (traineddata) mají přes 1,5 MB na jazyk, takže víc
+       jazyků by appku citelně nafouklo; kdyby byl zájem o víc jazyků, jde
+       kdykoliv přidat další .traineddata.gz do tesseract/ a rozšířit nabídku.
+       "OEM 1" = jen LSTM model (novější a přesnější, core soubory appka má
+       jen pro tenhle režim - proto "1", ne výchozí auto-detekce). Worker se
+       vytvoří až při první potřebě (ne hned při startu appky) a pak zůstává
+       připravený pro další fotky, ať se pokaždé nečeká na novou inicializaci. */
+    const ocrFileEl = ref(null);
+    const ocrModal = reactive({ open: false, status: 'idle', progress: 0, text: '', error: '', targetState: null });
+    let ocrWorkerPromise = null;
+    function getOcrWorker() {
+      if (!ocrWorkerPromise) {
+        if (typeof Tesseract === 'undefined') {
+          return Promise.reject(new Error('Tesseract.js se nepodařilo načíst.'));
+        }
+        ocrWorkerPromise = Tesseract.createWorker('ces', 1, {
+          workerPath: 'tesseract/worker.min.js',
+          corePath: 'tesseract/tesseract-core-simd-lstm.js',
+          langPath: 'tesseract',
+          logger: (m) => {
+            if (m && typeof m.progress === 'number') {
+              ocrModal.progress = Math.round(m.progress * 100);
+            }
+          },
+        }).catch((e) => {
+          ocrWorkerPromise = null; // příští pokus ať zkusí inicializaci znovu, ne zůstane navždy nefunkční
+          throw e;
+        });
+      }
+      return ocrWorkerPromise;
+    }
+    function openOcrPicker(targetState) {
+      ocrModal.targetState = targetState;
+      nextTick(() => { if (ocrFileEl.value) ocrFileEl.value.click(); });
+    }
+    async function handleOcrFile(event) {
+      const file = (event.target.files || [])[0];
+      event.target.value = '';
+      if (!file) return;
+      ocrModal.open = true;
+      ocrModal.status = 'loading';
+      ocrModal.progress = 0;
+      ocrModal.text = '';
+      ocrModal.error = '';
+      try {
+        const worker = await getOcrWorker();
+        ocrModal.status = 'recognizing';
+        const result = await worker.recognize(file);
+        ocrModal.text = ((result && result.data && result.data.text) || '').trim();
+        ocrModal.status = 'done';
+      } catch (e) {
+        console.warn('Rozpoznávání textu z fotky se nepodařilo.', e);
+        ocrModal.status = 'error';
+        ocrModal.error = 'Rozpoznávání textu se nepodařilo. Zkus fotku s ostřejším/kontrastnějším textem, případně appku otevři přes http(s) (ne přímo dvojklikem na soubor) - OCR to potřebuje stejně jako offline režim.';
+      }
+    }
+    function insertOcrTextIntoNote() {
+      if (!ocrModal.targetState || !ocrModal.text.trim()) return;
+      const state = ocrModal.targetState;
+      state.content = state.content ? `${state.content}\n\n${ocrModal.text.trim()}` : ocrModal.text.trim();
+      closeOcrModal();
+    }
+    function closeOcrModal() {
+      ocrModal.open = false;
+      ocrModal.status = 'idle';
+      ocrModal.progress = 0;
+      ocrModal.text = '';
+      ocrModal.error = '';
+      ocrModal.targetState = null;
+    }
+
     /* ---------- Obrázky u zápisů (uloženy jako komprimovaný base64 v localStorage) ---------- */
     function compressImageFile(file, maxWidth = 800, quality = 0.72) {
       return new Promise((resolve, reject) => {
@@ -4905,6 +5447,26 @@ const app = createApp({
       printWindow.document.close();
       printWindow.focus();
       // Malé zpoždění dá prohlížeči čas dorenderovat obrázky před otevřením tisku.
+      setTimeout(() => {
+        printWindow.print();
+      }, 350);
+    }
+
+    /** Otevře tiskový pracovní list (worksheet) pro daný předmět - N vygenerovaných
+     *  otázek bez odpovědí, na konci klíč se správnými odpověďmi na samostatné
+     *  stránce. Hodí se na procvičování offline/na papíře, nebo si nechat vytisknout
+     *  spolužákem/rodičem k přezkoušení. */
+    function exportSubjectWorksheet(subject, count) {
+      if (!subject) return;
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Prohlížeč zablokoval vyskakovací okno potřebné pro pracovní list. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildWorksheetHtml(subject, stats.mistakeCounts, stats.srs, count || 15));
+      printWindow.document.close();
+      printWindow.focus();
       setTimeout(() => {
         printWindow.print();
       }, 350);
@@ -5629,6 +6191,7 @@ const app = createApp({
       // synchronně ještě před prvním await, takže je hned jisté, jak pokračovat.
       loadSharedSubjectFromUrl();
       if (shareView.active) return;
+      detectIncomingShare();
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
       // Při startu appky se zkusí porovnat lokální data s cloudem a použije se
@@ -5658,7 +6221,10 @@ const app = createApp({
     return {
       // data
       theme, greeting, heroVideoEl, prefersReducedMotion, onCardTilt, onCardTiltLeave,
-      subjects, EMOJIS, GRADIENTS, stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak,
+      subjects, EMOJIS, GRADIENTS, ACCENT_PRESETS, accentId, setAccentColor, showAccentPicker,
+      stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak,
+      totalDueReviewCount, soonExamsForOverview, todayOverviewVisible,
+      recentSubjects, recentSubjectIds,
       showBadges, badgeStatus, unlockedBadgeCount,
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
@@ -5676,6 +6242,7 @@ const app = createApp({
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
+      showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, formatBytes, subjectsBySizeDesc,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
       toggleTheme,
@@ -5696,7 +6263,9 @@ const app = createApp({
       chartBarHeight,
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
       exportBackup, triggerImportFile, handleImportFile,
-      openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf,
+      openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet,
+      incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
+      ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
       showWeeklyPlan, weeklyPlan,
       notificationsSupported, notificationPermission, enableNotifications,

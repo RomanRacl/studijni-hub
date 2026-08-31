@@ -20,7 +20,7 @@
 // bez problémů. Jediné, co se pořád stahuje z internetu, je font (Google
 // Fonts) - a ten není kritický, appka bez něj jen použije náhradní písmo.
 
-const CACHE_NAME = 'studijni-hub-cache-v7';
+const CACHE_NAME = 'studijni-hub-cache-v8';
 
 // Soubory, které si service worker při instalaci rovnou uloží do cache,
 // aby appka po prvním navštívení fungovala i bez připojení k internetu.
@@ -29,6 +29,14 @@ const CACHE_NAME = 'studijni-hub-cache-v7';
 // katex/* (css, js a woff2 fonty) - samostatně hostovaný KaTeX pro matematické
 // vzorce v zápiscích, stejný důvod jako u tailwind-play-cdn.js/vue.global.prod.js
 // výše: appka nesmí při startu záviset na žádném externím CDN.
+// tesseract/tesseract.min.js + worker.min.js + tesseract-core-simd-lstm.js -
+// jen malé (~300 KB dohromady) "spouštěcí" soubory OCR (rozpoznávání textu z
+// fotky) se předehřejí hned. Samotný WASM engine (tesseract-core-simd-lstm.wasm,
+// ~2,9 MB) a čeština pro rozpoznávání (ces.traineddata.gz, ~1,7 MB) se úmyslně
+// NEPŘEDEHŘÍVAJÍ při instalaci (zbytečně by to nafouklo první stažení appky pro
+// každého, i pro ty, co OCR nikdy nepoužijí) - stáhnou a do cache se uloží samy
+// při prvním skutečném použití tlačítka "OCR z fotky" (viz obecná "network-first"
+// strategie ve fetch handleru níž), a od druhého použití pak fungují i offline.
 const CORE_ASSETS = [
   './',
   './studijni-hub.html',
@@ -41,6 +49,9 @@ const CORE_ASSETS = [
   './vue.global.prod.js',
   './katex/katex.min.css',
   './katex/katex.min.js',
+  './tesseract/tesseract.min.js',
+  './tesseract/worker.min.js',
+  './tesseract/tesseract-core-simd-lstm.js',
   './katex/fonts/KaTeX_AMS-Regular.woff2',
   './katex/fonts/KaTeX_Caligraphic-Bold.woff2',
   './katex/fonts/KaTeX_Caligraphic-Regular.woff2',
