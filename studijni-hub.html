@@ -1226,6 +1226,25 @@
         <span class="text-cyan-300 font-semibold shrink-0 hidden sm:inline">Začít →</span>
       </button>
 
+      <!-- Dnešní plán - kombinuje zkoušky, SRS opakování a slabá místa napříč předměty -->
+      <div v-if="dailyPlanItems.length > 0" class="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden entrance entrance-delay-5">
+        <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold px-5 pt-4 pb-2">🎯 Dnešní plán</p>
+        <div class="divide-y divide-slate-800/70">
+          <button
+            v-for="item in dailyPlanItems" :key="item.subject.id"
+            @click="openSubject(item.subject.id)"
+            class="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-slate-800/40 transition"
+          >
+            <span class="text-xl shrink-0">{{ item.subject.emoji }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-slate-100 font-semibold truncate">{{ item.subject.name }}</p>
+              <p class="text-slate-500 text-xs">{{ item.reasonText }}</p>
+            </div>
+            <span class="text-cyan-300 text-sm shrink-0 hidden sm:inline">Otevřít →</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Statistiky procvičování + zálohování dat -->
       <div class="mb-8 rounded-xl bg-slate-900/40 border border-slate-800 text-sm overflow-hidden entrance entrance-delay-6">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
@@ -1253,6 +1272,9 @@
           <button v-if="srsCalendarSummary.total > 0" @click="showSrsCalendar = !showSrsCalendar" class="btn-ghost !text-violet-300">
             🗓️ {{ showSrsCalendar ? 'Skrýt kalendář opakování' : `Kalendář opakování${srsCalendarSummary.overdue > 0 ? ` (${srsCalendarSummary.overdue} po termínu)` : ''}` }}
           </button>
+          <button v-if="stats.practiceLog.length > 0" @click="showPracticeLog = !showPracticeLog" class="btn-ghost !text-cyan-300">
+            📔 {{ showPracticeLog ? 'Skrýt deník procvičování' : 'Deník procvičování' }}
+          </button>
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
           </button>
@@ -1269,6 +1291,13 @@
               class="text-xs px-2 py-1 rounded-full border border-orange-800/60 text-orange-300 flex items-center gap-1 select-none"
               :title="`Procvičuješ ${dailyStreak} ${pluralize(dailyStreak, 'den', 'dny', 'dní')} v řadě! Nejdelší dosažená studijní série: ${bestDailyStreak} ${pluralize(bestDailyStreak, 'den', 'dny', 'dní')}.`"
             >📅 {{ dailyStreak }} {{ pluralize(dailyStreak, 'den', 'dny', 'dní') }} v řadě</span>
+            <span
+              v-if="dailyStreak > 0 || stats.streakFreezeCredits > 0"
+              class="text-xs px-2 py-1 rounded-full border border-sky-800/60 text-sky-300 flex items-center gap-1 select-none"
+              :title="stats.streakFreezeCredits > 0
+                ? 'Ochrana série: pokud jeden den zapomeneš procvičit, appka ti to jednou týdně odpustí a sérii nezruší. Teď máš k dispozici 1 nevyčerpanou záchranu.'
+                : 'Ochrana série: tenhle týden už jsi záchranu vyčerpal/a (nebo ještě žádnou sérii nemáš) - nová se doplní příští pondělí.'"
+            >🧊 {{ stats.streakFreezeCredits > 0 ? '1 záchrana k dispozici' : 'záchrana vyčerpána' }}</span>
             <button
               v-if="notificationsSupported && notificationPermission === 'default'"
               @click="enableNotifications"
@@ -1303,6 +1332,7 @@
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
             <button @click="triggerImportFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Nahraje dříve staženou zálohu a nahradí jí aktuální data">⬆️ Import zálohy</button>
             <button @click="shareProgressReport" class="btn-secondary text-xs !py-1.5 !px-3" title="Vytvoří odkaz jen se statistikami (bez textu zápisků) - hodí se poslat rodiči nebo učiteli, který má vidět pokrok">📊 Sdílet pokrok</button>
+            <button @click="exportExamDatesToIcs" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne termíny zkoušek jako .ics soubor, který jde přidat přímo do kalendáře v telefonu/počítači">🗓️ Termíny do kalendáře</button>
             <input ref="importFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportFile" />
             <input ref="ocrFileEl" type="file" accept="image/*" capture="environment" class="hidden" @change="handleOcrFile" />
             <input ref="importTextFileEl" type="file" accept=".txt,text/plain" class="hidden" @change="handleImportTextFile" />
@@ -1471,6 +1501,27 @@
                 <span class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full" :class="item.daysUntil < 0 ? 'bg-rose-950/60 text-rose-300' : (item.daysUntil === 0 ? 'bg-amber-950/60 text-amber-300' : 'bg-slate-900/60 text-slate-400')">{{ srsDueLabel(item) }}</span>
               </div>
               <p v-if="srsCalendarItems.length > 30" class="text-xs text-slate-500 text-center pt-1">a dalších {{ srsCalendarItems.length - 30 }}…</p>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showPracticeLog && stats.practiceLog.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between gap-3 mb-1 mt-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Deník procvičování (posledních {{ practiceLogRecent.length }} z {{ stats.practiceLog.length }})</p>
+              <button @click="clearPracticeLog" class="btn-ghost !text-xs !text-rose-300 shrink-0">🗑️ Vymazat deník</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Podrobný seznam jednotlivých zodpovězených otázek - na rozdíl od souhrnných čísel výš tu vidíš přesně kdy, u kterého předmětu a s jakým výsledkem.</p>
+            <div class="flex flex-col gap-1.5 max-h-96 overflow-y-auto">
+              <div v-for="(entry, i) in practiceLogRecent" :key="i" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <div class="min-w-0 flex items-center gap-2">
+                  <span class="shrink-0">{{ entry.correct ? '✅' : '❌' }}</span>
+                  <div class="min-w-0">
+                    <span class="text-xs text-slate-500">{{ formatPracticeLogTime(entry.ts) }} · {{ entry.subjectEmoji }} {{ entry.subjectName }}</span>
+                    <p class="truncate">{{ entry.promptShort || '—' }}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </Transition>
@@ -1671,6 +1722,9 @@
           <button @click="exportSubjectToPdf(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled všech zápisů předmětu, ze kterého jde uložit PDF">🖨️ Export do PDF</button>
           <button @click="exportSubjectWorksheet(activeSubject, 15)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový pracovní list s 15 otázkami bez odpovědí (a klíčem řešení na konci) - hodí se na procvičování na papíře">📝 Pracovní list</button>
           <button @click="exportSubjectToAnki(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne vlastní otázky, zápisky a rozbory vět jako soubor, který jde přímo naimportovat do appky Anki (File → Import...)">📤 Export do Anki</button>
+          <button @click="triggerImportAnkiFile(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Nahraje textový export z appky Anki (#separator:Tab, sloupce líc/rub) a vytvoří z něj vlastní otázky u tohoto předmětu">📥 Import z Anki</button>
+          <input ref="importAnkiFileEl" type="file" accept=".txt,text/plain" class="hidden" @change="handleImportAnkiFile" />
+          <button @click="exportSubjectFlashcardsToPrint(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled kartiček na vystřihání (otázka na líci, odpověď na rubu) - hodí se na procvičování bez telefonu/počítače">🃏 Tisknutelné kartičky</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
           <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
@@ -2729,17 +2783,24 @@ function dateKey(d) {
  *  zaznamenala aspoň jednu vyřešenou otázku) uživatel procvičoval - na rozdíl
  *  od stats.currentStreak, což je série správných odpovědí V RÁMCI kvízu.
  *  Dokud dnešek ještě neskončil, série se nepočítá jako přerušená jen proto,
- *  že dnes appka ještě nebyla otevřená - počítá se od včerejška zpátky. */
-function computeDailyStreak(dailyHistory, referenceDate) {
+ *  že dnes appka ještě nebyla otevřená - počítá se od včerejška zpátky.
+ *  freezeDates (volitelné) = datové klíče "zamrzlé" pomocí ochrany série
+ *  (viz refreshStreakFreeze) - takový den se počítá jako by v něm appka byla
+ *  použita, i když dailyHistory pro něj drží 0 (schválně - ať mapa aktivity
+ *  poctivě ukazuje, že se ten den fakticky neprocvičovalo, jen se sérii
+ *  "odpustil"). */
+function computeDailyStreak(dailyHistory, referenceDate, freezeDates) {
   const hist = dailyHistory || {};
+  const frozen = freezeDates || [];
+  const covered = (d) => (hist[dateKey(d)] || 0) > 0 || frozen.indexOf(dateKey(d)) !== -1;
   const cursor = new Date(referenceDate);
   cursor.setHours(0, 0, 0, 0);
   let count = 0;
-  if ((hist[dateKey(cursor)] || 0) > 0) {
+  if (covered(cursor)) {
     count = 1;
   }
   cursor.setDate(cursor.getDate() - 1);
-  while ((hist[dateKey(cursor)] || 0) > 0) {
+  while (covered(cursor)) {
     count++;
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -2783,9 +2844,13 @@ function computeWeeklyProgress(dailyHistory, dailyAttempts, weeksCount, referenc
 }
 
 /** Nejdelší historická série po sobě jdoucích dní s aspoň jednou vyřešenou
- *  otázkou - na rozdíl od computeDailyStreak, která počítá jen tu AKTUÁLNÍ. */
-function computeBestDailyStreak(dailyHistory) {
-  const days = Object.keys(dailyHistory || {}).filter((k) => (dailyHistory[k] || 0) > 0).sort();
+ *  otázkou - na rozdíl od computeDailyStreak, která počítá jen tu AKTUÁLNÍ.
+ *  freezeDates (volitelné) - stejný princip ochrany série jako u
+ *  computeDailyStreak výš, ať "nejlepší série" a "aktuální série" měří
+ *  stejným metrem. */
+function computeBestDailyStreak(dailyHistory, freezeDates) {
+  const historyDays = Object.keys(dailyHistory || {}).filter((k) => (dailyHistory[k] || 0) > 0);
+  const days = Array.from(new Set([...historyDays, ...(freezeDates || [])])).sort();
   if (!days.length) return 0;
   let best = 1;
   let run = 1;
@@ -3324,6 +3389,117 @@ function buildWorksheetHtml(subject, mistakeCounts, srs, count) {
 </html>`;
 }
 
+/** Poskládá tiskovou stránku s kartičkami na fyzické vystřihání - na rozdíl
+ *  od "🃏 Kartičky" v appce (digitální samo-hodnocení) jde o skutečné PDF k
+ *  vytištění a rozstříhání. Zdroj otázek je stejný jako u Anki exportu
+ *  (buildAnkiExport - vlastní otázky, zápisky, rozbory vět), jen appka texty
+ *  navíc zkrátí, ať se vejdou na kartičku. Vždycky vygeneruje DVOJICI stránek
+ *  (líc/rub) na každou "stranu" kartiček - rub má sloupce v řádku obrácené,
+ *  ať se při oboustranném tisku (otočení podél KRATŠÍ strany, viz instrukce
+ *  přímo ve vygenerované stránce) rub potkal se svým lícem. */
+function buildFlashcardsPrintHtml(subject) {
+  const rows = buildAnkiExport(subject);
+  const CARDS_PER_ROW = 2;
+  const ROWS_PER_PAGE = 3;
+  const PAGE_SIZE = CARDS_PER_ROW * ROWS_PER_PAGE;
+  const MAX_BACK_LEN = 260;
+
+  const cards = rows.map(([front, back]) => ({
+    front: escapeHtml(front),
+    back: escapeHtml(back.length > MAX_BACK_LEN ? back.slice(0, MAX_BACK_LEN) + '…' : back),
+  }));
+
+  const pages = [];
+  for (let i = 0; i < cards.length; i += PAGE_SIZE) pages.push(cards.slice(i, i + PAGE_SIZE));
+
+  function padded(pageCards) {
+    const copy = [...pageCards];
+    while (copy.length < PAGE_SIZE) copy.push(null);
+    return copy;
+  }
+  function cardCell(text, cls) {
+    return `<div class="fc-card ${cls || ''}"><div class="fc-card-inner">${text || '<span class="fc-empty">—</span>'}</div></div>`;
+  }
+
+  const pagesHtml = pages.map((pageCards) => {
+    const full = padded(pageCards);
+    const frontCells = full.map((c) => cardCell(c ? c.front : '')).join('');
+    const backRows = [];
+    for (let r = 0; r < ROWS_PER_PAGE; r++) {
+      const rowCards = full.slice(r * CARDS_PER_ROW, r * CARDS_PER_ROW + CARDS_PER_ROW);
+      backRows.push(...[...rowCards].reverse());
+    }
+    const backCells = backRows.map((c) => cardCell(c ? c.back : '', 'fc-back')).join('');
+    return `<div class="fc-page">${frontCells}</div><div class="fc-page fc-page-back">${backCells}</div>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(subject.name)} — Kartičky k vystřihání</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; margin: 0; }
+  .fc-instructions { max-width: 700px; margin: 1.5rem auto; padding: 0 1.5rem; font-size: 0.85rem; color: #475569; line-height: 1.6; }
+  .fc-instructions h1 { font-size: 1.2rem; color: #0f172a; margin-bottom: 0.3rem; }
+  .fc-instructions ol { padding-left: 1.2rem; }
+  .fc-page { display: grid; grid-template-columns: repeat(${CARDS_PER_ROW}, 1fr); grid-template-rows: repeat(${ROWS_PER_PAGE}, 1fr); width: 190mm; height: 270mm; margin: 0 auto; page-break-after: always; }
+  .fc-card { border: 1px dashed #94a3b8; display: flex; align-items: center; justify-content: center; padding: 6mm; box-sizing: border-box; overflow: hidden; }
+  .fc-card-inner { font-size: 0.95rem; line-height: 1.35; text-align: center; max-height: 100%; overflow: hidden; }
+  .fc-back .fc-card-inner { color: #0e7490; }
+  .fc-empty { color: #cbd5e1; }
+  @media print { .fc-instructions { display: none; } }
+  @page { size: A4; margin: 10mm; }
+</style>
+</head>
+<body>
+  <div class="fc-instructions">
+    <h1>🃏 ${escapeHtml(subject.name)} — kartičky k vystřihání</h1>
+    <p>${cards.length} ${pluralize(cards.length, 'kartička', 'kartičky', 'kartiček')} · vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu.</p>
+    <ol>
+      <li>Tiskni <strong>oboustranně</strong> a otáčej papír podél <strong>kratší strany</strong> (na většině tiskáren „flip on short edge") - stránky jsou připravené přesně na tohle otočení.</li>
+      <li>Než vytiskneš celý balíček, zkus napřed jen první dvojici stránek a zkontroluj proti světlu, že se rub s lícem doopravdy potkávají - nastavení oboustranného tisku se liší tiskárnu od tiskárny.</li>
+      <li>Po vytištění rozstřihni podél přerušovaných čar.</li>
+    </ol>
+    <p>Delší odpovědi appka pro kartičku zkrátila - celé znění najdeš v appce.</p>
+  </div>
+  ${cards.length ? pagesHtml : '<p style="text-align:center;padding:3rem;">Tenhle předmět zatím nemá žádné vlastní otázky, zápisy ani rozbory vět, ze kterých by šlo kartičky vytvořit.</p>'}
+</body>
+</html>`;
+}
+
+/* =====================================================================
+   EXPORT TERMÍNŮ DO KALENDÁŘE (.ics) - viz exportExamDatesToIcs
+   ===================================================================== */
+/** Escapuje text pro pole uvnitř .ics souboru podle RFC 5545 (zpětné
+ *  lomítko, středník, čárka a nový řádek mají v tomhle formátu zvláštní
+ *  význam). */
+function icsEscape(text) {
+  return String(text || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+/** Zalomí příliš dlouhý řádek podle RFC 5545 (pokračování řádku začíná
+ *  mezerou) - většina kalendářových appek to sice odpustí i bez zalomení,
+ *  ale pro delší názvy předmětů/popisků je lepší to mít správně. */
+function icsFold(line) {
+  if (line.length <= 74) return line;
+  let result = line.slice(0, 74);
+  let rest = line.slice(74);
+  while (rest.length > 0) {
+    result += '\r\n ' + rest.slice(0, 73);
+    rest = rest.slice(73);
+  }
+  return result;
+}
+/** Časové razítko DTSTAMP v UTC, formát YYYYMMDDTHHMMSSZ vyžadovaný RFC 5545. */
+function icsUtcStamp(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+}
+
 /* =====================================================================
    NASTAVENÍ / KONSTANTY (ikony a barvy pro předměty)
    ===================================================================== */
@@ -3598,7 +3774,13 @@ function parseSubjectsJson(raw) {
 }
 
 function parseStatsJson(raw) {
-  const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
+  const fallback = {
+    totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {},
+    // Ochrana série (streak freeze) - viz refreshStreakFreeze/computeDailyStreak.
+    streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
+    // Podrobný deník procvičování - viz logPracticeEvent.
+    practiceLog: [],
+  };
   try {
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -3617,6 +3799,13 @@ function parseStatsJson(raw) {
         // aktualizovaných ze starší verze prostě chybí a začnou se plnit
         // od nuly, nic se tím nerozbije.
         srs: (parsed && typeof parsed.srs === 'object' && parsed.srs) || {},
+        streakFreezeCredits: (parsed && typeof parsed.streakFreezeCredits === 'number') ? parsed.streakFreezeCredits : 0,
+        streakFreezeCreditWeekKey: (parsed && typeof parsed.streakFreezeCreditWeekKey === 'string') ? parsed.streakFreezeCreditWeekKey : null,
+        streakFreezeUsedDates: Array.isArray(parsed && parsed.streakFreezeUsedDates) ? parsed.streakFreezeUsedDates.slice(-60) : [],
+        // Deník se omezuje na posledních PRACTICE_LOG_LIMIT položek už při
+        // zápisu (viz logPracticeEvent) - .slice(-300) tady je jen pojistka
+        // pro data ručně vložená/upravená mimo appku.
+        practiceLog: Array.isArray(parsed && parsed.practiceLog) ? parsed.practiceLog.slice(-300) : [],
       };
     }
   } catch (e) {
@@ -4294,7 +4483,7 @@ function describeMistakeKey(key, subjectsList) {
     const id = Number(parts[1]);
     for (const s of list) {
       const q = (s.customQuestions || []).find((x) => x.id === id);
-      if (q) return { subjectLabel: `${s.emoji} ${s.name}`, text: `Vlastní otázka: „${q.question}“` };
+      if (q) return { subjectLabel: `${s.emoji} ${s.name}`, subjectId: s.id, text: `Vlastní otázka: „${q.question}“` };
     }
     return { subjectLabel: '⚙️ Vlastní otázka', text: '(otázka byla mezitím smazána nebo upravena)' };
   }
@@ -4302,7 +4491,7 @@ function describeMistakeKey(key, subjectsList) {
     const id = Number(parts[2]);
     for (const s of list) {
       const n = (s.notes || []).find((x) => x.id === id);
-      if (n) return { subjectLabel: `${s.emoji} ${s.name}`, text: `Zápis „${n.title}“` };
+      if (n) return { subjectLabel: `${s.emoji} ${s.name}`, subjectId: s.id, text: `Zápis „${n.title}“` };
     }
     return { subjectLabel: '📝 Zápis', text: '(zápis byl mezitím smazán nebo upraven)' };
   }
@@ -4312,7 +4501,7 @@ function describeMistakeKey(key, subjectsList) {
       const sa = (s.sentenceAnalyses || []).find((x) => x.id === id);
       if (sa) {
         const short = sa.sentence.length > 50 ? sa.sentence.slice(0, 50) + '…' : sa.sentence;
-        return { subjectLabel: `${s.emoji} ${s.name}`, text: `Rozbor věty: „${short}“` };
+        return { subjectLabel: `${s.emoji} ${s.name}`, subjectId: s.id, text: `Rozbor věty: „${short}“` };
       }
     }
     return { subjectLabel: '📖 Rozbor věty', text: '(věta byla mezitím smazána nebo upravena)' };
@@ -4443,7 +4632,11 @@ const app = createApp({
        milisekund), appka zobrazí jednoduchou "načítám" obrazovku - viz
        dataLoaded a šablona hned pod <div id="app">. */
     const subjects = reactive([]);
-    const stats = reactive({ totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} });
+    const stats = reactive({
+      totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {},
+      streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
+      practiceLog: [],
+    });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
 
@@ -4580,6 +4773,10 @@ const app = createApp({
               perfectSessions: remote.stats.perfectSessions || 0,
               celebratedBadges: Array.isArray(remote.stats.celebratedBadges) ? remote.stats.celebratedBadges : [],
               srs: (remote.stats.srs && typeof remote.stats.srs === 'object') ? remote.stats.srs : {},
+              streakFreezeCredits: typeof remote.stats.streakFreezeCredits === 'number' ? remote.stats.streakFreezeCredits : 0,
+              streakFreezeCreditWeekKey: typeof remote.stats.streakFreezeCreditWeekKey === 'string' ? remote.stats.streakFreezeCreditWeekKey : null,
+              streakFreezeUsedDates: Array.isArray(remote.stats.streakFreezeUsedDates) ? remote.stats.streakFreezeUsedDates.slice(-60) : [],
+              practiceLog: Array.isArray(remote.stats.practiceLog) ? remote.stats.practiceLog.slice(-300) : [],
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
@@ -4950,8 +5147,52 @@ const app = createApp({
     });
 
     /* ---------- Studijní série (kolik dní v řadě appka zaznamenala procvičování) ---------- */
-    const dailyStreak = computed(() => computeDailyStreak(stats.dailyHistory, new Date()));
-    const bestDailyStreak = computed(() => computeBestDailyStreak(stats.dailyHistory));
+    const dailyStreak = computed(() => computeDailyStreak(stats.dailyHistory, new Date(), stats.streakFreezeUsedDates));
+    const bestDailyStreak = computed(() => computeBestDailyStreak(stats.dailyHistory, stats.streakFreezeUsedDates));
+
+    /* ---------- Ochrana série (streak freeze) ----------
+       Appka jednou týdně "odpustí" jeden vynechaný den, ať náhodou zapomenutý
+       den nezruší celou dosavadní studijní sérii (dailyStreak výš) - stejný
+       princip, jaký znají lidi z Duolingo. Funguje tak, že appka při každém
+       otevření (viz onMounted) zkontroluje, jestli VČERA appka nezaznamenala
+       žádné procvičování, a pokud ještě navíc PŘEDVČEREJŠKEM série běžela a
+       je k dispozici nevyčerpaný "kredit" za tenhle týden, včerejšek se
+       zapíše do stats.streakFreezeUsedDates - dailyStreak/computeDailyStreak
+       ho pak počítá jako by v něm appka byla použita (mapa aktivity ale dál
+       poctivě ukazuje, že se ten den fakticky neprocvičovalo - freeze mění
+       jen výpočet série, ne historii). Kredit se doplňuje na začátku každého
+       kalendářního týdne (pondělí), max. 1 nevyčerpaný najednou. */
+    function mondayOfWeek(date) {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      const day = d.getDay(); // 0 = neděle
+      const diff = day === 0 ? -6 : 1 - day;
+      d.setDate(d.getDate() + diff);
+      return d;
+    }
+    function refreshStreakFreeze() {
+      if (typeof stats.streakFreezeCredits !== 'number') stats.streakFreezeCredits = 0;
+      if (!Array.isArray(stats.streakFreezeUsedDates)) stats.streakFreezeUsedDates = [];
+      const today = new Date();
+      const weekKey = dateKey(mondayOfWeek(today));
+      if (stats.streakFreezeCreditWeekKey !== weekKey) {
+        stats.streakFreezeCreditWeekKey = weekKey;
+        if (stats.streakFreezeCredits < 1) stats.streakFreezeCredits = 1;
+      }
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yKey = dateKey(yesterday);
+      const dayBefore = new Date(today);
+      dayBefore.setDate(dayBefore.getDate() - 2);
+      const dbKey = dateKey(dayBefore);
+      const yesterdayMissed = (stats.dailyHistory[yKey] || 0) === 0 && stats.streakFreezeUsedDates.indexOf(yKey) === -1;
+      const streakWasRunning = (stats.dailyHistory[dbKey] || 0) > 0 || stats.streakFreezeUsedDates.indexOf(dbKey) !== -1;
+      if (yesterdayMissed && streakWasRunning && stats.streakFreezeCredits > 0) {
+        stats.streakFreezeCredits -= 1;
+        stats.streakFreezeUsedDates.push(yKey);
+        if (stats.streakFreezeUsedDates.length > 60) stats.streakFreezeUsedDates.splice(0, stats.streakFreezeUsedDates.length - 60);
+      }
+    }
 
     /* ---------- Odznaky za pokrok ---------- */
     const showBadges = ref(false);
@@ -5443,6 +5684,51 @@ const app = createApp({
       return `naposledy před ${daysSince} ${daysSince === 1 ? 'dnem' : 'dny'}`;
     }
 
+    /** Dnešní plán - na rozdíl od recommendedSubject výš (jeden nejlepší tip,
+     *  jeden důvod) tohle zkombinuje NAPŘÍČ VŠEMI PŘEDMĚTY tři různé signály
+     *  najednou - blížící se zkoušku, kolik má předmět splatných položek v
+     *  rozloženém opakování (SRS) a kolik má slabých míst (zápisy/rozbory vět
+     *  s vysokou chybovostí) - do jednoho krátkého žebříčku max. 3 předmětů,
+     *  aby bylo hned jasné, čemu se dnes věnovat nejdřív. Nenahrazuje
+     *  recommendedSubject výš (ten zůstává jako rychlý jednořádkový tip), jen
+     *  ho doplňuje o širší kontext. */
+    const dailyPlanItems = computed(() => {
+      const now = Date.now();
+      const srs = stats.srs || {};
+      const mc = stats.mistakeCounts || {};
+      const bySubject = new Map();
+      subjects.filter((s) => !s.archived).forEach((s) => bySubject.set(s.id, { subject: s, srsDue: 0, weakCount: 0 }));
+
+      Object.entries(srs).forEach(([key, rec]) => {
+        if (!rec || typeof rec.dueAt !== 'number' || rec.dueAt > now || !isSrsEligibleKey(key)) return;
+        const info = describeMistakeKey(key, subjects);
+        if (info.subjectId && bySubject.has(info.subjectId)) bySubject.get(info.subjectId).srsDue++;
+      });
+      Object.entries(mc).forEach(([key, count]) => {
+        if (!count || count <= 0) return;
+        const info = describeMistakeKey(key, subjects);
+        if (info.subjectId && bySubject.has(info.subjectId)) bySubject.get(info.subjectId).weakCount++;
+      });
+
+      return [...bySubject.values()]
+        .map(({ subject, srsDue, weakCount }) => {
+          const examDays = daysUntil(subject.examDate);
+          const examSoon = examDays !== null && examDays >= 0 && examDays <= 7;
+          let score = 0;
+          if (examSoon) score += Math.max(0, 40 - examDays * 4);
+          score += srsDue * 6;
+          score += weakCount * 5;
+          const reasons = [];
+          if (examSoon) reasons.push(`zkouška ${examCountdownShort(examDays)}`);
+          if (srsDue > 0) reasons.push(`${srsDue} ${pluralize(srsDue, 'položka k opakování', 'položky k opakování', 'položek k opakování')}`);
+          if (weakCount > 0) reasons.push(`${weakCount} ${pluralize(weakCount, 'slabé místo', 'slabá místa', 'slabých míst')}`);
+          return { subject, score, reasonText: reasons.join(' · ') };
+        })
+        .filter((it) => it.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+    });
+
     /** Týdenní plánovač - pro každý z následujících 7 dní (dnes + 6) appka
      *  doporučí jeden předmět k procvičení. Vychází ze stejného skóre jako
      *  jednorázové doporučení (subjectRecommendationScore - zohledňuje
@@ -5528,6 +5814,49 @@ const app = createApp({
           checkAndSendReminders();
         }
       }).catch(() => {});
+    }
+
+    /** Stáhne .ics soubor s termíny zkoušek (u předmětů, které mají termín
+     *  nastavený, viz setExamDate) - jde přidat přímo do kalendáře v
+     *  telefonu/počítači, kde appka dá upozornění nezávisle na Studijním
+     *  Hubu (na rozdíl od notifikací appky výš, které fungují jen dokud je
+     *  appka aspoň občas otevřená v prohlížeči). Ke každé zkoušce appka
+     *  rovnou přidá i připomínku den předem (VALARM). */
+    function exportExamDatesToIcs() {
+      const withExam = subjects.filter((s) => !s.archived && s.examDate);
+      if (!withExam.length) {
+        alert('Zatím nemáš u žádného předmětu nastavený termín zkoušky - nastavíš ho v detailu předmětu u „📅 Nastavit termín zkoušky".');
+        return;
+      }
+      const stamp = icsUtcStamp(new Date());
+      const events = withExam.map((s) => {
+        const dateOnly = s.examDate.replace(/-/g, '');
+        const uid = `exam-${s.id}-${dateOnly}@studijni-hub`;
+        return [
+          'BEGIN:VEVENT',
+          `UID:${uid}`,
+          `DTSTAMP:${stamp}`,
+          `DTSTART;VALUE=DATE:${dateOnly}`,
+          icsFold(`SUMMARY:${icsEscape('Zkouška: ' + s.emoji + ' ' + s.name)}`),
+          icsFold(`DESCRIPTION:${icsEscape('Termín zkoušky z předmětu ' + s.name + ' - vytvořeno ve Studijním Hubu.')}`),
+          'BEGIN:VALARM',
+          'ACTION:DISPLAY',
+          icsFold(`DESCRIPTION:${icsEscape('Zítra máš zkoušku: ' + s.name)}`),
+          'TRIGGER:-P1D',
+          'END:VALARM',
+          'END:VEVENT',
+        ].join('\r\n');
+      });
+      const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Studijni Hub//CS', 'CALSCALE:GREGORIAN', ...events, 'END:VCALENDAR'].join('\r\n');
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'studijni-hub-zkousky.ics';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     }
 
     /** Zkontroluje, jestli appka dnes ještě neposlala připomínku na blížící
@@ -6280,6 +6609,101 @@ const app = createApp({
       URL.revokeObjectURL(url);
     }
 
+    /** Opačný směr k exportSubjectToAnki výš - nahraje textový export z Anki
+     *  (řádky oddělené tabulátorem, líc a rub ve dvou sloupcích; řádky
+     *  začínající "#" jsou hlavičkové direktivy jako #separator/#html a
+     *  přeskočí se) a z každého řádku udělá jednu vlastní otázku u zvoleného
+     *  předmětu (stejná datová struktura jako addCustomQuestion). Anki HTML
+     *  pole (appka sama exportuje s #html:true) appka zjednoduší na čistý
+     *  text, ať se dá rovnou použít i jako ověřitelná psaná odpověď. */
+    const importAnkiFileEl = ref(null);
+    let importAnkiTargetSubjectId = null;
+    function triggerImportAnkiFile(subject) {
+      if (!subject) return;
+      importAnkiTargetSubjectId = subject.id;
+      nextTick(() => { if (importAnkiFileEl.value) importAnkiFileEl.value.click(); });
+    }
+    function ankiFieldToPlainText(text) {
+      return String(text || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/(p|div|li)>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+    }
+    function handleImportAnkiFile(event) {
+      const file = event.target.files && event.target.files[0];
+      const subjectId = importAnkiTargetSubjectId;
+      if (!file || !subjectId) { if (event.target) event.target.value = ''; return; }
+      const subject = subjects.find((s) => s.id === subjectId);
+      if (!subject) { event.target.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const raw = String(reader.result || '');
+        if (!subject.customQuestions) subject.customQuestions = [];
+        const existing = new Set(subject.customQuestions.map((q) => `${q.question}|${(q.answers || []).join(',')}`));
+        let added = 0;
+        let skippedEmpty = 0;
+        let skippedDuplicate = 0;
+        raw.split(/\r?\n/).forEach((line) => {
+          if (!line.trim() || line.trim().startsWith('#')) return; // hlavičkové direktivy Anki exportu
+          const cols = line.split('\t');
+          if (cols.length < 2) { skippedEmpty++; return; }
+          const question = ankiFieldToPlainText(cols[0]);
+          const answer = ankiFieldToPlainText(cols[1]);
+          if (!question || !answer) { skippedEmpty++; return; }
+          const dedupeKey = `${question}|${answer}`;
+          if (existing.has(dedupeKey)) { skippedDuplicate++; return; }
+          existing.add(dedupeKey);
+          subject.customQuestions.push({ id: Date.now() + Math.floor(Math.random() * 1000) + added, question, answers: [answer] });
+          added++;
+        });
+        if (added === 0) {
+          alert(skippedDuplicate > 0
+            ? `Všech ${skippedDuplicate} otázek z tohohle souboru už u předmětu „${subject.name}“ existuje - nic nového se nepřidalo.`
+            : 'V tomhle souboru appka nenašla žádné použitelné dvojice líc/rub (očekává se textový export z Anki, sloupce oddělené tabulátorem).');
+        } else {
+          let msg = `Naimportováno ${added} ${pluralize(added, 'otázka', 'otázky', 'otázek')} do předmětu „${subject.name}“.`;
+          if (skippedDuplicate > 0) msg += ` (${skippedDuplicate} už existovalo, přeskočeno.)`;
+          alert(msg);
+        }
+        event.target.value = '';
+      };
+      reader.onerror = () => { alert('Soubor se nepodařilo přečíst.'); event.target.value = ''; };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    /** Otevře tiskový náhled fyzických kartiček na vystřihání (viz
+     *  buildFlashcardsPrintHtml) - stejný vzor jako exportSubjectToPdf/
+     *  exportSubjectWorksheet výš (nové okno + window.print() s malým
+     *  zpožděním, ať prohlížeč stihne stránku dorenderovat). */
+    function exportSubjectFlashcardsToPrint(subject) {
+      if (!subject) return;
+      const rows = buildAnkiExport(subject);
+      if (!rows.length) {
+        alert('Tenhle předmět zatím nemá žádné vlastní otázky, zápisy ani rozbory vět, ze kterých by šlo kartičky vytvořit.');
+        return;
+      }
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Prohlížeč zablokoval vyskakovací okno potřebné pro tisk kartiček. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildFlashcardsPrintHtml(subject));
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); }, 350);
+    }
+
     function exportBackup() {
       const payload = {
         app: 'studijni-hub',
@@ -6421,6 +6845,10 @@ const app = createApp({
               srs: (importedStats.srs && typeof importedStats.srs === 'object') ? importedStats.srs : {},
               celebratedBadges: Array.isArray(importedStats.celebratedBadges) ? importedStats.celebratedBadges : [],
               perfectSessions: Number(importedStats.perfectSessions) || 0,
+              streakFreezeCredits: Number(importedStats.streakFreezeCredits) || 0,
+              streakFreezeCreditWeekKey: typeof importedStats.streakFreezeCreditWeekKey === 'string' ? importedStats.streakFreezeCreditWeekKey : null,
+              streakFreezeUsedDates: Array.isArray(importedStats.streakFreezeUsedDates) ? importedStats.streakFreezeUsedDates.slice(-60) : [],
+              practiceLog: Array.isArray(importedStats.practiceLog) ? importedStats.practiceLog.slice(-300) : [],
             });
           }
           activeSubjectId.value = null;
@@ -6824,6 +7252,42 @@ const app = createApp({
       quizSourceSubject.value.attemptsCount = (quizSourceSubject.value.attemptsCount || 0) + 1;
       quizSourceSubject.value.lastPracticedAt = new Date().toISOString();
     }
+    /* ---------- Podrobný deník procvičování ----------
+       Na rozdíl od stats.dailyHistory (jen souhrnný počet za den) si appka
+       teď navíc pamatuje POSLEDNÍCH PRACTICE_LOG_LIMIT jednotlivých
+       zodpovězených otázek - kdy přesně, u kterého předmětu, jestli byla
+       odpověď správně a na jakou otázku (zkráceně). Hodí se, když si
+       potřebuješ zpětně dohledat, co přesně a kdy jsi procvičoval/a, ne jen
+       kolik toho bylo. Volá se z recordCorrect/recordWrong níž, takže
+       pokrývá úplně všechny způsoby procvičování (psané odpovědi, kartičky,
+       časovaný sprint...). */
+    const PRACTICE_LOG_LIMIT = 300;
+    const showPracticeLog = ref(false);
+    function logPracticeEvent(correct) {
+      if (!Array.isArray(stats.practiceLog)) stats.practiceLog = [];
+      const subject = quizSourceSubject.value;
+      const promptText = String((quiz && quiz.prompt) || '').trim();
+      stats.practiceLog.push({
+        ts: new Date().toISOString(),
+        subjectId: subject ? subject.id : null,
+        subjectName: subject ? subject.name : '(neznámý předmět)',
+        subjectEmoji: subject ? subject.emoji : '❓',
+        correct: !!correct,
+        promptShort: promptText.length > 90 ? promptText.slice(0, 90) + '…' : promptText,
+      });
+      if (stats.practiceLog.length > PRACTICE_LOG_LIMIT) {
+        stats.practiceLog.splice(0, stats.practiceLog.length - PRACTICE_LOG_LIMIT);
+      }
+    }
+    const practiceLogRecent = computed(() => [...stats.practiceLog].reverse().slice(0, 150));
+    function formatPracticeLogTime(iso) {
+      return new Date(iso).toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function clearPracticeLog() {
+      if (!confirm('Smazat celý deník procvičování? Tahle akce se nedá vrátit zpět. Souhrnné statistiky, série a odznaky zůstanou zachované - smaže se jen podrobný seznam jednotlivých odpovědí.')) return;
+      stats.practiceLog = [];
+    }
+
     function recordCorrect() {
       stats.totalSolved++;
       stats.currentStreak++;
@@ -6834,6 +7298,7 @@ const app = createApp({
         quizSourceSubject.value.solvedCount = (quizSourceSubject.value.solvedCount || 0) + 1;
       }
       touchSubjectPractice();
+      logPracticeEvent(true);
       // Správná odpověď snižuje "váhu k opakování" - po dvou úspěších v řadě
       // se otázka ze sledování opakování úplně odebere.
       if (quiz.key) {
@@ -6850,6 +7315,7 @@ const app = createApp({
     function recordWrong() {
       stats.currentStreak = 0;
       touchSubjectPractice();
+      logPracticeEvent(false);
       if (quiz.key) {
         stats.mistakeCounts[quiz.key] = Math.min((stats.mistakeCounts[quiz.key] || 0) + 1, 5);
         if (isSrsEligibleKey(quiz.key)) {
@@ -7100,6 +7566,10 @@ const app = createApp({
       // cloudem porovnává, co je novější...).
       await initPersistentData();
       refreshStorageEstimate();
+      // Ochrana série - zkontroluje/doplní kredit a případně "zamrzne" včerejšek,
+      // viz refreshStreakFreeze výš. Musí běžet až PO initPersistentData, ať má
+      // po ruce doopravdy načtená stats.dailyHistory.
+      refreshStreakFreeze();
       detectIncomingShare();
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
@@ -7156,6 +7626,7 @@ const app = createApp({
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
       showWeakSpots, weakestSpotsOverview,
       showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel,
+      showPracticeLog, practiceLogRecent, formatPracticeLogTime, clearPracticeLog,
       showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, storageEstimate, formatBytes, subjectsBySizeDesc, trashUsageBytes,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
@@ -7179,6 +7650,9 @@ const app = createApp({
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
       exportBackup, triggerImportFile, handleImportFile,
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet, exportSubjectToAnki,
+      importAnkiFileEl, triggerImportAnkiFile, handleImportAnkiFile,
+      exportSubjectFlashcardsToPrint,
+      exportExamDatesToIcs,
       incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
       importTextFileEl, openImportTextPicker, handleImportTextFile,
@@ -7193,7 +7667,7 @@ const app = createApp({
       showPomodoro, pomodoro, pomodoroTimeLabel, startPomodoro, pausePomodoro, resetPomodoro,
       setDifficulty, activeSubjectIsMath, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
       activeSubjectIsCzech, showSentenceAnalyses, newSentenceAnalysis, addSentenceAnalysis, deleteSentenceAnalysis,
-      recommendedSubject, recommendationReason,
+      recommendedSubject, recommendationReason, dailyPlanItems,
       addChecklistItem, removeChecklistItem, toggleChecklistItem,
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
       togglePinNote, toggleExamPrepNote,
