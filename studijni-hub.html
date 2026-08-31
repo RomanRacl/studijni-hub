@@ -1099,6 +1099,11 @@
           </button>
 
           <div class="flex items-center gap-2 ml-auto">
+            <span
+              class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 flex items-center gap-1 select-none"
+              :class="{ 'text-emerald-400 border-emerald-800': syncStatus === 'synced', 'text-amber-400 border-amber-800': syncStatus === 'error', 'animate-pulse': syncStatus === 'syncing' }"
+              :title="syncStatus === 'error' ? 'Data zůstávají bezpečně uložená v appce, do cloudu se jen teď nepodařilo odeslat/stáhnout (např. bez internetu) - zkusí se to znovu při další změně nebo dalším otevření appky.' : 'Data se automaticky ukládají i do cloudu, aby byla stejná na počítači i na mobilu/tabletu.'"
+            >{{ syncStatusLabel }}</span>
             <button @click="showTrashModal = true" class="btn-secondary text-xs !py-1.5 !px-3" title="Smazané předměty a zápisy zůstávají dočasně v koši, odkud je jde obnovit">🗑️ Koš<span v-if="trash.length"> ({{ trash.length }})</span></button>
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
@@ -1794,6 +1799,17 @@ const STORAGE_KEY = 'studijniHubData_v1';
 const STATS_KEY = 'studijniHubStats_v1';
 const TRASH_KEY = 'studijniHubTrash_v1';
 const TRASH_RETENTION_DAYS = 14;
+
+// Synchronizace mezi zařízeními přes Firebase Realtime Database (zdarma, bez
+// nutnosti přihlašování - appka na všech zařízeních čte a zapisuje na stejnou
+// adresu). Ukládá se sem jen to samé, co appka stejně drží v localStorage
+// (předměty + statistiky) - žádné přihlašovací údaje ani citlivá data.
+// Pokud appka nemá připojení k internetu, synchronizace se jen tiše
+// nezdaří a appka normálně pokračuje s daty uloženými lokálně (localStorage).
+const FIREBASE_DB_URL = 'https://studijni-hub-default-rtdb.europe-west1.firebasedatabase.app';
+const SYNC_PATH = '/studijniHub.json';
+const SYNC_META_KEY = 'studijniHubSyncMeta_v1';
+const SYNC_PUSH_DEBOUNCE_MS = 1500;
 
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function choice(arr) { return arr[randInt(0, arr.length - 1)]; }
@@ -2695,9 +2711,128 @@ const app = createApp({
       () => {
         try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); }
         catch (e) { console.warn('Statistiky se nepodařilo uložit.', e); }
+        if (!applyingRemoteUpdate) schedulePush();
       },
       { deep: true }
     );
+
+    /* ---------- Synchronizace mezi zařízeními (Firebase Realtime Database) ----------
+       Princip "vyhrává novější verze": ke každé uložené sadě dat se ukládá i čas
+       poslední změny (updatedAt). Při načtení appky se tenhle čas porovná s tím,
+       co je uložené v cloudu - pokud je cloud novější, appka si stáhne jeho data;
+       pokud je novější to, co je uloženo lokálně (nebo appka poprvé jede na tomhle
+       zařízení), naopak pošle svoje data nahoru. Každá další změna (přidání
+       předmětu, zápisu, vyřešený příklad...) se pak s malým zpožděním (aby se
+       appka "nezadýchala" při rychlém psaní) automaticky pošle do cloudu, odkud
+       si ji při dalším otevření vyzvedne libovolné jiné zařízení. */
+    const syncStatus = ref('idle'); // 'idle' | 'syncing' | 'synced' | 'error'
+    let applyingRemoteUpdate = false;
+    let pushTimer = null;
+
+    function getSyncMetaUpdatedAt() {
+      try {
+        const raw = localStorage.getItem(SYNC_META_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.updatedAt === 'number') return parsed.updatedAt;
+        }
+      } catch (e) { /* ignorováno - bez metadat appka prostě data při prvním běhu pošle nahoru */ }
+      return 0;
+    }
+    function setSyncMetaUpdatedAt(ts) {
+      try { localStorage.setItem(SYNC_META_KEY, JSON.stringify({ updatedAt: ts })); }
+      catch (e) { console.warn('Nepodařilo se uložit metadata synchronizace.', e); }
+    }
+
+    async function pushToCloud() {
+      if (applyingRemoteUpdate) return;
+      syncStatus.value = 'syncing';
+      const now = Date.now();
+      try {
+        const payload = {
+          subjects: JSON.parse(JSON.stringify(subjects)),
+          stats: JSON.parse(JSON.stringify(stats)),
+          updatedAt: now,
+        };
+        const res = await fetch(FIREBASE_DB_URL + SYNC_PATH, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        setSyncMetaUpdatedAt(now);
+        syncStatus.value = 'synced';
+      } catch (e) {
+        console.warn('Synchronizaci do cloudu se nepodařilo dokončit (appka pokračuje s lokálními daty).', e);
+        syncStatus.value = 'error';
+      }
+    }
+
+    function schedulePush() {
+      if (applyingRemoteUpdate) return;
+      if (pushTimer) clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => {
+        pushTimer = null;
+        pushToCloud();
+      }, SYNC_PUSH_DEBOUNCE_MS);
+    }
+
+    async function pullFromCloudAndMerge() {
+      syncStatus.value = 'syncing';
+      try {
+        const res = await fetch(FIREBASE_DB_URL + SYNC_PATH, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const remote = await res.json();
+        const localUpdatedAt = getSyncMetaUpdatedAt();
+        if (remote && typeof remote.updatedAt === 'number' && remote.updatedAt > localUpdatedAt) {
+          // Cloud má novější data než tohle zařízení - stáhnout a použít je.
+          applyingRemoteUpdate = true;
+          if (Array.isArray(remote.subjects)) {
+            const normalized = remote.subjects.map((s, i) => normalizeSubject(s, Date.now() + i));
+            subjects.splice(0, subjects.length, ...normalized);
+          }
+          if (remote.stats && typeof remote.stats === 'object') {
+            Object.assign(stats, {
+              totalSolved: remote.stats.totalSolved || 0,
+              totalAttempts: remote.stats.totalAttempts || 0,
+              currentStreak: remote.stats.currentStreak || 0,
+              bestStreak: remote.stats.bestStreak || 0,
+              dailyHistory: (remote.stats.dailyHistory && typeof remote.stats.dailyHistory === 'object') ? remote.stats.dailyHistory : {},
+              mistakeCounts: (remote.stats.mistakeCounts && typeof remote.stats.mistakeCounts === 'object') ? remote.stats.mistakeCounts : {},
+              perfectSessions: remote.stats.perfectSessions || 0,
+              celebratedBadges: Array.isArray(remote.stats.celebratedBadges) ? remote.stats.celebratedBadges : [],
+            });
+          }
+          setSyncMetaUpdatedAt(remote.updatedAt);
+          syncStatus.value = 'synced';
+          // Krátké zpoždění, než appka zase začne poslouchat vlastní změny -
+          // ať aplikování stažených dat samo nespustí okamžité poslání zpátky nahoru.
+          setTimeout(() => { applyingRemoteUpdate = false; }, 300);
+        } else if (!remote || typeof remote.updatedAt !== 'number') {
+          // V cloudu ještě nic není (první spuštění appky vůbec) - poslat tam,
+          // co appka má lokálně uložené.
+          await pushToCloud();
+        } else if (localUpdatedAt >= remote.updatedAt) {
+          // Tohle zařízení má stejně nová nebo novější data - pro jistotu je pošle
+          // nahoru (kdyby cloud měl starší verzi, např. po obnovení ze zálohy).
+          await pushToCloud();
+        } else {
+          syncStatus.value = 'synced';
+        }
+      } catch (e) {
+        console.warn('Načtení dat z cloudu se nepodařilo, appka pokračuje jen s lokálními daty.', e);
+        syncStatus.value = 'error';
+      }
+    }
+
+    const syncStatusLabel = computed(() => {
+      switch (syncStatus.value) {
+        case 'syncing': return '⏳ Synchronizuji…';
+        case 'synced': return '☁️ Synchronizováno mezi zařízeními';
+        case 'error': return '⚠️ Synchronizace teď nejde (data zůstávají uložená v appce)';
+        default: return '☁️ Synchronizace…';
+      }
+    });
 
     /* ---------- Koš (dočasně smazané předměty a zápisy) ---------- */
     function loadTrash() {
@@ -2888,6 +3023,7 @@ const app = createApp({
             alert('Úložiště prohlížeče je plné, poslední změna se pravděpodobně neuložila. Zkus smazat pár starších obrázků u zápisů, nebo si stáhni zálohu přes „Export zálohy" a uvolni místo.');
           }
         }
+        if (!applyingRemoteUpdate) schedulePush();
       },
       { deep: true }
     );
@@ -3946,6 +4082,9 @@ const app = createApp({
     onMounted(() => {
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
+      // Při startu appky se zkusí porovnat lokální data s cloudem a použije se
+      // ta novější verze - viz komentář u "Synchronizace mezi zařízeními" výš.
+      pullFromCloudAndMerge();
       // Baseline pro odznaky odemčené ještě před touto aktualizací appky -
       // ať se hned po prvním spuštění nerozjedou konfety za staré úspěchy.
       badgeStatus.value.forEach((b) => {
@@ -4010,6 +4149,7 @@ const app = createApp({
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
       togglePinNote,
       handleSubjectImageUpload, removeSubjectImage,
+      syncStatus, syncStatusLabel,
     };
   },
 });
