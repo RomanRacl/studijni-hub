@@ -1247,6 +1247,12 @@
           <button @click="showBadges = !showBadges" class="btn-ghost !text-amber-300">
             🏅 {{ showBadges ? 'Skrýt odznaky' : `Odznaky (${unlockedBadgeCount}/${badgeStatus.length})` }}
           </button>
+          <button v-if="weakestSpotsOverview.length > 0" @click="showWeakSpots = !showWeakSpots" class="btn-ghost !text-rose-300">
+            🎯 {{ showWeakSpots ? 'Skrýt slabá místa' : `Slabá místa (${weakestSpotsOverview.length})` }}
+          </button>
+          <button v-if="srsCalendarSummary.total > 0" @click="showSrsCalendar = !showSrsCalendar" class="btn-ghost !text-violet-300">
+            🗓️ {{ showSrsCalendar ? 'Skrýt kalendář opakování' : `Kalendář opakování${srsCalendarSummary.overdue > 0 ? ` (${srsCalendarSummary.overdue} po termínu)` : ''}` }}
+          </button>
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
           </button>
@@ -1425,6 +1431,44 @@
                 <div class="text-3xl mb-1">{{ b.unlocked ? b.emoji : '🔒' }}</div>
                 <p class="text-xs font-semibold leading-tight">{{ b.label }}</p>
               </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showWeakSpots && weakestSpotsOverview.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Slabá místa napříč všemi předměty</p>
+            <p class="text-xs text-slate-500 mb-3">Otázky a zápisky, u kterých se ti nejčastěji stalo, že jsi napoprvé odpověděl/a špatně - appka je proto v procvičování zvýhodňuje, tady je vidíš přehledně pohromadě.</p>
+            <div class="flex flex-col gap-1.5">
+              <div v-for="item in weakestSpotsOverview" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <div class="min-w-0">
+                  <span class="text-xs text-slate-500">{{ item.subjectLabel }}</span>
+                  <p class="truncate">{{ item.text }}</p>
+                </div>
+                <span class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-rose-950/60 text-rose-300">{{ item.count }}× chyba</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showSrsCalendar && srsCalendarItems.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Kalendář naplánovaného opakování</p>
+            <p class="text-xs text-slate-500 mb-3">
+              Appka si podle rozloženého opakování pamatuje, kdy se má která otázka objevit znovu (viz „🔁 k opakování" výš) - tady jsou konkrétní termíny.
+              <span class="text-rose-400" v-if="srsCalendarSummary.overdue > 0">{{ srsCalendarSummary.overdue }} už je po termínu.</span>
+              <span v-if="srsCalendarSummary.today > 0">{{ srsCalendarSummary.today }} má termín dnes.</span>
+              <span v-if="srsCalendarSummary.next7Days > 0">{{ srsCalendarSummary.next7Days }} v příštích 7 dnech.</span>
+            </p>
+            <div class="flex flex-col gap-1.5 max-h-96 overflow-y-auto">
+              <div v-for="item in srsCalendarItems.slice(0, 30)" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <div class="min-w-0">
+                  <span class="text-xs text-slate-500">{{ item.subjectLabel }}</span>
+                  <p class="truncate">{{ item.text }}</p>
+                </div>
+                <span class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full" :class="item.daysUntil < 0 ? 'bg-rose-950/60 text-rose-300' : (item.daysUntil === 0 ? 'bg-amber-950/60 text-amber-300' : 'bg-slate-900/60 text-slate-400')">{{ srsDueLabel(item) }}</span>
+              </div>
+              <p v-if="srsCalendarItems.length > 30" class="text-xs text-slate-500 text-center pt-1">a dalších {{ srsCalendarItems.length - 30 }}…</p>
             </div>
           </div>
         </Transition>
@@ -1624,6 +1668,7 @@
           </button>
           <button @click="exportSubjectToPdf(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový náhled všech zápisů předmětu, ze kterého jde uložit PDF">🖨️ Export do PDF</button>
           <button @click="exportSubjectWorksheet(activeSubject, 15)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Otevře tiskový pracovní list s 15 otázkami bez odpovědí (a klíčem řešení na konci) - hodí se na procvičování na papíře">📝 Pracovní list</button>
+          <button @click="exportSubjectToAnki(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne vlastní otázky, zápisky a rozbory vět jako soubor, který jde přímo naimportovat do appky Anki (File → Import...)">📤 Export do Anki</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
           <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
@@ -1655,6 +1700,12 @@
               :class="{ 'quiz-mode-active': mixedQuizMode }"
               title="Kvíz bude náhodně střídat otázky ze všech tvých (nearchivovaných) předmětů, ne jen z tohoto"
             >🔀 Mix předmětů</button>
+            <button
+              @click="toggleExamPracticeMode"
+              class="quiz-mode-btn"
+              :class="{ 'quiz-mode-active': examPracticeMode }"
+              :title="examPrepNotesCount > 0 ? `Zkouší jen ze zápisků označených 🎓 (aktuálně ${examPrepNotesCount}) - hodí se, když víš dopředu, z čeho přesně bude zkouška` : 'Nejdřív si u zápisků klikni na 🎓, ať appka ví, ze kterých má zkoušet'"
+            >🎓 Zkouškový režim<span v-if="examPrepNotesCount > 0"> ({{ examPrepNotesCount }})</span></button>
             <button
               @click="toggleMultipleChoice"
               class="quiz-mode-btn"
@@ -1712,6 +1763,17 @@
             <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">⏱️ Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
             <p v-if="quiz.wasReview" class="review-badge">🔁 Opakování — tohle ti nedávno nešlo</p>
             <p v-if="mixedQuizMode && quizSourceSubject" class="text-xs uppercase tracking-wider text-fuchsia-400 font-semibold mb-2">🔀 {{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }}</p>
+            <p v-if="examPracticeMode && quiz.type !== 'exam-empty'" class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">🎓 Zkouškový režim — jen z označených zápisků</p>
+
+            <!-- Zkouškový režim je zapnutý, ale ze zvolené kombinace (mód doplňovačky/kartiček)
+                 zrovna nejde žádná otázka sestavit - typicky když jsou označené zápisky moc
+                 krátké na doplňovačku. Radši srozumitelná hláška než rozbitá otázka. -->
+            <div v-if="quiz.type === 'exam-empty'" class="text-slate-400 text-sm py-6 text-center">
+              🎓 Ze zápisků označených „Do zkoušky" se bohužel nepodařilo sestavit žádnou otázku pro tenhle mód.
+              <span v-if="practiceMode !== 'flashcard'">Zkus přepnout na 🃏 Kartičky (fungují i s krátkými zápisky), nebo si označ 🎓 i další, delší zápisky.</span>
+              <span v-else>Zkus si označit 🎓 i další zápisky tohoto předmětu.</span>
+            </div>
+            <template v-else>
             <div class="flex items-start gap-2">
               <p class="quiz-prompt flex-1">{{ quiz.prompt }}</p>
               <button
@@ -1781,6 +1843,7 @@
                 <p v-for="(line, i) in quiz.hintBody" :key="i">{{ line }}</p>
               </div>
             </Transition>
+            </template>
           </div>
 
           <!-- Vlastní otázky k tomuto předmětu -->
@@ -2018,6 +2081,7 @@
                     <div class="min-w-0">
                       <h4 class="font-semibold text-slate-100 truncate">
                         <span v-if="n.pinned" title="Připnutý zápis">📌</span>
+                        <span v-if="n.examPrep" title="Zahrnuto do zkouškového režimu">🎓</span>
                         <span v-if="n.kind === 'checklist'">✅</span>
                         {{ n.title }}
                       </h4>
@@ -2042,6 +2106,12 @@
                         class="text-lg leading-none opacity-70 hover:opacity-100"
                         :title="n.pinned ? 'Odepnout zápis' : 'Připnout zápis navrch'"
                       >{{ n.pinned ? '📌' : '📍' }}</button>
+                      <button
+                        @click.stop="toggleExamPrepNote(n)"
+                        class="text-lg leading-none hover:opacity-100"
+                        :class="n.examPrep ? 'opacity-100' : 'opacity-30'"
+                        :title="n.examPrep ? 'Zahrnuto do zkouškového režimu (klikni pro zrušení)' : 'Zahrnout do zkouškového režimu procvičování'"
+                      >🎓</button>
                       <span class="text-slate-500">{{ expandedNoteId === n.id ? '▲' : '▼' }}</span>
                     </div>
                   </div>
@@ -3017,6 +3087,37 @@ function buildAllSubjectsPdfHtml(subjects) {
  *  odpovědí (aby šlo vytisknout, dát žákovi/sobě k vyplnění a klíč si nechat
  *  stranou). Používá stejný generátor otázek jako živý kvíz (buildQuiz), takže
  *  otázky odpovídají tomu, co appka běžně dává k procvičování u daného předmětu. */
+/** Uteče tabulátor/nový řádek v textu, ať se nerozbije formát Anki
+ *  plain-textového importu (sloupce oddělené tabulátorem, viz
+ *  buildAnkiExport) - nový řádek appka převede na <br>, protože export má
+ *  zapnuté #html:true (Anki ho pak zobrazí jako opravdový zalomení řádku). */
+function escapeAnkiField(text) {
+  return String(text || '').replace(/\t/g, ' ').replace(/\r?\n/g, '<br>').trim();
+}
+
+/** Sestaví ze všech "stabilních" otázek předmětu (vlastní otázky, zápisky,
+ *  rozbory vět - stejná sada, jaká se sleduje v rozloženém opakování, viz
+ *  isSrsEligibleKey) dvojice [líc, rub] pro export do Anki. Procedurálně
+ *  generované příklady (matematika apod.) se záměrně nezahrnují - nemají
+ *  jedno pevné znění, takže by v Anki nedávaly smysl jako opakovatelná
+ *  kartička. */
+function buildAnkiExport(subject) {
+  const rows = [];
+  (subject.customQuestions || []).forEach((q) => {
+    rows.push([q.question, (q.answers || []).join(' / ')]);
+  });
+  const notesPool = buildNotesPool(subject);
+  notesPool.cardItems.forEach((item) => {
+    rows.push([`Zápis „${item.title}“ — co si pamatuješ?`, item.content]);
+  });
+  (subject.sentenceAnalyses || []).forEach((sa) => {
+    if (sa.subjectPart) rows.push([`Urči podmět ve větě: „${sa.sentence}“`, sa.subjectPart]);
+    if (sa.predicatePart) rows.push([`Urči přísudek ve větě: „${sa.sentence}“`, sa.predicatePart]);
+    if (sa.sentenceType) rows.push([`Urči druh věty (větný vzorec): „${sa.sentence}“`, sa.sentenceType]);
+  });
+  return rows;
+}
+
 function buildWorksheetHtml(subject, mistakeCounts, srs, count) {
   const name = typeof subject === 'string' ? subject : subject.name;
   const seenPrompts = new Set();
@@ -3173,6 +3274,10 @@ function normalizeSubject(raw, fallbackId) {
       createdAt: (n && n.createdAt) || new Date().toISOString(),
       updatedAt: (n && n.updatedAt) || null,
       pinned: !!(n && n.pinned),
+      // Zápis označený "Do zkoušky" appka zahrne do Zkouškového režimu (viz
+      // buildNotesPool/buildQuiz a toggleExamPracticeMode) - procvičování se
+      // v tom režimu omezí jen na takhle označené zápisky daného předmětu.
+      examPrep: !!(n && n.examPrep),
       // Štítky umožňují najít/filtrovat zápisy napříč všemi předměty (viz
       // globalSearchResults a filteredNotes), ne jen v rámci jednoho předmětu.
       tags: (Array.isArray(n && n.tags) ? n.tags : [])
@@ -3786,9 +3891,12 @@ function pickBlankCandidate(plain) {
  *  - cardItems: celý zápis jako kartička (název = otázka, obsah = odpověď) -
  *    dává smysl jen v kartičkovém režimu, kde se uživatel ohodnotí sám/sama.
  *  - blankItems: jedna věta ze zápisu se schovaným slovem - dá se použít i
- *    v normálním (psaném) i časovaném režimu, protože má ověřitelnou odpověď. */
-function buildNotesPool(subject) {
-  const notes = (subject && Array.isArray(subject.notes)) ? subject.notes : [];
+ *    v normálním (psaném) i časovaném režimu, protože má ověřitelnou odpověď.
+ *  examOnly=true (Zkouškový režim) omezí zdrojové zápisky jen na ty, které
+ *  má uživatel ručně označené jako "Do zkoušky" (viz toggleExamPrepNote). */
+function buildNotesPool(subject, examOnly) {
+  const allNotes = (subject && Array.isArray(subject.notes)) ? subject.notes : [];
+  const notes = examOnly ? allNotes.filter((n) => n && n.examPrep) : allNotes;
   const cardItems = [];
   const blankItems = [];
   for (const n of notes) {
@@ -3923,14 +4031,28 @@ function srsWeightForSentence(srs, id) {
   );
 }
 
-function buildQuiz(subject, mistakeCounts, mode, srs) {
+/** examOnly=true zapíná Zkouškový režim (viz toggleExamPracticeMode ve
+ *  setup()) - appka pak čerpá VÝHRADNĚ ze zápisků označených jako "Do
+ *  zkoušky" u tohoto předmětu (buildNotesPool s examOnly), ne z generátorů,
+ *  vlastních otázek ani rozborů vět. Když v tomhle režimu není z čeho
+ *  vybírat (žádný označený zápis, nebo jsou moc krátké na doplňovačku),
+ *  vrátí null - volající (generateNewQuiz) na to musí reagovat srozumitelnou
+ *  hláškou místo rozbité otázky. */
+function buildQuiz(subject, mistakeCounts, mode, srs, examOnly) {
   const mc = mistakeCounts || {};
   const name = typeof subject === 'string' ? subject : subject.name;
   const isObj = subject && typeof subject === 'object';
   const customQuestions = (isObj && subject.customQuestions) || [];
   const sentenceAnalyses = (isObj && Array.isArray(subject.sentenceAnalyses)) ? subject.sentenceAnalyses : [];
-  const notesPool = isObj ? buildNotesPool(subject) : { cardItems: [], blankItems: [] };
+  const notesPool = isObj ? buildNotesPool(subject, examOnly) : { cardItems: [], blankItems: [] };
   const relevantNoteItems = mode === 'flashcard' ? notesPool.cardItems : notesPool.blankItems;
+
+  if (examOnly) {
+    if (relevantNoteItems.length === 0) return null;
+    const noteKeyPrefix = mode === 'flashcard' ? 'notes:card:' : 'notes:blank:';
+    const picked = weightedChoice(relevantNoteItems, (it) => mistakeWeight(mc, noteKeyPrefix + it.id) * srsWeight(srs, noteKeyPrefix + it.id));
+    return { type: 'notes', ...(mode === 'flashcard' ? generateFromNoteCard(picked) : generateFromNoteBlank(picked)) };
+  }
 
   const pools = ['generator'];
   if (customQuestions.length > 0) pools.push('custom');
@@ -3971,6 +4093,72 @@ const CATEGORY_LABELS = {
   notes: 'Otázka vygenerovaná přímo z tvých vlastních zápisů u tohoto předmětu.',
   sentence: 'Rozbor věty, kterou sis sám/sama přidal/a k tomuto předmětu.',
 };
+
+/* =====================================================================
+   ČITELNÝ POPIS KLÍČE OTÁZKY (mistakeCounts/srs)
+   Appka si chybovost i rozložené opakování ukládá pod stabilním "klíčem"
+   otázky (viz komentáře u buildQuiz/srsGrade výš) - pro přehledy napříč
+   předměty (Slabá místa, Kalendář opakování) je ale potřeba z takového
+   klíče zpátky odvodit něco, co dává smysl ČLOVĚKU: ze kterého předmětu
+   otázka je a o čem přesně je. describeMistakeKey to udělá tak, že u
+   otázek s pevnou identitou (vlastní otázky/zápisky/rozbory vět) danou
+   položku dohledá v seznamu předmětů podle id zakódovaného v klíči, u
+   procedurálně generovaných otázek (matematika/čeština/angličtina/obecné)
+   využije to, že si čitelný text nesou přímo v klíči (viz generateMath
+   apod. výš). Nikdy nevrací null/undefined, i pro smazanou položku vrátí
+   rozumný náhradní text. */
+const MATH_SUBTYPE_LABELS = { linear: 'lineární rovnice', fraction: 'zlomky', percentage: 'procenta' };
+const CZECH_SUBTYPE_LABELS = { iy: 'i/y v příčestí minulém', preposition: 'předložka' };
+const ENGLISH_SUBTYPE_LABELS = { article: 'člen', preposition: 'předložka', irregular: 'nepravidelné sloveso', vocabulary: 'slovní zásoba' };
+function describeMistakeKey(key, subjectsList) {
+  const list = Array.isArray(subjectsList) ? subjectsList : [];
+  const parts = String(key || '').split(':');
+  const kind = parts[0];
+  if (kind === 'math') {
+    return { subjectLabel: '📐 Matematika (obecně)', text: MATH_SUBTYPE_LABELS[parts[1]] || parts[1] || 'příklad' };
+  }
+  if (kind === 'czech') {
+    const label = CZECH_SUBTYPE_LABELS[parts[1]] || parts[1] || '';
+    const text = parts.slice(2).join(':') || 'cvičení';
+    return { subjectLabel: '📖 Čeština (obecně)', text: label ? `${label}: „${text}“` : text };
+  }
+  if (kind === 'english') {
+    const label = ENGLISH_SUBTYPE_LABELS[parts[1]] || parts[1] || '';
+    const text = parts.slice(2).join(':') || 'cvičení';
+    return { subjectLabel: '🗣️ Angličtina (obecně)', text: label ? `${label}: „${text}“` : text };
+  }
+  if (kind === 'generic') {
+    return { subjectLabel: '❓ Obecné otázky', text: parts.slice(1).join(':') || 'otázka' };
+  }
+  if (kind === 'custom') {
+    const id = Number(parts[1]);
+    for (const s of list) {
+      const q = (s.customQuestions || []).find((x) => x.id === id);
+      if (q) return { subjectLabel: `${s.emoji} ${s.name}`, text: `Vlastní otázka: „${q.question}“` };
+    }
+    return { subjectLabel: '⚙️ Vlastní otázka', text: '(otázka byla mezitím smazána nebo upravena)' };
+  }
+  if (kind === 'notes') {
+    const id = Number(parts[2]);
+    for (const s of list) {
+      const n = (s.notes || []).find((x) => x.id === id);
+      if (n) return { subjectLabel: `${s.emoji} ${s.name}`, text: `Zápis „${n.title}“` };
+    }
+    return { subjectLabel: '📝 Zápis', text: '(zápis byl mezitím smazán nebo upraven)' };
+  }
+  if (kind === 'sentence') {
+    const id = Number(parts[1]);
+    for (const s of list) {
+      const sa = (s.sentenceAnalyses || []).find((x) => x.id === id);
+      if (sa) {
+        const short = sa.sentence.length > 50 ? sa.sentence.slice(0, 50) + '…' : sa.sentence;
+        return { subjectLabel: `${s.emoji} ${s.name}`, text: `Rozbor věty: „${short}“` };
+      }
+    }
+    return { subjectLabel: '📖 Rozbor věty', text: '(věta byla mezitím smazána nebo upravena)' };
+  }
+  return { subjectLabel: 'Ostatní', text: key };
+}
 
 /* =====================================================================
    ODZNAKY ZA POKROK (gamifikace)
@@ -4655,6 +4843,58 @@ const app = createApp({
       return `týden od ${w.label} — úspěšnost ${w.successRate} % (${w.solved} z ${w.attempts} ${w.attempts === 1 ? 'pokusu' : 'pokusů'})`;
     }
 
+    /* ---------- Přehled slabých míst napříč VŠEMI předměty ----------
+       Appka už dřív sledovala chybovost (mistakeCounts) a podle ní zvýhodňovala
+       otázky při náhodném výběru (viz mistakeWeight), ale nikde to neukazovala
+       přehledně pohromadě - jen nepřímo, tím, že se dané otázky/zápisky
+       objevovaly v procvičování o něco častěji. Tenhle přehled totéž zobrazí
+       explicitně, seřazené od nejvíc problematického, napříč úplně všemi
+       předměty (ne jen v rámci jednoho, jako predtím). */
+    const showWeakSpots = ref(false);
+    const weakestSpotsOverview = computed(() => {
+      const mc = stats.mistakeCounts || {};
+      return Object.entries(mc)
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => ({ key, count, ...describeMistakeKey(key, subjects) }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20);
+    });
+
+    /* ---------- Kalendář naplánovaného opakování (SRS) ----------
+       Appka už dřív sama počítala, kdy se má otázka podle rozloženého
+       opakování objevit znovu (viz srsGrade/srsWeight), ale uživatel nikde
+       neviděl KONKRÉTNÍ termíny - jen holé číslo "K opakování" u předmětu.
+       Tenhle přehled je zobrazí přímo (kolik je toho po splatnosti, kolik
+       dnes, kolik v příštím týdnu), napříč všemi předměty. */
+    const showSrsCalendar = ref(false);
+    const srsCalendarItems = computed(() => {
+      const srs = stats.srs || {};
+      const now = Date.now();
+      return Object.entries(srs)
+        .filter(([key, rec]) => rec && typeof rec.dueAt === 'number' && isSrsEligibleKey(key))
+        .map(([key, rec]) => ({
+          key,
+          dueAt: rec.dueAt,
+          daysUntil: Math.ceil((rec.dueAt - now) / (24 * 60 * 60 * 1000)),
+          ...describeMistakeKey(key, subjects),
+        }))
+        .sort((a, b) => a.dueAt - b.dueAt);
+    });
+    const srsCalendarSummary = computed(() => {
+      const items = srsCalendarItems.value;
+      return {
+        overdue: items.filter((i) => i.daysUntil < 0).length,
+        today: items.filter((i) => i.daysUntil === 0).length,
+        next7Days: items.filter((i) => i.daysUntil > 0 && i.daysUntil <= 7).length,
+        total: items.length,
+      };
+    });
+    function srsDueLabel(item) {
+      if (item.daysUntil < 0) return `splatné před ${Math.abs(item.daysUntil)} ${pluralize(Math.abs(item.daysUntil), 'dnem', 'dny', 'dny')}`;
+      if (item.daysUntil === 0) return 'splatné dnes';
+      return `za ${item.daysUntil} ${pluralize(item.daysUntil, 'den', 'dny', 'dní')}`;
+    }
+
     /* ---------- Kalendářní mapa aktivity (heatmap, dlouhodobý přehled) ---------- */
     const showActivityHeatmap = ref(false);
     const HEATMAP_WEEKS = 18; // ~4 měsíce zpětně
@@ -4783,7 +5023,7 @@ const app = createApp({
       stopTimedSession();
       generateNewQuiz();
     }
-    function closeSubject() { activeSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); }
+    function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; stopSpeaking(); stopTimedSession(); stopDictation(); }
 
     /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ---------- */
     const globalSearchQuery = ref('');
@@ -5224,6 +5464,13 @@ const app = createApp({
     function togglePinNote(n) {
       if (!n) return;
       n.pinned = !n.pinned;
+    }
+    /** Označí/odznačí zápis jako součást Zkouškového režimu (viz
+     *  toggleExamPracticeMode níž) - appka v tomhle režimu zkouší jen z
+     *  takhle vybraných zápisků daného předmětu. */
+    function toggleExamPrepNote(n) {
+      if (!n) return;
+      n.examPrep = !n.examPrep;
     }
 
     const filteredNotes = computed(() => {
@@ -5678,6 +5925,32 @@ const app = createApp({
       }, 350);
     }
 
+    /** Stáhne otázky/zápisky/rozbory vět tohoto předmětu jako .txt soubor,
+     *  který jde přímo naimportovat do appky Anki (File → Import...) - appka
+     *  ho v dialogu automaticky rozpozná jako "Notes in Plain Text" díky
+     *  hlavičce #separator/#html na začátku souboru; jako typ poznámky pak
+     *  stačí zvolit "Basic" (2 pole: líc/rub). */
+    function exportSubjectToAnki(subject) {
+      if (!subject) return;
+      const rows = buildAnkiExport(subject);
+      if (!rows.length) {
+        alert('Tenhle předmět zatím nemá žádné vlastní otázky, zápisy ani rozbory vět, ze kterých by šlo pro Anki kartičky vytvořit.');
+        return;
+      }
+      const header = '#separator:Tab\n#html:true\n';
+      const body = rows.map(([front, back]) => `${escapeAnkiField(front)}\t${escapeAnkiField(back)}`).join('\n');
+      const blob = new Blob([header + body], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = subject.name.replace(/[^\p{L}\p{N}\-_ ]/gu, '').trim() || 'predmet';
+      a.href = url;
+      a.download = `${safeName}-anki.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
     function exportBackup() {
       const payload = {
         app: 'studijni-hub',
@@ -5859,7 +6132,8 @@ const app = createApp({
       let tries = 0;
       while (options.length < 4 && tries < 15) {
         tries++;
-        const candidate = buildQuiz(subject, stats.mistakeCounts, practiceMode.value, stats.srs);
+        const candidate = buildQuiz(subject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value);
+        if (!candidate) continue;
         const candAnswer = String(candidate.answerText || '').trim();
         if (!candAnswer) continue;
         const norm = normalizeAnswer(candAnswer);
@@ -5902,6 +6176,33 @@ const app = createApp({
     function toggleMixedQuiz() {
       mixedQuizMode.value = !mixedQuizMode.value;
       if (!mixedQuizMode.value) mixedQuizSubjectId.value = null;
+      if (mixedQuizMode.value) examPracticeMode.value = false; // dvě různé "odkud brát otázky" pravidla najednou by nedávalo smysl
+      generateNewQuiz();
+    }
+
+    /* ---------- Zkouškový režim (procvičování jen z ručně vybraných zápisků) ----
+       Doplněk k mixedQuizMode výš - zatímco ten mísí CELÉ předměty, tenhle
+       naopak zúží procvičování na podmnožinu zápisků JEDNOHO (aktuálně
+       otevřeného) předmětu, které si uživatel sám označil jako "Do zkoušky"
+       (viz toggleExamPrepNote u jednotlivých zápisků). Hodí se, když víš
+       dopředu, že se u zkoušky bude zkoušet jen z konkrétních zápisků/kapitol,
+       a chceš se soustředit jen na ně. Proto jde vypnout kombinaci s
+       mixedQuizMode (viz výš) - najednou by dávaly protichůdné pokyny. */
+    const examPracticeMode = ref(false);
+    const examPrepNotesCount = computed(() => {
+      if (!activeSubject.value) return 0;
+      return activeSubject.value.notes.filter((n) => n.examPrep).length;
+    });
+    function toggleExamPracticeMode() {
+      if (!examPracticeMode.value && examPrepNotesCount.value === 0) {
+        alert('Nejdřív si u aspoň jednoho zápisu tohoto předmětu klikni na 🎓 ("Zahrnout do zkouškového režimu"), pak teprve půjde zkouškový režim zapnout.');
+        return;
+      }
+      examPracticeMode.value = !examPracticeMode.value;
+      if (examPracticeMode.value) {
+        mixedQuizMode.value = false;
+        mixedQuizSubjectId.value = null;
+      }
       generateNewQuiz();
     }
 
@@ -5916,7 +6217,28 @@ const app = createApp({
           mixedQuizSubjectId.value = sourceSubject.id;
         }
       }
-      const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs);
+      const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value);
+      if (!built) {
+        // Zkouškový režim je zapnutý, ale ze současné kombinace předmětu/módu
+        // (psaná doplňovačka vs. kartičky) zrovna nejde sestavit žádná otázka
+        // (např. označené zápisky jsou moc krátké na doplňovačku) - appka to
+        // srozumitelně napíše místo toho, aby zobrazila rozbitou otázku.
+        quiz.type = 'exam-empty';
+        quiz.prompt = '';
+        quiz.hintTitle = '';
+        quiz.hintBody = [];
+        quiz._check = null;
+        quiz.answerText = '';
+        quiz.key = null;
+        quiz.wasReview = false;
+        quiz.userInput = '';
+        quiz.solved = false;
+        quiz.wrongAttempt = false;
+        quiz.showHint = false;
+        quiz.options = [];
+        flashcardFlipped.value = false;
+        return;
+      }
       quiz.type = built.type;
       quiz.prompt = built.prompt;
       quiz.hintTitle = built.hintTitle;
@@ -6451,10 +6773,13 @@ const app = createApp({
       quiz, quizCategoryLabel, quizSession, totalSessionMistakes, activeSubjectStats,
       practiceMode, flashcardFlipped,
       mixedQuizMode, quizSourceSubject, toggleMixedQuiz,
+      examPracticeMode, examPrepNotesCount, toggleExamPracticeMode,
       multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption,
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
+      showWeakSpots, weakestSpotsOverview,
+      showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel,
       showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, storageEstimate, formatBytes, subjectsBySizeDesc, trashUsageBytes,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
@@ -6476,7 +6801,7 @@ const app = createApp({
       chartBarHeight,
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
       exportBackup, triggerImportFile, handleImportFile,
-      openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet,
+      openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet, exportSubjectToAnki,
       incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
@@ -6493,7 +6818,7 @@ const app = createApp({
       recommendedSubject, recommendationReason,
       addChecklistItem, removeChecklistItem, toggleChecklistItem,
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
-      togglePinNote,
+      togglePinNote, toggleExamPrepNote,
       handleSubjectImageUpload, removeSubjectImage,
       syncStatus, syncStatusLabel, lastSyncedAt, lastSyncedLabel, syncNow,
       insertImageToken, isImageInlined,
