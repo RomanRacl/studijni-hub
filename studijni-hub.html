@@ -1053,6 +1053,16 @@
 <body class="font-sans antialiased">
 
 <div id="app" class="min-h-screen">
+<!-- Krátká "načítám" obrazovka, dokud initPersistentData (viz onMounted) ještě
+     nedokončilo asynchronní načtení dat appky z IndexedDB - typicky jde o pár
+     milisekund, ale bez tohohle by appka nakrátko bleskla prázdný dashboard,
+     než se data doopravdy zobrazí. Sdíleného (read-only) zobrazení přes odkaz
+     se netýká - to má vlastní "shareView.loading" stav v šabloně níž. -->
+<div v-if="!dataLoaded && !shareView.active" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
+  <div class="w-10 h-10 border-4 border-slate-700 border-t-cyan-400 rounded-full animate-spin"></div>
+  <p class="text-slate-400 text-sm">Načítám tvoje data…</p>
+  <p v-if="dataLoadError" class="text-rose-400 text-sm max-w-md text-center px-4">{{ dataLoadError }}</p>
+</div>
 <template v-if="!shareView.active">
 
   <!-- ============================================================= -->
@@ -1278,7 +1288,9 @@
                 'border-amber-800 text-amber-400': storageUsageLevel === 'warning',
                 'border-rose-800 text-rose-400': storageUsageLevel === 'critical',
               }"
-              :title="`Odhadované využití úložiště appky v tomto prohlížeči: ${formatBytes(storageUsageBytes)} (~${storageUsagePercent} % z běžného limitu ~5 MB). Skutečný limit se liší podle prohlížeče/zařízení. Klikni pro podrobnosti.`"
+              :title="storageEstimate.supported && storageEstimate.quotaBytes > 0
+                ? `Využití úložiště appky v tomto prohlížeči: ${formatBytes(storageEstimate.usageBytes)} z dostupných ${formatBytes(storageEstimate.quotaBytes)} (~${storageUsagePercent} %). Klikni pro podrobnosti.`
+                : `Odhadované využití úložiště appky v tomto prohlížeči: ${formatBytes(storageUsageBytes)} (~${storageUsagePercent} % z hrubého odhadu ~5 MB — tenhle prohlížeč neumí zjistit skutečnou kvótu). Klikni pro podrobnosti.`"
             >💾 {{ storageUsagePercent }} %</button>
             <button @click="showTrashModal = true" class="btn-secondary text-xs !py-1.5 !px-3" title="Smazané předměty a zápisy zůstávají dočasně v koši, odkud je jde obnovit">🗑️ Koš<span v-if="trash.length"> ({{ trash.length }})</span></button>
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
@@ -1295,11 +1307,21 @@
           <div v-if="showStorageDetail" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Využití úložiště appky</p>
             <p class="text-sm text-slate-400 mb-3">
-              Appka si všechna svá data (zápisy, obrázky, statistiky) ukládá přímo v tomto prohlížeči/zařízení. Aktuálně je to přibližně <strong class="text-slate-200">{{ formatBytes(storageUsageBytes) }}</strong>, tedy zhruba <strong class="text-slate-200">{{ storageUsagePercent }} %</strong> z běžného limitu prohlížečů (~5 MB — skutečný limit se liší podle zařízení).
+              Appka si všechna svá data (zápisy, obrázky, statistiky) ukládá přímo v tomto prohlížeči/zařízení (do IndexedDB). Data appky samotná zabírají přibližně <strong class="text-slate-200">{{ formatBytes(storageUsageBytes) }}</strong>.
+              <template v-if="storageEstimate.supported && storageEstimate.quotaBytes > 0">
+                Z celkové kvóty, kterou appce tenhle prohlížeč na tomhle zařízení dovoluje (zahrnuje i drobnou režii IndexedDB a offline cache appky), appka aktuálně využívá <strong class="text-slate-200">{{ formatBytes(storageEstimate.usageBytes) }}</strong> z <strong class="text-slate-200">{{ formatBytes(storageEstimate.quotaBytes) }}</strong>, tedy zhruba <strong class="text-slate-200">{{ storageUsagePercent }} %</strong>. Tahle kvóta se obvykle odvozuje od volného místa na disku, takže bývá řádově větší, než jaký měl dřív limit prohlížeče pro localStorage (~5 MB).
+              </template>
+              <template v-else>
+                Tenhle prohlížeč bohužel neumí zjistit skutečnou kvótu úložiště, takže appka procento počítá jen jako hrubý odhad vůči starému orientačnímu limitu (~5 MB) — reálně toho ale IndexedDB většinou zvládne uložit podstatně víc.
+              </template>
             </p>
             <p v-if="storageUsageLevel !== 'ok'" class="text-sm mb-3" :class="storageUsageLevel === 'critical' ? 'text-rose-400' : 'text-amber-400'">
               {{ storageUsageLevel === 'critical' ? '⚠️ Úložiště appky je téměř plné — hrozí, že se nepodaří uložit nové změny.' : '⚠️ Úložiště appky se plní.' }}
-              Zkus odebrat staré obrázky u předmětů (tlačítko „Odebrat obrázek"), archivovat nebo smazat nepoužívané předměty, případně vysypat koš.
+              Nejvíc pomůže odebrat/zmenšit staré fotky u zápisů, případně u dokončeného předmětu použít „Export předmětu" (záloha do souboru) a pak ho z appky smazat i s košem - archivace sama o sobě místo neuvolní, data zůstávají stejně velká.
+            </p>
+            <p v-if="trashUsageBytes > 0" class="text-sm mb-3 flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+              <span class="text-slate-400">🗑️ V koši čeká {{ formatBytes(trashUsageBytes) }} (smazané položky tam zůstávají {{ TRASH_RETENTION_DAYS }} dní, než sami zaniknou)</span>
+              <button @click="showTrashModal = true" class="btn-secondary !py-1 !px-2.5 text-xs shrink-0">Otevřít koš</button>
             </p>
             <div v-if="subjectsBySizeDesc.length" class="space-y-1.5">
               <p class="text-xs text-slate-500 mb-1">Největší předměty (odhad):</p>
@@ -3184,6 +3206,178 @@ function normalizeSubject(raw, fallbackId) {
 }
 
 /* =====================================================================
+   PERZISTENCE - IndexedDB (s automatickým přesunem starých dat z
+   localStorage) a čisté parsovací funkce pro uložená data
+   =====================================================================
+   localStorage má v prohlížečích typicky jen ~5-10 MB místa a appka do něj
+   dřív ukládala i zápisky s fotkami (jako base64 text, který je o cca
+   třetinu větší než samotný obrázek) - při dlouhodobém používání appky na
+   víc předmětů s fotkami na to snadno nestačí. IndexedDB stejného
+   počítače/telefonu má mnohem víc místa (obvykle stovky MB až jednotky GB,
+   odvozeno od volného místa na disku) a hodí se přesně na tohle, appka
+   proto od teď ukládá svá hlavní data (předměty, statistiky, koš) tam.
+   Při prvním spuštění téhle verze appka existující data z localStorage
+   jednorázově a bezpečně "přestěhuje" (viz migrateKeyToIdb - teprve po
+   ověřeném úspěšném zápisu do IndexedDB smaže starou kopii), takže
+   uživatel nic dělat nemusí a nic mu nezmizí. Pokud by IndexedDB v daném
+   prohlížeči z nějakého důvodu nešlo použít (výjimečné, např. některé
+   soukromé/anonymní režimy), appka se potichu vrátí k ukládání do
+   localStorage jako dřív - viz idbAvailable/saveKeyToIdb. */
+const IDB_NAME = 'studijniHubDb_v1';
+const IDB_STORE = 'kv';
+let idbOpenPromise = null;
+let idbAvailable = true;
+
+function openIdb() {
+  if (idbOpenPromise) return idbOpenPromise;
+  idbOpenPromise = new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('IndexedDB není v tomto prohlížeči k dispozici.')); return; }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB se nepodařilo otevřít.'));
+  });
+  return idbOpenPromise;
+}
+
+function idbGetRaw(key) {
+  return openIdb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result === undefined ? null : req.result);
+    req.onerror = () => reject(req.error || new Error('Čtení z IndexedDB selhalo.'));
+  }));
+}
+
+function idbSetRaw(key, value) {
+  return openIdb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('Zápis do IndexedDB selhal.'));
+  }));
+}
+
+/** Jednorázově přestěhuje existující data z localStorage[key] do IndexedDB
+ *  (jen pokud v IndexedDB pro daný klíč ještě nic není a v localStorage
+ *  něco je) - zápis do IndexedDB ověří zpětným přečtením a teprve POTOM
+ *  smaže starou kopii z localStorage. Kdyby se zápis do IndexedDB nepovedl
+ *  nebo IndexedDB nebylo dostupné vůbec, stará data v localStorage
+ *  zůstanou netknutá jako záloha a appka je použije přímo odtamtud. Vrací
+ *  syrový (ještě needitovaný) JSON řetězec, nebo null, když nic uložené není. */
+async function migrateKeyToIdb(key) {
+  try {
+    const existing = await idbGetRaw(key);
+    if (existing != null) return existing; // migrace pro tenhle klíč už dřív proběhla
+  } catch (e) {
+    idbAvailable = false;
+    console.warn('IndexedDB není dostupné, appka zůstává u localStorage.', e);
+    try { return localStorage.getItem(key); } catch (e2) { return null; }
+  }
+  let legacyRaw = null;
+  try { legacyRaw = localStorage.getItem(key); } catch (e) { /* nevadí */ }
+  if (legacyRaw == null) return null;
+  try {
+    await idbSetRaw(key, legacyRaw);
+    const verify = await idbGetRaw(key);
+    if (verify === legacyRaw) {
+      try { localStorage.removeItem(key); } catch (e) { /* nekritické, nevadí */ }
+    } else {
+      console.warn('Ověření přesunu dat do IndexedDB se neshodovalo, stará kopie v localStorage zůstává jako záloha.');
+    }
+  } catch (e) {
+    console.warn('Přesun dat do IndexedDB se nepodařil, appka zatím zůstává u localStorage.', e);
+    idbAvailable = false;
+  }
+  return legacyRaw;
+}
+
+/** Uloží syrový (JSON.stringify) obsah pod daným klíčem - běžný provoz appky
+ *  po migraci. Pokud IndexedDB z nějakého důvodu selže/přestane být
+ *  dostupné, appka se potichu vrátí k ukládání do localStorage, ať nová
+ *  změna nikdy nezmizí jen kvůli tomuhle. Může vyhodit (např.
+ *  QuotaExceededError z localStorage zálohy) - volající to odchytává. */
+async function saveKeyToIdb(key, raw) {
+  if (idbAvailable) {
+    try {
+      await idbSetRaw(key, raw);
+      return;
+    } catch (e) {
+      console.warn('Zápis do IndexedDB selhal, appka zkusí zálohu do localStorage.', e);
+      idbAvailable = false;
+    }
+  }
+  localStorage.setItem(key, raw);
+}
+
+/** Čisté parsovací funkce - vezmou syrový JSON string (z IndexedDB nebo
+ *  localStorage, jedno a totéž) a vrátí normalizovaná data appky. Odděleny
+ *  od samotného čtení z úložiště, aby šly použít shodně jak při běžném
+ *  načtení appky, tak při ukládání/verifikaci migrace. */
+function parseSubjectsJson(raw) {
+  try {
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) {
+        // normalizeSubject doplní pole solvedCount apod. u dat uložených starší verzí appky
+        return parsed.map((s, i) => normalizeSubject(s, Date.now() + i));
+      }
+    }
+  } catch (e) {
+    console.warn('Uložená data se nepodařilo načíst, používám výchozí sadu.', e);
+  }
+  return defaultSubjects();
+}
+
+function parseStatsJson(raw) {
+  const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
+  try {
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...fallback,
+        ...parsed,
+        dailyHistory: (parsed && typeof parsed.dailyHistory === 'object' && parsed.dailyHistory) || {},
+        // dailyAttempts (pokusy za den, ne jen správné odpovědi) je novější
+        // pole než dailyHistory - u appek aktualizovaných ze starší verze
+        // prostě chybí a začne se plnit od nuly, graf úspěšnosti bude jen
+        // zpočátku mít méně dat, nic víc se tím nerozbije.
+        dailyAttempts: (parsed && typeof parsed.dailyAttempts === 'object' && parsed.dailyAttempts) || {},
+        mistakeCounts: (parsed && typeof parsed.mistakeCounts === 'object' && parsed.mistakeCounts) || {},
+        celebratedBadges: Array.isArray(parsed && parsed.celebratedBadges) ? parsed.celebratedBadges : [],
+        // srs = záznamy rozloženého opakování (viz srsGrade) - u appek
+        // aktualizovaných ze starší verze prostě chybí a začnou se plnit
+        // od nuly, nic se tím nerozbije.
+        srs: (parsed && typeof parsed.srs === 'object' && parsed.srs) || {},
+      };
+    }
+  } catch (e) {
+    console.warn('Statistiky se nepodařilo načíst, začínám od nuly.', e);
+  }
+  return fallback;
+}
+
+function parseTrashJson(raw) {
+  try {
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Položky starší než retenční lhůta se při načtení potichu odfiltrují
+        // (natrvalo zaniknou, aniž by appka musela běžet na pozadí).
+        const cutoff = Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+        return parsed.filter((item) => item && new Date(item.deletedAt).getTime() > cutoff);
+      }
+    }
+  } catch (e) {
+    console.warn('Koš se nepodařilo načíst.', e);
+  }
+  return [];
+}
+
+/* =====================================================================
    GENERÁTORY PŘÍKLADŮ / OTÁZEK
    Každý generátor vrací objekt: { prompt, hintTitle, hintBody[], check(input) => bool }
    ===================================================================== */
@@ -3889,60 +4083,53 @@ const app = createApp({
     }
     applyTheme(); // sladí stav appky s třídou nastavenou blokujícím skriptem v <head>
 
-    /* ---------- Perzistentní data (předměty + zápisy) ---------- */
-    function loadSubjects() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length) {
-            // normalizeSubject doplní pole solvedCount apod. u dat uložených starší verzí appky
-            return parsed.map((s, i) => normalizeSubject(s, Date.now() + i));
-          }
-        }
-      } catch (e) {
-        console.warn('Uložená data se nepodařilo načíst, používám výchozí sadu.', e);
-      }
-      return defaultSubjects();
-    }
+    /* ---------- Perzistentní data (předměty + zápisy) ----------
+       subjects/stats/trash začínají prázdné a naplní se až asynchronně přes
+       initPersistentData() (viz níž, volá se z onMounted) - appka totiž od
+       teď data čte z IndexedDB, což je ze své podstaty asynchronní API (na
+       rozdíl od dřívějšího synchronního localStorage.getItem). Zbytek appky
+       na tom nic nemění: subjects/stats/trash jsou pořád ty samé reactive()
+       objekty po celou dobu běhu appky (nikdy se znovu nepřiřazují, jen
+       mutují na místě - .push/.splice/přímé zápisy), initPersistentData do
+       nich jen na začátku doplní obsah. Než se data načtou (typicky pár
+       milisekund), appka zobrazí jednoduchou "načítám" obrazovku - viz
+       dataLoaded a šablona hned pod <div id="app">. */
+    const subjects = reactive([]);
+    const stats = reactive({ totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} });
+    const dataLoaded = ref(false);
+    const dataLoadError = ref('');
 
-    function loadStats() {
-      const fallback = { totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {} };
+    /** Načte (a při první příležitosti přesune z localStorage do IndexedDB)
+     *  všechna tři perzistentní data appky a naplní jimi existující
+     *  subjects/stats/trash reactive objekty NA MÍSTĚ (splice/Object.assign),
+     *  ať zůstávají pořád tentýž objekt, na který se všude v appce odkazuje.
+     *  Volá se jednou při startu appky z onMounted, PŘED vším ostatním, co s
+     *  daty pracuje (detekce sdílení, synchronizace s cloudem...). */
+    async function initPersistentData() {
       try {
-        const raw = localStorage.getItem(STATS_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return {
-            ...fallback,
-            ...parsed,
-            dailyHistory: (parsed && typeof parsed.dailyHistory === 'object' && parsed.dailyHistory) || {},
-            // dailyAttempts (pokusy za den, ne jen správné odpovědi) je novější
-            // pole než dailyHistory - u appek aktualizovaných ze starší verze
-            // prostě chybí a začne se plnit od nuly, graf úspěšnosti bude jen
-            // zpočátku mít méně dat, nic víc se tím nerozbije.
-            dailyAttempts: (parsed && typeof parsed.dailyAttempts === 'object' && parsed.dailyAttempts) || {},
-            mistakeCounts: (parsed && typeof parsed.mistakeCounts === 'object' && parsed.mistakeCounts) || {},
-            celebratedBadges: Array.isArray(parsed && parsed.celebratedBadges) ? parsed.celebratedBadges : [],
-            // srs = záznamy rozloženého opakování (viz srsGrade) - u appek
-            // aktualizovaných ze starší verze prostě chybí a začnou se plnit
-            // od nuly, nic se tím nerozbije.
-            srs: (parsed && typeof parsed.srs === 'object' && parsed.srs) || {},
-          };
-        }
+        const [subjectsRaw, statsRaw, trashRaw] = await Promise.all([
+          migrateKeyToIdb(STORAGE_KEY),
+          migrateKeyToIdb(STATS_KEY),
+          migrateKeyToIdb(TRASH_KEY),
+        ]);
+        subjects.splice(0, subjects.length, ...parseSubjectsJson(subjectsRaw));
+        Object.assign(stats, parseStatsJson(statsRaw));
+        trash.splice(0, trash.length, ...parseTrashJson(trashRaw));
       } catch (e) {
-        console.warn('Statistiky se nepodařilo načíst, začínám od nuly.', e);
+        console.warn('Data appky se nepodařilo načíst, používám výchozí/prázdná data.', e);
+        dataLoadError.value = 'Data appky se z úložiště tohoto prohlížeče nepodařilo načíst. Appka teď běží s prázdnými/výchozími daty, ať aspoň jde použít - zkus stránku načíst znovu, ať zkusí přístup k datům zopakovat.';
+        if (subjects.length === 0) subjects.splice(0, subjects.length, ...defaultSubjects());
+      } finally {
+        dataLoaded.value = true;
       }
-      return fallback;
     }
-
-    const subjects = reactive(loadSubjects());
-    const stats = reactive(loadStats());
 
     watch(
       stats,
       () => {
-        try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); }
-        catch (e) { console.warn('Statistiky se nepodařilo uložit.', e); }
+        if (!dataLoaded.value) return; // appka ještě nedokončila initPersistentData, nic reálného k uložení není
+        saveKeyToIdb(STATS_KEY, JSON.stringify(stats))
+          .catch((e) => console.warn('Statistiky se nepodařilo uložit.', e));
         if (!applyingRemoteUpdate) schedulePush();
       },
       { deep: true }
@@ -4236,37 +4423,22 @@ const app = createApp({
       }
     }
 
-    /* ---------- Koš (dočasně smazané předměty a zápisy) ---------- */
-    function loadTrash() {
-      try {
-        const raw = localStorage.getItem(TRASH_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            // Položky starší než retenční lhůta se při načtení potichu odfiltrují
-            // (natrvalo zaniknou, aniž by appka musela běžet na pozadí).
-            const cutoff = Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-            return parsed.filter((item) => item && new Date(item.deletedAt).getTime() > cutoff);
-          }
-        }
-      } catch (e) {
-        console.warn('Koš se nepodařilo načíst.', e);
-      }
-      return [];
-    }
-    const trash = reactive(loadTrash());
+    /* ---------- Koš (dočasně smazané předměty a zápisy) ----------
+       Stejně jako subjects/stats výš - začíná prázdný, naplní se v rámci
+       initPersistentData(). */
+    const trash = reactive([]);
     const showTrashModal = ref(false);
 
     watch(
       trash,
       () => {
-        try { localStorage.setItem(TRASH_KEY, JSON.stringify(trash)); }
-        catch (e) {
+        if (!dataLoaded.value) return;
+        saveKeyToIdb(TRASH_KEY, JSON.stringify(trash)).catch((e) => {
           console.warn('Koš se nepodařilo uložit.', e);
           if (e && e.name === 'QuotaExceededError') {
             alert('Úložiště prohlížeče je plné, položka se možná do koše neuložila celá. Zkus koš vyprázdnit nebo smazat pár starších obrázků.');
           }
-        }
+        });
       },
       { deep: true }
     );
@@ -4370,23 +4542,56 @@ const app = createApp({
     }, { deep: true });
 
     /* ---------- Ukazatel využitého úložiště ----------
-       Appka ukládá všechna svá data (studijniHubData_v1, studijniHubStats_v1)
-       do localStorage v prohlížeči, který má omezenou kapacitu (typicky
-       kolem 5 MB, liší se podle prohlížeče/zařízení). Aby uživatel nebyl
-       nemile překvapen, že se mu jednoho dne přestanou ukládat změny (bez
-       jasné chybové hlášky), appka si spočítá hrubý odhad zabraného místa
-       (dominantní část tvoří base64 obrázky u předmětů a v zápiscích) a
-       zobrazí ho jako procentuální ukazatel, který zežloutne/zčervená, když
-       se blíží limitu - s tipy na uvolnění místa. */
-    const STORAGE_QUOTA_ESTIMATE_BYTES = 5 * 1024 * 1024;
+       Appka od migrace na IndexedDB (viz "Perzistentní data" výš) nemá jeden
+       pevný, dopředu známý limit jako dřív u localStorage (~5 MB) - kvóta
+       IndexedDB se odvozuje od volného místa na disku a liší se
+       zařízení od zařízení. Skutečné číslo (kolik appka zabírá + jaká je
+       reálná kvóta TOHOTO zařízení) dá navigator.storage.estimate() - to
+       podporují všechny běžné prohlížeče kromě starších Safari, kde appka
+       použije záložní hrubý odhad (5 MB, stejně jako dřív fungoval limit
+       localStorage) vůči velikosti vlastních dat appky (storageUsageBytes). */
+    const STORAGE_QUOTA_FALLBACK_BYTES = 5 * 1024 * 1024;
+    const storageEstimate = reactive({ usageBytes: 0, quotaBytes: 0, supported: false });
+    async function refreshStorageEstimate() {
+      try {
+        if (navigator.storage && navigator.storage.estimate) {
+          const { usage, quota } = await navigator.storage.estimate();
+          storageEstimate.usageBytes = usage || 0;
+          storageEstimate.quotaBytes = quota || 0;
+          storageEstimate.supported = true;
+        }
+      } catch (e) {
+        console.warn('Odhad využití úložiště se nepodařilo zjistit.', e);
+      }
+    }
+    // Hrubý odhad velikosti VLASTNÍCH dat appky (na rozdíl od storageEstimate
+    // výš, což je celkové využití prohlížeče na tomhle originu) - používá se
+    // jako fallback u prohlížečů bez navigator.storage.estimate a taky pro
+    // rozpis "největší předměty" níž, kde jde právě o srovnání dat appky
+    // navzájem, ne o skutečnou kvótu.
     const storageUsageBytes = computed(() => {
       try {
-        return (JSON.stringify(subjects).length + JSON.stringify(stats).length) * 2;
+        // Koš (viz trash/TRASH_KEY) se počítá taky - smazané předměty/zápisy tam
+        // až 14 dní zůstávají (viz TRASH_RETENTION_DAYS), takže i nadále reálně
+        // zabírají místo, dokud je uživatel nevyprázdní nebo sama nevyprší lhůta.
+        return (JSON.stringify(subjects).length + JSON.stringify(stats).length + JSON.stringify(trash).length) * 2;
       } catch (e) {
         return 0;
       }
     });
-    const storageUsagePercent = computed(() => Math.min(100, Math.round((storageUsageBytes.value / STORAGE_QUOTA_ESTIMATE_BYTES) * 100)));
+    const trashUsageBytes = computed(() => {
+      try {
+        return JSON.stringify(trash).length * 2;
+      } catch (e) {
+        return 0;
+      }
+    });
+    const storageUsagePercent = computed(() => {
+      if (storageEstimate.supported && storageEstimate.quotaBytes > 0) {
+        return Math.min(100, Math.round((storageEstimate.usageBytes / storageEstimate.quotaBytes) * 100));
+      }
+      return Math.min(100, Math.round((storageUsageBytes.value / STORAGE_QUOTA_FALLBACK_BYTES) * 100));
+    });
     const storageUsageLevel = computed(() => {
       const p = storageUsagePercent.value;
       if (p >= 85) return 'critical';
@@ -4399,6 +4604,7 @@ const app = createApp({
       return `${(n / (1024 * 1024)).toFixed(1)} MB`;
     }
     const showStorageDetail = ref(false);
+    watch(showStorageDetail, (open) => { if (open) refreshStorageEstimate(); });
     const subjectsBySizeDesc = computed(() => {
       return [...subjects]
         .map((s) => ({ subject: s, bytes: JSON.stringify(s).length * 2 }))
@@ -4510,13 +4716,13 @@ const app = createApp({
     watch(
       subjects,
       () => {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(subjects));
-        } catch (e) {
-          console.warn('Data se nepodařilo uložit do localStorage.', e);
-          if (e && e.name === 'QuotaExceededError') {
-            alert('Úložiště prohlížeče je plné, poslední změna se pravděpodobně neuložila. Zkus smazat pár starších obrázků u zápisů, nebo si stáhni zálohu přes „Export zálohy" a uvolni místo.');
-          }
+        if (dataLoaded.value) {
+          saveKeyToIdb(STORAGE_KEY, JSON.stringify(subjects)).catch((e) => {
+            console.warn('Data se nepodařilo uložit.', e);
+            if (e && e.name === 'QuotaExceededError') {
+              alert('Úložiště prohlížeče je plné, poslední změna se pravděpodobně neuložila. Zkus smazat pár starších obrázků u zápisů, nebo si stáhni zálohu přes „Export zálohy" a uvolni místo.');
+            }
+          });
         }
         if (!applyingRemoteUpdate) schedulePush();
       },
@@ -6183,7 +6389,7 @@ const app = createApp({
         if (noteTitleEl.value) noteTitleEl.value.focus();
       }
     }
-    onMounted(() => {
+    onMounted(async () => {
       // Odkaz na sdílený předmět (?share=<id>) appku přepne do čistě
       // read-only prohlížeče (viz šablona) - zbytek běžné inicializace appky
       // (klávesové zkratky, synchronizace, připomínky...) v tom případě nemá
@@ -6191,6 +6397,12 @@ const app = createApp({
       // synchronně ještě před prvním await, takže je hned jisté, jak pokračovat.
       loadSharedSubjectFromUrl();
       if (shareView.active) return;
+      // Vlastní data appky (předměty/statistiky/koš) se musí nejdřív doopravdy
+      // načíst z IndexedDB (asynchronní) - teprve pak dává smysl cokoliv, co
+      // s nimi pracuje (detekce sdílení volí výchozí předmět, synchronizace s
+      // cloudem porovnává, co je novější...).
+      await initPersistentData();
+      refreshStorageEstimate();
       detectIncomingShare();
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
@@ -6220,6 +6432,7 @@ const app = createApp({
 
     return {
       // data
+      dataLoaded, dataLoadError,
       theme, greeting, heroVideoEl, prefersReducedMotion, onCardTilt, onCardTiltLeave,
       subjects, EMOJIS, GRADIENTS, ACCENT_PRESETS, accentId, setAccentColor, showAccentPicker,
       stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak,
@@ -6242,7 +6455,7 @@ const app = createApp({
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
-      showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, formatBytes, subjectsBySizeDesc,
+      showStorageDetail, storageUsageBytes, storageUsagePercent, storageUsageLevel, storageEstimate, formatBytes, subjectsBySizeDesc, trashUsageBytes,
       globalSearchQuery, globalSearchResults, searchByTag,
       // metody
       toggleTheme,
