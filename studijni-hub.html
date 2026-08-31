@@ -1058,12 +1058,12 @@
      milisekund, ale bez tohohle by appka nakrátko bleskla prázdný dashboard,
      než se data doopravdy zobrazí. Sdíleného (read-only) zobrazení přes odkaz
      se netýká - to má vlastní "shareView.loading" stav v šabloně níž. -->
-<div v-if="!dataLoaded && !shareView.active" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
+<div v-if="!dataLoaded && !shareView.active && !reportView.active" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
   <div class="w-10 h-10 border-4 border-slate-700 border-t-cyan-400 rounded-full animate-spin"></div>
   <p class="text-slate-400 text-sm">Načítám tvoje data…</p>
   <p v-if="dataLoadError" class="text-rose-400 text-sm max-w-md text-center px-4">{{ dataLoadError }}</p>
 </div>
-<template v-if="!shareView.active">
+<template v-if="!shareView.active && !reportView.active">
 
   <!-- ============================================================= -->
   <!-- HORNÍ LIŠTA -->
@@ -1302,8 +1302,10 @@
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
             <button @click="triggerImportFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Nahraje dříve staženou zálohu a nahradí jí aktuální data">⬆️ Import zálohy</button>
+            <button @click="shareProgressReport" class="btn-secondary text-xs !py-1.5 !px-3" title="Vytvoří odkaz jen se statistikami (bez textu zápisků) - hodí se poslat rodiči nebo učiteli, který má vidět pokrok">📊 Sdílet pokrok</button>
             <input ref="importFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportFile" />
             <input ref="ocrFileEl" type="file" accept="image/*" capture="environment" class="hidden" @change="handleOcrFile" />
+            <input ref="importTextFileEl" type="file" accept=".txt,text/plain" class="hidden" @change="handleImportTextFile" />
             <button @click="triggerImportSubjectFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Přidá nový předmět ze souboru vyexportovaného přes „Export předmětu" - nic stávajícího nepřepíše">📥 Naimportovat předmět</button>
             <input ref="importSubjectFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportSubjectFile" />
           </div>
@@ -1704,8 +1706,22 @@
               @click="toggleExamPracticeMode"
               class="quiz-mode-btn"
               :class="{ 'quiz-mode-active': examPracticeMode }"
-              :title="examPrepNotesCount > 0 ? `Zkouší jen ze zápisků označených 🎓 (aktuálně ${examPrepNotesCount}) - hodí se, když víš dopředu, z čeho přesně bude zkouška` : 'Nejdřív si u zápisků klikni na 🎓, ať appka ví, ze kterých má zkoušet'"
-            >🎓 Zkouškový režim<span v-if="examPrepNotesCount > 0"> ({{ examPrepNotesCount }})</span></button>
+              :title="examPrepEligibleCount > 0 ? `Zkouší jen ze zápisků označených 🎓 (aktuálně ${examPrepEligibleCount}${examPracticeScope === 'all' ? ' napříč předměty' : ''}) - hodí se, když víš dopředu, z čeho přesně bude zkouška` : 'Nejdřív si u zápisků klikni na 🎓, ať appka ví, ze kterých má zkoušet'"
+            >🎓 Zkouškový režim<span v-if="examPrepEligibleCount > 0"> ({{ examPrepEligibleCount }})</span></button>
+            <span v-if="examPracticeMode && examPrepAllCount > examPrepNotesCount" class="flex rounded-full border border-slate-700 overflow-hidden text-xs">
+              <button
+                @click="setExamPracticeScope('single')"
+                class="!rounded-none !border-0 px-2.5 py-1.5"
+                :class="examPracticeScope === 'single' ? 'bg-emerald-900/60 text-emerald-300' : 'text-slate-500 hover:text-slate-300'"
+                title="Jen z označených zápisků tohoto předmětu"
+              >Tento předmět</button>
+              <button
+                @click="setExamPracticeScope('all')"
+                class="!rounded-none !border-0 px-2.5 py-1.5"
+                :class="examPracticeScope === 'all' ? 'bg-emerald-900/60 text-emerald-300' : 'text-slate-500 hover:text-slate-300'"
+                :title="`Napříč všemi předměty (${examPrepAllCount} označených zápisků celkem) - hodí se na souhrnnou zkoušku z víc předmětů`"
+              >Napříč předměty ({{ examPrepAllCount }})</button>
+            </span>
             <button
               @click="toggleMultipleChoice"
               class="quiz-mode-btn"
@@ -1763,7 +1779,9 @@
             <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">⏱️ Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
             <p v-if="quiz.wasReview" class="review-badge">🔁 Opakování — tohle ti nedávno nešlo</p>
             <p v-if="mixedQuizMode && quizSourceSubject" class="text-xs uppercase tracking-wider text-fuchsia-400 font-semibold mb-2">🔀 {{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }}</p>
-            <p v-if="examPracticeMode && quiz.type !== 'exam-empty'" class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">🎓 Zkouškový režim — jen z označených zápisků</p>
+            <p v-if="examPracticeMode && quiz.type !== 'exam-empty'" class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">
+              🎓 Zkouškový režim — jen z označených zápisků<span v-if="examPracticeScope === 'all' && quizSourceSubject"> ({{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }})</span>
+            </p>
 
             <!-- Zkouškový režim je zapnutý, ale ze zvolené kombinace (mód doplňovačky/kartiček)
                  zrovna nejde žádná otázka sestavit - typicky když jsou označené zápisky moc
@@ -1944,6 +1962,7 @@
                   <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, noteForm)" />
                 </label>
                 <button type="button" @click="openOcrPicker(noteForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
+                <button type="button" @click="openImportTextPicker(noteForm)" class="fmt-btn" title="Nahraje textový (.txt) soubor a jeho obsah vloží do zápisu - alternativa k ručnímu psaní nebo OCR">📄 Import textu</button>
               </div>
               <textarea
                 ref="noteContentEl"
@@ -2037,6 +2056,7 @@
                         <input type="file" accept="image/*" multiple class="hidden" @change="handleNoteImageUpload($event, editForm)" />
                       </label>
                       <button type="button" @click="openOcrPicker(editForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
+                      <button type="button" @click="openImportTextPicker(editForm)" class="fmt-btn" title="Nahraje textový (.txt) soubor a jeho obsah vloží do zápisu - alternativa k ručnímu psaní nebo OCR">📄 Import textu</button>
                     </div>
                     <textarea ref="editContentEl" v-model="editForm.content" rows="4" class="input mb-2" placeholder="Obsah zápisu"></textarea>
                   </template>
@@ -2133,6 +2153,27 @@
                             <img :src="img.src" alt="Obrázek k zápisu" class="note-thumb" />
                           </a>
                           <span v-if="img.caption" class="text-xs text-slate-500 max-w-[7rem] text-center truncate" :title="img.caption">{{ img.caption }}</span>
+                        </div>
+                      </div>
+
+                      <!-- Historie verzí - appka si před KAŽDOU skutečnou úpravou (viz
+                           saveEditNote) uloží předchozí znění, ať jde omylem přepsaný
+                           nebo smazaný text vrátit zpět. Kvůli místu appka drží jen
+                           posledních 5 verzí a BEZ obrázků (ty by historii zbytečně
+                           nafukovaly - viz komentář u pushNoteHistorySnapshot). -->
+                      <div v-if="n.history && n.history.length > 0" class="mt-3 border-t border-slate-800 pt-2">
+                        <button @click.stop="openHistoryNoteId = openHistoryNoteId === n.id ? null : n.id" class="hint-toggle !mt-0 !text-slate-400 !text-xs">
+                          🕐 Historie verzí ({{ n.history.length }}) <span>{{ openHistoryNoteId === n.id ? '▲' : '▼' }}</span>
+                        </button>
+                        <div v-if="openHistoryNoteId === n.id" class="mt-2 space-y-1.5" @click.stop>
+                          <div v-for="(v, i) in n.history" :key="i" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-800/50 text-xs">
+                            <div class="min-w-0">
+                              <span class="text-slate-500">{{ formatDate(v.savedAt) }}</span>
+                              <span class="text-slate-300 truncate block">{{ v.title }}</span>
+                            </div>
+                            <button @click="restoreNoteHistoryVersion(n, i)" class="btn-secondary !py-1 !px-2 shrink-0">↩️ Obnovit</button>
+                          </div>
+                          <button @click="clearNoteHistory(n)" class="btn-ghost danger !text-xs">🗑️ Smazat celou historii</button>
                         </div>
                       </div>
                     </div>
@@ -2293,6 +2334,35 @@
   </Transition>
 
   <!-- ============================================================= -->
+  <!-- MODAL: REPORTOVACÍ ODKAZ (jen statistiky, bez zápisků) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="progressReportModal.open" class="modal-overlay" @click.self="closeProgressReportModal">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">📊 Sdílet pokrok</h3>
+        <p class="text-slate-400 text-sm mb-4">
+          Tenhle odkaz obsahuje jen souhrnné statistiky (kolik vyřešeno, úspěšnost, série, kolik zápisů u kterého předmětu) - <strong class="text-slate-300">žádný text zápisků</strong>. Hodí se poslat rodiči nebo učiteli, který má vidět pokrok. Odkaz zůstane platný, dokud ho sami nepřepíšeš novým sdílením pokroku.
+        </p>
+
+        <div v-if="progressReportModal.loading" class="text-slate-500 text-sm py-6 text-center">Vytvářím odkaz…</div>
+
+        <div v-else-if="progressReportModal.error" class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-2">{{ progressReportModal.error }}</div>
+
+        <div v-else-if="progressReportModal.url" class="mb-2">
+          <div class="flex gap-2">
+            <input type="text" readonly :value="progressReportModal.url" class="input flex-1 text-xs" @click="$event.target.select()">
+            <button @click="copyProgressReportLink" class="btn-primary text-sm shrink-0">{{ progressReportModal.copied ? '✅ Zkopírováno' : '📋 Kopírovat' }}</button>
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-4">
+          <button @click="closeProgressReportModal" class="btn-secondary text-sm">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
   <!-- MODAL: PŘIJETÍ SDÍLENÉHO TEXTU/ODKAZU Z JINÉ APPKY (Web Share Target) -->
   <!-- ============================================================= -->
   <Transition name="modal">
@@ -2357,7 +2427,7 @@
   </Transition>
 
 </template>
-<template v-else>
+<template v-else-if="shareView.active">
 
   <!-- ============================================================= -->
   <!-- READ-ONLY PROHLÍŽEČ SDÍLENÉHO PŘEDMĚTU (?share=<id> v adrese) -->
@@ -2405,6 +2475,73 @@
     </div>
 
     <p class="text-center text-slate-600 text-xs mt-10">Vytvořeno ve <a href="?" class="text-cyan-400 hover:underline">Studijním Hubu</a> — appce na procvičování a zápisky do školy.</p>
+  </div>
+
+</template>
+<template v-else>
+
+  <!-- ============================================================= -->
+  <!-- READ-ONLY REPORTOVACÍ ODKAZ (?report=<id> v adrese) -->
+  <!-- Jen souhrnné statistiky - žádný text zápisků (viz shareProgressReport -->
+  <!-- / loadReportFromUrl / reportView v hlavním JS bloku níž). -->
+  <!-- ============================================================= -->
+  <div class="max-w-2xl mx-auto px-6 md:px-12 py-10">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
+      <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
+      <span class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 ml-2">📊 report pokroku · jen statistiky</span>
+    </div>
+
+    <div v-if="reportView.loading" class="text-center py-20 text-slate-400">Načítám report…</div>
+
+    <div v-else-if="reportView.error" class="bg-rose-950/30 border border-rose-800/50 rounded-xl p-6 text-center">
+      <p class="text-rose-300 font-semibold mb-1">Report se nepodařilo načíst</p>
+      <p class="text-slate-400 text-sm">{{ reportView.error }}</p>
+    </div>
+
+    <div v-else-if="reportView.report">
+      <p class="text-slate-500 text-sm mb-6">Vygenerováno {{ formatDate(new Date(reportView.report.generatedAt).toISOString()) }}</p>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-cyan-400">{{ reportView.report.totalSolved }}</p>
+          <p class="text-xs text-slate-500 mt-1">vyřešeno úloh</p>
+        </div>
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-cyan-400">{{ reportView.report.successRate }} %</p>
+          <p class="text-xs text-slate-500 mt-1">úspěšnost</p>
+        </div>
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-cyan-400">{{ reportView.report.currentStreak }} 🔥</p>
+          <p class="text-xs text-slate-500 mt-1">aktuální série</p>
+        </div>
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-center">
+          <p class="text-2xl font-bold text-cyan-400">{{ reportView.report.bestStreak }} 🏆</p>
+          <p class="text-xs text-slate-500 mt-1">nejlepší série</p>
+        </div>
+      </div>
+
+      <div v-if="reportView.report.unlockedBadges && reportView.report.unlockedBadges.length" class="mb-8">
+        <h2 class="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Získané odznaky</h2>
+        <div class="flex flex-wrap gap-2">
+          <span v-for="b in reportView.report.unlockedBadges" :key="b.label" class="text-xs px-2.5 py-1.5 rounded-full border border-slate-700 text-slate-300 flex items-center gap-1">
+            <span>{{ b.emoji }}</span><span>{{ b.label }}</span>
+          </span>
+        </div>
+      </div>
+
+      <h2 class="text-sm uppercase tracking-wider text-slate-500 font-semibold mb-2">Předměty</h2>
+      <div v-if="!reportView.report.subjects.length" class="text-slate-500 text-center py-10">Zatím žádné předměty.</div>
+      <div v-for="s in reportView.report.subjects" :key="s.name" class="bg-slate-900/40 border border-slate-800 rounded-xl p-4 mb-3 flex items-center gap-3">
+        <span class="text-2xl">{{ s.emoji }}</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold truncate">{{ s.name }}</p>
+          <p class="text-xs text-slate-500">{{ s.notesCount }} {{ noteWord(s.notesCount) }} · vyřešeno {{ s.solvedCount }} z {{ s.attemptsCount }} pokusů<span v-if="s.examDate"> · zkouška {{ formatDateShortCs(s.examDate) }}</span></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-10">Vytvořeno ve <a href="?" class="text-cyan-400 hover:underline">Studijním Hubu</a> — appce na procvičování a zápisky do školy. Tenhle odkaz obsahuje jen statistiky, žádný text zápisků.</p>
   </div>
 
 </template>
@@ -2458,6 +2595,19 @@ function buildShareUrl(shareId) {
   const url = new URL(window.location.href);
   url.hash = '';
   url.search = '?share=' + shareId;
+  return url.toString();
+}
+
+// Reportovací odkaz - stejný princip jako sdílení předmětu výš (samostatný,
+// neuhodnutelný uzel v databázi, NEZÁVISLÝ na SYNC_PATH i na SHARE_PATH_PREFIX),
+// jen s jiným obsahem: NIKDY žádný text zápisků, jen souhrnné počty/statistiky
+// (kolik vyřešeno, úspěšnost, série, kolik zápisů u kterého předmětu...).
+// Hodí se poslat rodiči nebo učiteli, který má vidět POKROK, ne obsah poznámek.
+const PROGRESS_REPORT_PATH_PREFIX = '/publicReports/';
+function buildReportUrl(reportId) {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '?report=' + reportId;
   return url.toString();
 }
 
@@ -3278,6 +3428,16 @@ function normalizeSubject(raw, fallbackId) {
       // buildNotesPool/buildQuiz a toggleExamPracticeMode) - procvičování se
       // v tom režimu omezí jen na takhle označené zápisky daného předmětu.
       examPrep: !!(n && n.examPrep),
+      // Historie posledních verzí zápisu (viz pushNoteHistorySnapshot) -
+      // schválně BEZ obrázků (jen title/content/kind/items), ať appce
+      // zbytečně nenafukuje úložiště - obrázky se řeší jen v aktuální verzi.
+      history: (Array.isArray(n && n.history) ? n.history : []).slice(0, 5).map((v) => ({
+        title: (v && String(v.title || '').trim()) || 'Bez názvu',
+        content: (v && v.content) || '',
+        kind: (v && v.kind === 'checklist') ? 'checklist' : 'text',
+        items: Array.isArray(v && v.items) ? v.items.map((it) => ({ id: it.id, text: it.text, done: !!it.done })) : [],
+        savedAt: (v && v.savedAt) || new Date().toISOString(),
+      })),
       // Štítky umožňují najít/filtrovat zápisy napříč všemi předměty (viz
       // globalSearchResults a filteredNotes), ne jen v rámci jednoho předmětu.
       tags: (Array.isArray(n && n.tags) ? n.tags : [])
@@ -4529,6 +4689,90 @@ const app = createApp({
       }
     }
 
+    /* ---------- Reportovací odkaz (jen statistiky, bez obsahu zápisků) ----------
+       Stejný mechanismus jako sdílení jednoho předmětu výš (shareSubject),
+       jen payload NIKDY neobsahuje text/obrázky zápisků - jen souhrnné počty
+       a statistiky. Hodí se poslat rodiči nebo učiteli, který má vidět jen
+       POKROK, ne obsah poznámek (na rozdíl od "🔗 Sdílet" u jednotlivého
+       předmětu, který naopak zápisky ukazuje). */
+    const progressReportModal = reactive({ open: false, loading: false, error: '', url: '', copied: false });
+    async function shareProgressReport() {
+      progressReportModal.open = true;
+      progressReportModal.loading = true;
+      progressReportModal.error = '';
+      progressReportModal.url = '';
+      progressReportModal.copied = false;
+      try {
+        const reportId = generateShareId();
+        const payload = {
+          generatedAt: Date.now(),
+          totalSolved: stats.totalSolved || 0,
+          totalAttempts: stats.totalAttempts || 0,
+          successRate: successRate.value,
+          currentStreak: stats.currentStreak || 0,
+          bestStreak: stats.bestStreak || 0,
+          unlockedBadges: badgeStatus.value.filter((b) => b.unlocked).map((b) => ({ emoji: b.emoji, label: b.label })),
+          subjects: subjects.filter((s) => !s.archived).map((s) => ({
+            name: s.name,
+            emoji: s.emoji,
+            solvedCount: s.solvedCount || 0,
+            attemptsCount: s.attemptsCount || 0,
+            notesCount: (s.notes || []).length,
+            lastPracticedAt: s.lastPracticedAt || null,
+            examDate: s.examDate || null,
+          })),
+        };
+        const res = await fetch(FIREBASE_DB_URL + PROGRESS_REPORT_PATH_PREFIX + reportId + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        progressReportModal.url = buildReportUrl(reportId);
+      } catch (e) {
+        console.warn('Reportovací odkaz se nepodařilo vytvořit.', e);
+        progressReportModal.error = 'Odkaz se teď nepodařilo vytvořit. Zkontroluj připojení k internetu, případně to, jestli má appka ve Firebase konzoli povolený i uzel "publicReports" (stejně jako u sdílení předmětu).';
+      } finally {
+        progressReportModal.loading = false;
+      }
+    }
+    function closeProgressReportModal() { progressReportModal.open = false; }
+    async function copyProgressReportLink() {
+      if (!progressReportModal.url) return;
+      try {
+        await navigator.clipboard.writeText(progressReportModal.url);
+        progressReportModal.copied = true;
+        setTimeout(() => { progressReportModal.copied = false; }, 2500);
+      } catch (e) {
+        // stejné jako u copyShareLink výš - odkaz je i vypsaný v textovém poli
+      }
+    }
+
+    /* Prohlížení reportu (?report=<id> v adrese appky) - viz šablona "v-else"
+       pod <div id="app"> (třetí, poslední větev vedle appky/sdíleného
+       předmětu). Detekce a načtení běží v onMounted níž, stejně jako u
+       loadSharedSubjectFromUrl. */
+    const reportView = reactive({ active: false, loading: false, error: '', report: null });
+    async function loadReportFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const reportId = params.get('report');
+      if (!reportId || !/^[a-f0-9]+$/i.test(reportId)) return;
+      reportView.active = true;
+      reportView.loading = true;
+      try {
+        const res = await fetch(FIREBASE_DB_URL + PROGRESS_REPORT_PATH_PREFIX + reportId + '.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || !Array.isArray(data.subjects)) throw new Error('Report nenalezen');
+        reportView.report = data;
+      } catch (e) {
+        console.warn('Report se nepodařilo načíst.', e);
+        reportView.error = 'Tento odkaz na report je buď neplatný, nebo už neexistuje (majitel ho mohl mezitím smazat, případně appku od té doby aktualizoval novým reportem).';
+      } finally {
+        reportView.loading = false;
+      }
+    }
+
     /* ---------- Přijetí sdíleného textu/odkazu z jiné appky (Web Share Target) ----------
        Když si uživatel v telefonu/počítači v systémovém menu "Sdílet" zvolí
        Studijní Hub jako cíl (u nainstalované appky - viz share_target v
@@ -5023,7 +5267,7 @@ const app = createApp({
       stopTimedSession();
       generateNewQuiz();
     }
-    function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; stopSpeaking(); stopTimedSession(); stopDictation(); }
+    function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; examPracticeScope.value = 'single'; examQuizSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); }
 
     /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ---------- */
     const globalSearchQuery = ref('');
@@ -5558,6 +5802,49 @@ const app = createApp({
       editForm.tagsInput = (n.tags || []).join(', ');
     }
     function cancelEdit() { editingNoteId.value = null; stopDictation(); }
+
+    /* ---------- Historie verzí zápisu ----------
+       Appka si před KAŽDOU skutečnou úpravou (viz saveEditNote) uloží
+       předchozí znění zápisu, ať jde omylem přepsaný nebo smazaný text
+       vrátit zpět. Schválně jen posledních NOTE_HISTORY_LIMIT verzí a BEZ
+       obrázků (jen title/content/kind/items) - historie s plnými obrázky by
+       appce zbytečně nafukovala úložiště (viz IndexedDB migrace výš), a
+       obrázky navíc ani nejde "omylem přepsat" stejným způsobem jako text. */
+    const NOTE_HISTORY_LIMIT = 5;
+    const openHistoryNoteId = ref(null);
+    function pushNoteHistorySnapshot(n) {
+      if (!n) return;
+      if (!Array.isArray(n.history)) n.history = [];
+      n.history.unshift({
+        title: n.title,
+        content: n.content,
+        kind: n.kind,
+        items: (n.items || []).map((it) => ({ ...it })),
+        savedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
+      });
+      if (n.history.length > NOTE_HISTORY_LIMIT) n.history.length = NOTE_HISTORY_LIMIT;
+    }
+    /** Obnoví starší verzi zápisu z historie - nejdřív ale do historie uloží
+     *  i AKTUÁLNÍ (před obnovením) znění, takže i samotné obnovení jde
+     *  případně zase vrátit zpět. */
+    function restoreNoteHistoryVersion(n, index) {
+      const version = n && n.history && n.history[index];
+      if (!version) return;
+      if (!confirm('Obnovit tuhle starší verzi zápisu? Aktuální znění appka nejdřív uloží do historie, takže se dá vrátit zpátky.')) return;
+      pushNoteHistorySnapshot(n);
+      n.title = version.title;
+      n.content = version.content;
+      n.kind = version.kind;
+      n.items = (version.items || []).map((it) => ({ ...it }));
+      n.updatedAt = new Date().toISOString();
+      openHistoryNoteId.value = null;
+    }
+    function clearNoteHistory(n) {
+      if (!n) return;
+      if (!confirm('Smazat celou historii verzí tohohle zápisu? Tahle akce se nedá vrátit zpět.')) return;
+      n.history = [];
+    }
+
     function saveEditNote(n) {
       const title = editForm.title.trim();
       if (!title) return;
@@ -5566,11 +5853,15 @@ const app = createApp({
       } else if (!editForm.content.trim()) {
         return;
       }
+      const newContent = editForm.kind === 'checklist' ? '' : editForm.content.trim();
+      const newItems = editForm.kind === 'checklist' ? editForm.items.map((it) => ({ ...it })) : [];
+      const changed = n.title !== title || n.content !== newContent || n.kind !== editForm.kind || JSON.stringify(n.items) !== JSON.stringify(newItems);
+      if (changed) pushNoteHistorySnapshot(n);
       n.title = title;
-      n.content = editForm.kind === 'checklist' ? '' : editForm.content.trim();
+      n.content = newContent;
       n.images = editForm.images.map((img) => ({ ...img }));
       n.kind = editForm.kind;
-      n.items = editForm.kind === 'checklist' ? editForm.items.map((it) => ({ ...it })) : [];
+      n.items = newItems;
       n.tags = parseTagsInput(editForm.tagsInput);
       n.updatedAt = new Date().toISOString();
       editingNoteId.value = null;
@@ -5752,6 +6043,44 @@ const app = createApp({
       ocrModal.text = '';
       ocrModal.error = '';
       ocrModal.targetState = null;
+    }
+
+    /* ---------- Import textového (.txt) souboru přímo do zápisu ----------
+       Alternativa k OCR z fotky (viz výš) - pro poznámky, které už uživatel
+       má digitálně jako čistý text (např. vyexportované z Wordu/Google
+       Docs jako .txt). Na rozdíl od OCR jde o čtení souboru čistě v
+       prohlížeči (FileReader), bez zpracování na pozadí, takže appka
+       nepotřebuje mezikrok s náhledem/progress barem jako u OCR - text se
+       vloží do zápisu rovnou. */
+    const importTextFileEl = ref(null);
+    let importTextTargetState = null;
+    function openImportTextPicker(targetState) {
+      importTextTargetState = targetState;
+      nextTick(() => { if (importTextFileEl.value) importTextFileEl.value.click(); });
+    }
+    function handleImportTextFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const targetState = importTextTargetState;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || '').trim();
+        if (!text) {
+          alert('Tenhle soubor je bohužel prázdný, nebo se z něj nepodařilo přečíst žádný text.');
+        } else if (targetState) {
+          targetState.content = targetState.content ? `${targetState.content}\n\n${text}` : text;
+          // Pokud zápis ještě nemá název, appka ho předvyplní podle jména souboru (bez přípony).
+          if (!targetState.title || !targetState.title.trim()) {
+            targetState.title = file.name.replace(/\.[^.]+$/, '');
+          }
+        }
+        event.target.value = '';
+      };
+      reader.onerror = () => {
+        alert('Soubor se nepodařilo přečíst.');
+        event.target.value = '';
+      };
+      reader.readAsText(file, 'utf-8');
     }
 
     /* ---------- Obrázky u zápisů (uloženy jako komprimovaný base64 v localStorage) ---------- */
@@ -6171,6 +6500,9 @@ const app = createApp({
       if (mixedQuizMode.value && mixedQuizSubjectId.value) {
         return subjects.find((s) => s.id === mixedQuizSubjectId.value) || activeSubject.value;
       }
+      if (examPracticeMode.value && examPracticeScope.value === 'all' && examQuizSubjectId.value) {
+        return subjects.find((s) => s.id === examQuizSubjectId.value) || activeSubject.value;
+      }
       return activeSubject.value;
     });
     function toggleMixedQuiz() {
@@ -6182,28 +6514,61 @@ const app = createApp({
 
     /* ---------- Zkouškový režim (procvičování jen z ručně vybraných zápisků) ----
        Doplněk k mixedQuizMode výš - zatímco ten mísí CELÉ předměty, tenhle
-       naopak zúží procvičování na podmnožinu zápisků JEDNOHO (aktuálně
-       otevřeného) předmětu, které si uživatel sám označil jako "Do zkoušky"
-       (viz toggleExamPrepNote u jednotlivých zápisků). Hodí se, když víš
-       dopředu, že se u zkoušky bude zkoušet jen z konkrétních zápisků/kapitol,
-       a chceš se soustředit jen na ně. Proto jde vypnout kombinaci s
-       mixedQuizMode (viz výš) - najednou by dávaly protichůdné pokyny. */
+       naopak zúží procvičování na podmnožinu zápisků, které si uživatel sám
+       označil jako "Do zkoušky" (viz toggleExamPrepNote u jednotlivých
+       zápisků). Hodí se, když víš dopředu, že se u zkoušky bude zkoušet jen
+       z konkrétních zápisků/kapitol, a chceš se soustředit jen na ně. Proto
+       jde vypnout kombinaci s mixedQuizMode (viz výš) - najednou by dávaly
+       protichůdné pokyny.
+       examPracticeScope rozhoduje, JAK ŠIROKO appka označené zápisky hledá:
+       'single' = jen v aktuálně otevřeném předmětu (běžný případ - zkouška
+       z jednoho předmětu), 'all' = napříč VŠEMI (nearchivovanými) předměty,
+       které mají aspoň jeden označený zápis - hodí se na souhrnné/maturitní
+       zkoušky pokrývající látku z víc předmětů najednou. V režimu 'all' si
+       generateNewQuiz pro KAŽDOU otázku znovu náhodně vybere jeden z
+       předmětů, které mají co nabídnout (stejný princip jako mixedQuizMode,
+       jen omezený na předměty s označenými zápisky). */
     const examPracticeMode = ref(false);
+    const examPracticeScope = ref('single'); // 'single' | 'all'
+    const examQuizSubjectId = ref(null);
     const examPrepNotesCount = computed(() => {
       if (!activeSubject.value) return 0;
       return activeSubject.value.notes.filter((n) => n.examPrep).length;
     });
+    const examPrepAllSubjects = computed(() => subjects.filter((s) => !s.archived && s.notes.some((n) => n.examPrep)));
+    const examPrepAllCount = computed(() => examPrepAllSubjects.value.reduce((sum, s) => sum + s.notes.filter((n) => n.examPrep).length, 0));
+    // Kolik zápisků appka v aktuálně zvoleném rozsahu (single/all) vidí -
+    // používá se jak pro popisek tlačítka, tak pro kontrolu při zapínání.
+    const examPrepEligibleCount = computed(() => (examPracticeScope.value === 'all' ? examPrepAllCount.value : examPrepNotesCount.value));
     function toggleExamPracticeMode() {
-      if (!examPracticeMode.value && examPrepNotesCount.value === 0) {
-        alert('Nejdřív si u aspoň jednoho zápisu tohoto předmětu klikni na 🎓 ("Zahrnout do zkouškového režimu"), pak teprve půjde zkouškový režim zapnout.');
+      if (!examPracticeMode.value && examPrepEligibleCount.value === 0) {
+        alert('Nejdřív si u aspoň jednoho zápisu klikni na 🎓 ("Zahrnout do zkouškového režimu"), pak teprve půjde zkouškový režim zapnout.');
         return;
       }
       examPracticeMode.value = !examPracticeMode.value;
       if (examPracticeMode.value) {
         mixedQuizMode.value = false;
         mixedQuizSubjectId.value = null;
+      } else {
+        examQuizSubjectId.value = null;
       }
       generateNewQuiz();
+    }
+    /** Přepne rozsah zkouškového režimu mezi jedním předmětem a napříč
+     *  všemi - pokud by ve zvoleném rozsahu zrovna nebylo z čeho vybírat,
+     *  appka to řekne a rozsah nezmění. */
+    function setExamPracticeScope(scope) {
+      if (examPracticeScope.value === scope) return;
+      const wouldBeCount = scope === 'all' ? examPrepAllCount.value : examPrepNotesCount.value;
+      if (wouldBeCount === 0) {
+        alert(scope === 'all'
+          ? 'Zatím nemáš označený 🎓 žádný zápis u žádného předmětu.'
+          : 'Tenhle předmět zatím nemá žádný zápis označený 🎓.');
+        return;
+      }
+      examPracticeScope.value = scope;
+      examQuizSubjectId.value = null;
+      if (examPracticeMode.value) generateNewQuiz();
     }
 
     function generateNewQuiz() {
@@ -6215,6 +6580,12 @@ const app = createApp({
         if (candidates.length > 0) {
           sourceSubject = candidates[Math.floor(Math.random() * candidates.length)];
           mixedQuizSubjectId.value = sourceSubject.id;
+        }
+      } else if (examPracticeMode.value && examPracticeScope.value === 'all') {
+        const candidates = examPrepAllSubjects.value;
+        if (candidates.length > 0) {
+          sourceSubject = candidates[Math.floor(Math.random() * candidates.length)];
+          examQuizSubjectId.value = sourceSubject.id;
         }
       }
       const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value);
@@ -6719,6 +7090,10 @@ const app = createApp({
       // synchronně ještě před prvním await, takže je hned jisté, jak pokračovat.
       loadSharedSubjectFromUrl();
       if (shareView.active) return;
+      // Stejný princip pro reportovací odkaz (?report=<id>) - jen souhrnné
+      // statistiky, viz loadReportFromUrl/reportView výš.
+      loadReportFromUrl();
+      if (reportView.active) return;
       // Vlastní data appky (předměty/statistiky/koš) se musí nejdřív doopravdy
       // načíst z IndexedDB (asynchronní) - teprve pak dává smysl cokoliv, co
       // s nimi pracuje (detekce sdílení volí výchozí předmět, synchronizace s
@@ -6774,6 +7149,7 @@ const app = createApp({
       practiceMode, flashcardFlipped,
       mixedQuizMode, quizSourceSubject, toggleMixedQuiz,
       examPracticeMode, examPrepNotesCount, toggleExamPracticeMode,
+      examPracticeScope, setExamPracticeScope, examPrepAllCount, examPrepEligibleCount,
       multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption,
       showCustomQuestions, newCustomQuestion,
       showProgressChart, chartDays, chartHasData,
@@ -6793,6 +7169,7 @@ const app = createApp({
       addNote, toggleNote, startEditNote, cancelEdit, saveEditNote, formatDate, noteWord,
       renderNoteContent, renderChecklistHtml, applyFormat, handleNoteImageUpload, removeComposingImage,
       shareModal, shareSubject, closeShareModal, copyShareLink, shareView,
+      progressReportModal, shareProgressReport, closeProgressReportModal, copyProgressReportLink, reportView,
       dictationSupported, isDictatingTarget, toggleDictation,
       generateNewQuiz, checkQuizAnswer,
       useFlashcardMode, flipFlashcard, gradeFlashcard,
@@ -6804,6 +7181,7 @@ const app = createApp({
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet, exportSubjectToAnki,
       incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
+      importTextFileEl, openImportTextPicker, handleImportTextFile,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
       showWeeklyPlan, weeklyPlan,
       notificationsSupported, notificationPermission, enableNotifications,
@@ -6819,6 +7197,7 @@ const app = createApp({
       addChecklistItem, removeChecklistItem, toggleChecklistItem,
       globalSearchEl, noteSearchEl, noteTitleEl, showShortcutsHelp, KEYBOARD_SHORTCUTS,
       togglePinNote, toggleExamPrepNote,
+      openHistoryNoteId, restoreNoteHistoryVersion, clearNoteHistory,
       handleSubjectImageUpload, removeSubjectImage,
       syncStatus, syncStatusLabel, lastSyncedAt, lastSyncedLabel, syncNow,
       insertImageToken, isImageInlined,
