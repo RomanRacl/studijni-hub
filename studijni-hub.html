@@ -1071,7 +1071,7 @@
   <p class="text-slate-400 text-sm">Načítám tvoje data…</p>
   <p v-if="dataLoadError" class="text-rose-400 text-sm max-w-md text-center px-4">{{ dataLoadError }}</p>
 </div>
-<template v-if="!shareView.active && !reportView.active">
+<template v-if="!shareView.active && !reportView.active && !challengeView.active">
 
   <!-- ============================================================= -->
   <!-- HORNÍ LIŠTA -->
@@ -1263,6 +1263,25 @@
         </div>
       </div>
 
+      <!-- Dnes v rozvrhu - skutečný rozvrh hodin (viz showTimetable/timetableForm níž), NE doporučení appky -->
+      <div v-if="todayTimetable.length > 0" class="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden entrance entrance-delay-5">
+        <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold px-5 pt-4 pb-2">🏫 Dnes v rozvrhu</p>
+        <div class="divide-y divide-slate-800/70">
+          <button
+            v-for="slot in todayTimetable" :key="slot.id"
+            @click="openSubject(slot.subject.id)"
+            class="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-slate-800/40 transition"
+          >
+            <span class="text-xl shrink-0">{{ slot.subject.emoji }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-slate-100 font-semibold truncate">{{ slot.subject.name }}</p>
+              <p v-if="slot.time" class="text-slate-500 text-xs">{{ slot.time }}</p>
+            </div>
+            <span class="text-cyan-300 text-sm shrink-0 hidden sm:inline">Procvičit →</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Statistiky procvičování + zálohování dat -->
       <div class="mb-8 rounded-xl bg-slate-900/40 border border-slate-800 text-sm overflow-hidden entrance entrance-delay-6">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
@@ -1287,6 +1306,9 @@
           <button v-if="weakestSpotsOverview.length > 0" @click="showWeakSpots = !showWeakSpots" class="btn-ghost !text-rose-300">
             🎯 {{ showWeakSpots ? 'Skrýt slabá místa' : `Slabá místa (${weakestSpotsOverview.length})` }}
           </button>
+          <button v-if="weakestTopicsOverview.length > 0" @click="showWeakTopics = !showWeakTopics" class="btn-ghost !text-rose-300">
+            📊 {{ showWeakTopics ? 'Skrýt slabá témata' : `Slabá témata (${weakestTopicsOverview.length})` }}
+          </button>
           <button v-if="srsCalendarSummary.total > 0" @click="showSrsCalendar = !showSrsCalendar" class="btn-ghost !text-violet-300">
             🗓️ {{ showSrsCalendar ? 'Skrýt kalendář opakování' : `Kalendář opakování${srsCalendarSummary.overdue > 0 ? ` (${srsCalendarSummary.overdue} po termínu)` : ''}` }}
           </button>
@@ -1302,6 +1324,12 @@
           <button v-if="weeklyPlan.length > 0" @click="showWeeklyPlan = !showWeeklyPlan" class="btn-ghost !text-emerald-300">
             🗓️ {{ showWeeklyPlan ? 'Skrýt plánovač' : 'Týdenní plánovač' }}
           </button>
+          <button @click="showTimetable = !showTimetable" class="btn-ghost !text-emerald-300">
+            🏫 {{ showTimetable ? 'Skrýt rozvrh hodin' : 'Rozvrh hodin' }}
+          </button>
+          <button @click="showGoals = !showGoals" class="btn-ghost !text-amber-300">
+            🎯 {{ showGoals ? 'Skrýt vlastní cíle' : `Vlastní cíle${activeGoalsWithProgress.length > 0 ? ` (${activeGoalsWithProgress.length})` : ''}` }}
+          </button>
           <button @click="showPomodoro = !showPomodoro" class="btn-ghost !text-amber-300" :class="{ 'quiz-mode-active': pomodoro.active }">
             ⏱️ {{ pomodoro.active ? (pomodoro.phase === 'work' ? 'Práce' : 'Přestávka') + ' ' + pomodoroTimeLabel : 'Časovač' }}
           </button>
@@ -1312,6 +1340,11 @@
               class="text-xs px-2 py-1 rounded-full border border-orange-800/60 text-orange-300 flex items-center gap-1 select-none"
               :title="`Procvičuješ ${dailyStreak} ${pluralize(dailyStreak, 'den', 'dny', 'dní')} v řadě! Nejdelší dosažená studijní série: ${bestDailyStreak} ${pluralize(bestDailyStreak, 'den', 'dny', 'dní')}.`"
             >📅 {{ dailyStreak }} {{ pluralize(dailyStreak, 'den', 'dny', 'dní') }} v řadě</span>
+            <span
+              v-if="todayStudyMinutes > 0 || weekStudyMinutes > 0"
+              class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 flex items-center gap-1 select-none"
+              title="Appka počítá jen čas, kdy máš tuhle kartu prohlížeče otevřenou a viditelnou na popředí - ne skutečné soustředění."
+            >⏱️ dnes {{ todayStudyMinutes }} min <span class="opacity-70">· týden {{ weekStudyMinutes }} min</span></span>
             <span
               v-if="dailyStreak > 0 || stats.streakFreezeCredits > 0"
               class="text-xs px-2 py-1 rounded-full border border-sky-800/60 text-sky-300 flex items-center gap-1 select-none"
@@ -1505,6 +1538,19 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showWeakTopics && weakestTopicsOverview.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Nejslabší témata podle typu</p>
+            <p class="text-xs text-slate-500 mb-3">Slabá místa výš po jednotlivých otázkách, tohle je sečtené po TÉMATECH u automaticky generovaných příkladů (matematika/čeština/angličtina) - kde děláš nejvíc chyb celkově.</p>
+            <div class="flex flex-col gap-1.5">
+              <div v-for="item in weakestTopicsOverview" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <span>{{ item.label }}</span>
+                <span class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-rose-950/60 text-rose-300">{{ item.count }}× chyba</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showSrsCalendar && srsCalendarItems.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Kalendář naplánovaného opakování</p>
             <p class="text-xs text-slate-500 mb-3">
@@ -1606,6 +1652,84 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showTimetable" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🏫 Rozvrh hodin</p>
+            <p class="text-xs text-slate-500 mb-3">Skutečný rozvrh - kdy máš ve škole který předmět. Na rozdíl od „Co se učit tento týden" výš appka tohle nijak nedoporučuje, jen si to pamatuje a ukáže, co je dnes na programu.</p>
+
+            <div class="flex flex-wrap items-end gap-2 mb-4">
+              <label class="text-xs text-slate-500">Den
+                <select v-model.number="timetableForm.day" class="input !py-1.5 !text-sm block mt-0.5">
+                  <option v-for="d in DAY_ORDER" :key="d" :value="d">{{ DAY_LABELS[d] }}</option>
+                </select>
+              </label>
+              <label class="text-xs text-slate-500">Předmět
+                <select v-model="timetableForm.subjectId" class="input !py-1.5 !text-sm block mt-0.5">
+                  <option :value="null" disabled>Vyber předmět…</option>
+                  <option v-for="s in subjects.filter(x => !x.archived)" :key="s.id" :value="s.id">{{ s.emoji }} {{ s.name }}</option>
+                </select>
+              </label>
+              <label class="text-xs text-slate-500">Čas
+                <input type="time" v-model="timetableForm.time" class="input !py-1.5 !text-sm block mt-0.5" />
+              </label>
+              <button @click="addTimetableSlot" :disabled="timetableForm.subjectId == null" class="btn-primary !py-1.5 !px-4 text-sm">➕ Přidat</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div v-for="d in DAY_ORDER" :key="d" class="rounded-lg bg-slate-800/40 p-2.5">
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">{{ DAY_LABELS[d] }}</p>
+                <p v-if="timetableSlotsForDay(d).length === 0" class="text-xs text-slate-600">—</p>
+                <div v-for="slot in timetableSlotsForDay(d)" :key="slot.id" class="flex items-center justify-between gap-2 text-sm mb-1">
+                  <span class="truncate">{{ slot.time ? slot.time + ' · ' : '' }}{{ slot.subject.emoji }} {{ slot.subject.name }}</span>
+                  <button @click="removeTimetableSlot(d, slot.id)" class="btn-ghost !text-xs !p-1 shrink-0" title="Smazat">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showGoals" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🎯 Vlastní cíle</p>
+            <p class="text-xs text-slate-500 mb-3">Nastav si vlastní týdenní cíl - appka počítá progres vždy za aktuální kalendářní týden (pondělí až neděle), nezávisle na pevných odznacích.</p>
+
+            <div class="flex flex-wrap items-end gap-2 mb-4">
+              <label class="text-xs text-slate-500">Typ
+                <select v-model="newGoalForm.type" class="input !py-1.5 !text-sm block mt-0.5">
+                  <option value="total">Celkem vyřešeno</option>
+                  <option value="subject">U konkrétního předmětu</option>
+                </select>
+              </label>
+              <label v-if="newGoalForm.type === 'subject'" class="text-xs text-slate-500">Předmět
+                <select v-model="newGoalForm.subjectId" class="input !py-1.5 !text-sm block mt-0.5">
+                  <option :value="null" disabled>Vyber předmět…</option>
+                  <option v-for="s in subjects.filter(x => !x.archived)" :key="s.id" :value="s.id">{{ s.emoji }} {{ s.name }}</option>
+                </select>
+              </label>
+              <label class="text-xs text-slate-500">Cíl (za týden)
+                <input type="number" min="1" v-model.number="newGoalForm.target" class="input !py-1.5 !text-sm block mt-0.5 !w-24" />
+              </label>
+              <button @click="addGoal" :disabled="newGoalForm.type === 'subject' && newGoalForm.subjectId == null" class="btn-primary !py-1.5 !px-4 text-sm">➕ Přidat cíl</button>
+            </div>
+
+            <div v-if="activeGoalsWithProgress.length === 0" class="text-slate-500 text-sm">Zatím nemáš žádný vlastní cíl.</div>
+            <div class="flex flex-col gap-2">
+              <div v-for="g in activeGoalsWithProgress" :key="g.id" class="rounded-lg bg-slate-800/40 p-3">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                  <span class="text-sm font-semibold">{{ g.type === 'subject' && g.subject ? `${g.subject.emoji} ${g.subject.name}` : '🧠 Celkem' }}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs" :class="g.done ? 'text-emerald-400' : 'text-slate-400'">{{ g.progress }} / {{ g.target }}{{ g.done ? ' ✅' : '' }}</span>
+                    <button @click="removeGoal(g.id)" class="btn-ghost !text-xs !p-1" title="Smazat cíl">✕</button>
+                  </div>
+                </div>
+                <div class="h-2 rounded-full bg-slate-900 overflow-hidden">
+                  <div class="h-full rounded-full" :class="g.done ? 'bg-emerald-500' : 'bg-cyan-500'" :style="{ width: g.percent + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showPomodoro" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">⏱️ Časovač na soustředěné učení</p>
             <p class="text-xs text-slate-500 mb-3">Střídej bloky soustředěné práce a krátké přestávky - nezávisle na kvízu, klidně u čtení zápisků.</p>
@@ -1642,6 +1766,22 @@
         </button>
       </div>
 
+      <!-- Filtr podle složky/kategorie předmětů -->
+      <div v-if="subjectFolders.length > 0" class="flex flex-wrap items-center gap-1.5 mb-3">
+        <span class="text-xs text-slate-500">📁 Složka:</span>
+        <button
+          @click="folderFilter = null"
+          class="px-2.5 py-1 rounded-full text-xs font-semibold border transition"
+          :class="!folderFilter ? 'bg-cyan-500/20 border-cyan-600 text-cyan-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+        >Vše</button>
+        <button
+          v-for="f in subjectFolders" :key="f"
+          @click="folderFilter = folderFilter === f ? null : f"
+          class="px-2.5 py-1 rounded-full text-xs font-semibold border transition"
+          :class="folderFilter === f ? 'bg-cyan-500/20 border-cyan-600 text-cyan-300' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+        >{{ f }}</button>
+      </div>
+
       <!-- Karusel předmětů -->
       <div class="relative entrance entrance-delay-6" v-if="visibleSubjects.length > 0">
         <button v-show="canScrollLeft" @click="scrollCarousel(-1)" class="carousel-arrow -left-2 md:-left-5" aria-label="Posunout doleva">‹</button>
@@ -1671,6 +1811,7 @@
               <p class="text-sm opacity-85 mt-1">
                 {{ s.archived ? '🗄️ Archivováno · ' : '' }}{{ s.notes.length }} {{ noteWord(s.notes.length) }} · 🧠 {{ s.solvedCount || 0 }}
               </p>
+              <p v-if="s.folder" class="text-xs opacity-70 mt-0.5">📁 {{ s.folder }}</p>
               <p v-if="examBadge(s)" class="inline-flex items-center gap-1 text-xs font-bold mt-2 px-2 py-0.5 rounded-full" :class="examBadge(s).cls">
                 📅 {{ examBadge(s).label.toLowerCase() }} {{ examBadge(s).shortLabel }}
               </p>
@@ -1759,6 +1900,22 @@
                 <button @click="addExtraExamDate(activeSubject)" class="btn-ghost !text-xs !p-1 opacity-80" title="Přidá další termín u tohohle předmětu (např. zápočet, dílčí test) - nezávisle na hlavní zkoušce výš">➕ Přidat termín</button>
               </div>
             </div>
+            <p v-if="activeSubjectStudyPlan" class="text-xs opacity-80 mt-2" title="Appka spočítala z počtu zápisů, vlastních otázek a rozborů vět u tohoto předmětu a dní zbývajících do nejbližšího termínu">
+              📐 Studijní plán: {{ activeSubjectStudyPlan.itemCount }} {{ pluralize(activeSubjectStudyPlan.itemCount, 'položka', 'položky', 'položek') }} (zápisy/otázky) za {{ activeSubjectStudyPlan.daysLeft }} {{ pluralize(activeSubjectStudyPlan.daysLeft, 'den', 'dny', 'dní') }} → cca <b>{{ activeSubjectStudyPlan.perDay }}</b> / den, abys vše aspoň jednou prošel/prošla.
+            </p>
+            <div class="flex items-center flex-wrap gap-1.5 mt-2">
+              <span class="text-xs opacity-80">📁</span>
+              <input
+                list="subject-folder-options"
+                :value="activeSubject.folder || ''"
+                @change="setSubjectFolder(activeSubject, $event.target.value)"
+                type="text" placeholder="Složka (např. Zimní semestr)"
+                class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20"
+              />
+              <datalist id="subject-folder-options">
+                <option v-for="f in subjectFolders" :key="f" :value="f"></option>
+              </datalist>
+            </div>
             <div v-if="activeSubjectIsMath" class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">🎚️ Obtížnost:</span>
               <button
@@ -1788,6 +1945,7 @@
           <button @click="exportSubjectCheatSheet(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Sestaví jednostránkový tahák se zápisy do zkoušky (🎓), vlastními otázkami, rozbory vět a zvýrazněnými nejslabšími místy">🗒️ Tahák ke zkoušce</button>
           <button @click="exportSubjectData(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Stáhne tento předmět jako soubor - hodí se na sdílení se spolužákem nebo přenos na jiné zařízení">📤 Export předmětu</button>
           <button @click="shareSubject(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vytvoří odkaz, přes který si kdokoliv (bez hesla/účtu) přečte zápisky tohoto předmětu - jen ke čtení, bez možnosti úprav">🔗 Sdílet</button>
+          <button @click="openChallengeModal(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm" title="Vygeneruje krátký kvíz z tohohle předmětu a odkaz, který spolužák vyplní bez appky/účtu - appka pak ukáže srovnání skóre">🏆 Vyzvat spolužáka</button>
           <button @click="requestDeleteSubject(activeSubject.id)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🗑️ Smazat předmět</button>
         </div>
       </div>
@@ -2103,6 +2261,7 @@
                 </label>
                 <button type="button" @click="openOcrPicker(noteForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
                 <button type="button" @click="openImportTextPicker(noteForm)" class="fmt-btn" title="Nahraje textový (.txt) soubor a jeho obsah vloží do zápisu - alternativa k ručnímu psaní nebo OCR">📄 Import textu</button>
+                <button type="button" @click="openDrawModal(noteForm)" class="fmt-btn" title="Nakreslí jednoduchý náčrtek/diagram myší nebo prstem a vloží ho k zápisu jako obrázek">✏️ Nakreslit</button>
               </div>
               <textarea
                 ref="noteContentEl"
@@ -2214,6 +2373,7 @@
                       </label>
                       <button type="button" @click="openOcrPicker(editForm)" class="fmt-btn" title="Vyfotí/nahraje obrázek a pokusí se z něj rozpoznat text (čeština), který jde vložit do zápisu">📷 OCR z fotky</button>
                       <button type="button" @click="openImportTextPicker(editForm)" class="fmt-btn" title="Nahraje textový (.txt) soubor a jeho obsah vloží do zápisu - alternativa k ručnímu psaní nebo OCR">📄 Import textu</button>
+                      <button type="button" @click="openDrawModal(editForm)" class="fmt-btn" title="Nakreslí jednoduchý náčrtek/diagram myší nebo prstem a vloží ho k zápisu jako obrázek">✏️ Nakreslit</button>
                     </div>
                     <textarea ref="editContentEl" v-model="editForm.content" rows="4" class="input mb-2" placeholder="Obsah zápisu"></textarea>
                   </template>
@@ -2525,6 +2685,63 @@
   </Transition>
 
   <!-- ============================================================= -->
+  <!-- MODAL: VÝZVA SE SPOLUŽÁKEM -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="challengeModal.open" class="modal-overlay" @click.self="challengeModal.step === 'confirm' && closeChallengeModal()">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">🏆 Vyzvat spolužáka</h3>
+
+        <template v-if="challengeModal.step === 'confirm'">
+          <p class="text-slate-400 text-sm mb-4">
+            Appka z předmětu „{{ challengeModal.subject.name }}“ vybrala {{ challengeModal.questions.length }} {{ pluralize(challengeModal.questions.length, 'otázku', 'otázky', 'otázek') }}. Nejdřív si je sám/sama projdi (sebehodnocením, jako u kartiček) - teprve pak appka vytvoří odkaz i s tvým skóre, ať má spolužák s čím srovnávat.
+          </p>
+          <div class="flex justify-end gap-2">
+            <button @click="closeChallengeModal" class="btn-secondary text-sm">Zrušit</button>
+            <button @click="startChallengePlaying" class="btn-primary text-sm">▶️ Začít</button>
+          </div>
+        </template>
+
+        <template v-else-if="challengeModal.step === 'playing'">
+          <p class="text-slate-500 text-sm mb-3">Otázka {{ challengeModal.index + 1 }} / {{ challengeModal.questions.length }}</p>
+          <div class="bg-slate-800/50 rounded-xl p-5 text-center mb-2">
+            <p class="font-semibold mb-4">{{ challengeModalCurrentQuestion.q }}</p>
+            <button v-if="!challengeModal.revealed" @click="challengeModalReveal" class="btn-primary text-sm">👁️ Zobrazit odpověď</button>
+            <template v-else>
+              <p class="text-cyan-300 mb-4">{{ challengeModalCurrentQuestion.a }}</p>
+              <div class="flex justify-center gap-2">
+                <button @click="challengeModalGrade(false)" class="btn-secondary text-sm">❌ Nevěděl/a jsem to</button>
+                <button @click="challengeModalGrade(true)" class="btn-primary text-sm">✅ Věděl/a jsem to</button>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <template v-else>
+          <div v-if="challengeModal.loading" class="text-slate-500 text-sm py-6 text-center">Vytvářím odkaz na výzvu…</div>
+
+          <div v-else-if="challengeModal.error">
+            <p class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-3">{{ challengeModal.error }}</p>
+            <button @click="finishChallengeCreation" class="btn-primary text-sm">🔄 Zkusit znovu</button>
+          </div>
+
+          <div v-else-if="challengeModal.url">
+            <p class="text-slate-300 text-sm mb-3">Tvoje skóre: <b>{{ challengeModal.correctCount }} / {{ challengeModal.questions.length }}</b>. Odkaz pošli spolužákovi - po dohrání uvidí srovnání skóre.</p>
+            <div class="flex gap-2">
+              <input type="text" readonly :value="challengeModal.url" class="input flex-1 text-xs" @click="$event.target.select()">
+              <button @click="copyChallengeLink" class="btn-primary text-sm shrink-0">{{ challengeModal.copied ? '✅ Zkopírováno' : '📋 Kopírovat' }}</button>
+            </div>
+          </div>
+        </template>
+
+        <div class="flex justify-end mt-4" v-if="challengeModal.step !== 'confirm'">
+          <button @click="closeChallengeModal" class="btn-secondary text-sm">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
   <!-- MODAL: PŘIJETÍ SDÍLENÉHO TEXTU/ODKAZU Z JINÉ APPKY (Web Share Target) -->
   <!-- ============================================================= -->
   <Transition name="modal">
@@ -2552,6 +2769,37 @@
         <div class="flex justify-end gap-2 mt-4">
           <button @click="dismissIncomingShare" class="btn-secondary text-sm">Zahodit</button>
           <button v-if="subjects.length > 0" @click="saveIncomingShareAsNote" class="btn-primary text-sm">💾 Uložit jako zápis</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: KRESLENÍ DO ZÁPISKŮ -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="drawModal.open" class="modal-overlay" @click.self="closeDrawModal">
+      <div class="modal-card !max-w-lg">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">✏️ Nakreslit náčrtek</h3>
+        <p class="text-slate-400 text-sm mb-3">Nakresli náčrtek nebo diagram myší/prstem - po vložení se přidá k zápisu jako obrázek (dá se pak podepsat popiskem jako běžná fotka).</p>
+        <div class="flex items-center gap-3 mb-3">
+          <input type="color" v-model="drawModal.color" class="w-9 h-9 rounded cursor-pointer border border-slate-700 bg-transparent" title="Barva štětce" />
+          <input type="range" min="1" max="16" v-model.number="drawModal.size" class="flex-1" title="Tloušťka štětce" />
+          <button type="button" @click="clearDrawCanvas" class="btn-ghost !text-xs shrink-0">🗑️ Vymazat</button>
+        </div>
+        <canvas
+          ref="drawCanvasEl"
+          width="600" height="400"
+          class="w-full rounded-lg border border-slate-700 bg-white touch-none cursor-crosshair"
+          style="aspect-ratio: 3 / 2;"
+          @pointerdown="drawStart"
+          @pointermove="drawMove"
+          @pointerup="drawEnd"
+          @pointerleave="drawEnd"
+        ></canvas>
+        <div class="flex justify-end gap-2 mt-4">
+          <button @click="closeDrawModal" class="btn-secondary text-sm">Zrušit</button>
+          <button @click="insertDrawingIntoNote" class="btn-primary text-sm">➕ Vložit do zápisu</button>
         </div>
       </div>
     </div>
@@ -2633,6 +2881,63 @@
             <figcaption v-if="img.caption" class="text-xs text-slate-500 mt-1">{{ img.caption }}</figcaption>
           </figure>
         </div>
+      </div>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-10">Vytvořeno ve <a href="?" class="text-cyan-400 hover:underline">Studijním Hubu</a> — appce na procvičování a zápisky do školy.</p>
+  </div>
+
+</template>
+<template v-else-if="challengeView.active">
+
+  <!-- ============================================================= -->
+  <!-- HRANÍ VÝZVY OD SPOLUŽÁKA (?challenge=<id> v adrese) -->
+  <!-- Zobrazí se místo celé appky - krátký kvíz bez editace/appky na -->
+  <!-- pozadí, na konci srovnání se skóre tvůrce výzvy (viz openChallengeModal -->
+  <!-- / loadChallengeFromUrl / challengeView v hlavním JS bloku výš). -->
+  <!-- ============================================================= -->
+  <div class="max-w-xl mx-auto px-6 md:px-12 py-10">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
+      <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
+      <span class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 ml-2">🏆 výzva od spolužáka</span>
+    </div>
+
+    <div v-if="challengeView.loading" class="text-center py-20 text-slate-400">Načítám výzvu…</div>
+
+    <div v-else-if="challengeView.error" class="bg-rose-950/30 border border-rose-800/50 rounded-xl p-6 text-center">
+      <p class="text-rose-300 font-semibold mb-1">Výzvu se nepodařilo načíst</p>
+      <p class="text-slate-400 text-sm">{{ challengeView.error }}</p>
+    </div>
+
+    <div v-else-if="challengeView.data">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-3xl">{{ challengeView.data.subjectEmoji }}</span>
+        <h1 class="text-2xl font-bold">{{ challengeView.data.subjectName }}</h1>
+      </div>
+
+      <div v-if="!challengeView.done">
+        <p class="text-slate-500 text-sm mb-6">Otázka {{ challengeView.index + 1 }} / {{ challengeView.data.questions.length }}</p>
+        <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-6 text-center">
+          <p class="text-lg font-semibold mb-4">{{ challengeViewCurrentQuestion.q }}</p>
+          <button v-if="!challengeView.revealed" @click="challengeViewReveal" class="btn-primary">👁️ Zobrazit odpověď</button>
+          <template v-else>
+            <p class="text-cyan-300 text-lg mb-5">{{ challengeViewCurrentQuestion.a }}</p>
+            <div class="flex justify-center gap-3">
+              <button @click="challengeViewGrade(false)" class="btn-secondary">❌ Nevěděl/a jsem to</button>
+              <button @click="challengeViewGrade(true)" class="btn-primary">✅ Věděl/a jsem to</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div v-else class="text-center py-6">
+        <p class="text-4xl mb-3">{{ challengeView.correctCount > challengeView.data.creatorScore ? '🏆' : (challengeView.correctCount === challengeView.data.creatorScore ? '🤝' : '💪') }}</p>
+        <p class="text-xl font-bold mb-1">Tvoje skóre: {{ challengeView.correctCount }} / {{ challengeView.data.questions.length }}</p>
+        <p class="text-slate-400 mb-4">Skóre tvůrce výzvy: {{ challengeView.data.creatorScore }} / {{ challengeView.data.total }}</p>
+        <p class="text-slate-500 text-sm">
+          {{ challengeView.correctCount > challengeView.data.creatorScore ? 'Porazil/a jsi tvůrce výzvy! 🎉' : (challengeView.correctCount === challengeView.data.creatorScore ? 'Remíza - stejné skóre!' : 'Tentokrát to vyhrál tvůrce výzvy - zkus to znovu?') }}
+        </p>
       </div>
     </div>
 
@@ -2770,6 +3075,21 @@ function buildReportUrl(reportId) {
   const url = new URL(window.location.href);
   url.hash = '';
   url.search = '?report=' + reportId;
+  return url.toString();
+}
+
+// Výzva se spolužákem - stejný princip jako sdílení/report výš (samostatný,
+// neuhodnutelný uzel v databázi), obsahuje krátký kvíz (otázka/odpověď) z
+// jednoho předmětu plus skóre TVŮRCE výzvy - appka pak spolužákovi, který
+// odkaz otevře bez appky/účtu, po dohrání ukáže srovnání obou skóre. Stejně
+// jako u publicShares/publicReports je potřeba mít ve Firebase konzoli
+// povolený i tenhle uzel ("publicChallenges"), jinak appka o tom uživatele
+// informuje přímo v UI.
+const CHALLENGE_PATH_PREFIX = '/publicChallenges/';
+function buildChallengeUrl(challengeId) {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '?challenge=' + challengeId;
   return url.toString();
 }
 
@@ -3817,6 +4137,10 @@ function normalizeSubject(raw, fallbackId) {
     attemptsCount: (raw && Number.isFinite(raw.attemptsCount)) ? raw.attemptsCount : 0,
     lastPracticedAt: (raw && typeof raw.lastPracticedAt === 'string' && raw.lastPracticedAt) ? raw.lastPracticedAt : null,
     archived: !!(raw && raw.archived),
+    // Volitelná složka/kategorie (např. "Zimní semestr", "Maturita") - volný
+    // text, appka z existujících hodnot napříč předměty jen skládá nabídku
+    // pro autocomplete (viz subjectFolders) a filtr na dashboardu.
+    folder: (raw && typeof raw.folder === 'string' && raw.folder.trim()) ? raw.folder.trim() : null,
     examDate: (raw && typeof raw.examDate === 'string' && raw.examDate) ? raw.examDate : null,
     // Doplňkové termíny (zápočet, dílčí test...) - viz addExtraExamDate/collectExamMilestones.
     extraExamDates: (Array.isArray(raw && raw.extraExamDates) ? raw.extraExamDates : [])
@@ -4034,6 +4358,12 @@ function parseStatsJson(raw) {
     streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
     // Podrobný deník procvičování - viz logPracticeEvent.
     practiceLog: [],
+    // Rozvrh hodin (kdy máš ve škole který předmět) - viz addTimetableSlot.
+    timetable: {},
+    // Vlastní cíle (např. "100 příkladů tento týden") - viz addGoal/goalProgress.
+    goals: [],
+    // Sledování aktivního času s appkou otevřenou - viz addStudySeconds.
+    studyTimeByDay: {},
   };
   try {
     if (raw) {
@@ -4060,6 +4390,9 @@ function parseStatsJson(raw) {
         // zápisu (viz logPracticeEvent) - .slice(-300) tady je jen pojistka
         // pro data ručně vložená/upravená mimo appku.
         practiceLog: Array.isArray(parsed && parsed.practiceLog) ? parsed.practiceLog.slice(-300) : [],
+        timetable: (parsed && typeof parsed.timetable === 'object' && parsed.timetable) || {},
+        goals: Array.isArray(parsed && parsed.goals) ? parsed.goals : [],
+        studyTimeByDay: (parsed && typeof parsed.studyTimeByDay === 'object' && parsed.studyTimeByDay) || {},
       };
     }
   } catch (e) {
@@ -4945,6 +5278,7 @@ const app = createApp({
       totalSolved: 0, totalAttempts: 0, currentStreak: 0, bestStreak: 0, dailyHistory: {}, dailyAttempts: {}, mistakeCounts: {}, perfectSessions: 0, celebratedBadges: [], srs: {},
       streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
       practiceLog: [],
+      timetable: {}, goals: [], studyTimeByDay: {},
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -5086,6 +5420,9 @@ const app = createApp({
               streakFreezeCreditWeekKey: typeof remote.stats.streakFreezeCreditWeekKey === 'string' ? remote.stats.streakFreezeCreditWeekKey : null,
               streakFreezeUsedDates: Array.isArray(remote.stats.streakFreezeUsedDates) ? remote.stats.streakFreezeUsedDates.slice(-60) : [],
               practiceLog: Array.isArray(remote.stats.practiceLog) ? remote.stats.practiceLog.slice(-300) : [],
+              timetable: (remote.stats.timetable && typeof remote.stats.timetable === 'object') ? remote.stats.timetable : {},
+              goals: Array.isArray(remote.stats.goals) ? remote.stats.goals : [],
+              studyTimeByDay: (remote.stats.studyTimeByDay && typeof remote.stats.studyTimeByDay === 'object') ? remote.stats.studyTimeByDay : {},
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
@@ -5253,6 +5590,127 @@ const app = createApp({
         // stejné jako u copyShareLink výš - odkaz je i vypsaný v textovém poli
       }
     }
+
+    /* ---------- Výzva se spolužákem (tvorba) ----------
+       Appka z předmětu sestaví krátký kvíz (líc/rub dvojice ze stejného
+       zdroje jako export do Anki - buildAnkiExport), uživatel si ho nejdřív
+       sám/sama projde (sebehodnocením, stejně jako u kartiček - appka
+       schválně nezkouší automaticky vyhodnocovat libovolně dlouhé textové
+       odpovědi), a teprve POTOM appka vytvoří odkaz i se svým skóre, aby
+       spolužák po dohrání uviděl rovnou srovnání. */
+    const CHALLENGE_SIZE = 8;
+    const challengeModal = reactive({
+      open: false, step: 'confirm', subject: null, questions: [], index: 0, revealed: false,
+      correctCount: 0, loading: false, error: '', url: '', copied: false,
+    });
+    function openChallengeModal(subject) {
+      if (!subject) return;
+      const rows = buildAnkiExport(subject);
+      if (!rows.length) {
+        alert('Tenhle předmět zatím nemá dost obsahu (vlastní otázky, zápisy ani rozbory vět) na to, aby z něj šla sestavit výzva.');
+        return;
+      }
+      const shuffled = shuffledIndices(rows.length).map((i) => rows[i]);
+      challengeModal.subject = subject;
+      challengeModal.questions = shuffled.slice(0, Math.min(CHALLENGE_SIZE, shuffled.length)).map(([q, a]) => ({ q, a }));
+      challengeModal.step = 'confirm';
+      challengeModal.index = 0;
+      challengeModal.revealed = false;
+      challengeModal.correctCount = 0;
+      challengeModal.loading = false;
+      challengeModal.error = '';
+      challengeModal.url = '';
+      challengeModal.copied = false;
+      challengeModal.open = true;
+    }
+    function closeChallengeModal() { challengeModal.open = false; }
+    function startChallengePlaying() { challengeModal.step = 'playing'; }
+    function challengeModalReveal() { challengeModal.revealed = true; }
+    function challengeModalGrade(correct) {
+      if (correct) challengeModal.correctCount++;
+      challengeModal.revealed = false;
+      if (challengeModal.index + 1 >= challengeModal.questions.length) {
+        challengeModal.step = 'done';
+        finishChallengeCreation();
+      } else {
+        challengeModal.index++;
+      }
+    }
+    async function finishChallengeCreation() {
+      challengeModal.loading = true;
+      challengeModal.error = '';
+      try {
+        const challengeId = generateShareId();
+        const payload = {
+          subjectName: challengeModal.subject.name,
+          subjectEmoji: challengeModal.subject.emoji,
+          questions: challengeModal.questions.map((q) => ({ q: q.q, a: q.a })),
+          creatorScore: challengeModal.correctCount,
+          total: challengeModal.questions.length,
+          createdAt: Date.now(),
+        };
+        const res = await fetch(FIREBASE_DB_URL + CHALLENGE_PATH_PREFIX + challengeId + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        challengeModal.url = buildChallengeUrl(challengeId);
+      } catch (e) {
+        console.warn('Výzvu se nepodařilo vytvořit.', e);
+        challengeModal.error = 'Výzvu se teď nepodařilo vytvořit. Zkontroluj připojení k internetu, případně to, jestli má appka ve Firebase konzoli povolený i uzel "publicChallenges" (stejně jako u sdílení předmětu/reportu).';
+      } finally {
+        challengeModal.loading = false;
+      }
+    }
+    async function copyChallengeLink() {
+      if (!challengeModal.url) return;
+      try {
+        await navigator.clipboard.writeText(challengeModal.url);
+        challengeModal.copied = true;
+        setTimeout(() => { challengeModal.copied = false; }, 2500);
+      } catch (e) {
+        // stejné jako u copyShareLink výš - odkaz je i vypsaný v textovém poli
+      }
+    }
+    const challengeModalCurrentQuestion = computed(() => challengeModal.questions[challengeModal.index] || null);
+
+    /* ---------- Výzva se spolužákem (prohlížení/hraní) ----------
+       Když spolužák otevře odkaz s ?challenge=<id>, appka mu jen přehraje
+       stejnou sadu otázek (bez editace/appky na pozadí, žádný účet) a na
+       konci ukáže srovnání se skóre tvůrce výzvy. Nic se nezapisuje zpátky -
+       appka tak zůstává jednoduchá i pro víc kamarádů, kteří stejný odkaz
+       otevřou nezávisle na sobě. */
+    const challengeView = reactive({
+      active: false, loading: false, error: '', data: null, index: 0, revealed: false, correctCount: 0, done: false,
+    });
+    async function loadChallengeFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const challengeId = params.get('challenge');
+      if (!challengeId || !/^[a-f0-9]+$/i.test(challengeId)) return;
+      challengeView.active = true;
+      challengeView.loading = true;
+      try {
+        const res = await fetch(FIREBASE_DB_URL + CHALLENGE_PATH_PREFIX + challengeId + '.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || !Array.isArray(data.questions) || !data.questions.length) throw new Error('Výzva nenalezena');
+        challengeView.data = data;
+      } catch (e) {
+        console.warn('Výzvu se nepodařilo načíst.', e);
+        challengeView.error = 'Tenhle odkaz na výzvu je buď neplatný, nebo už neexistuje.';
+      } finally {
+        challengeView.loading = false;
+      }
+    }
+    function challengeViewReveal() { challengeView.revealed = true; }
+    function challengeViewGrade(correct) {
+      if (correct) challengeView.correctCount++;
+      challengeView.revealed = false;
+      if (challengeView.index + 1 >= challengeView.data.questions.length) challengeView.done = true;
+      else challengeView.index++;
+    }
+    const challengeViewCurrentQuestion = computed(() => (challengeView.data && !challengeView.done) ? challengeView.data.questions[challengeView.index] : null);
 
     /* Prohlížení reportu (?report=<id> v adrese appky) - viz šablona "v-else"
        pod <div id="app"> (třetí, poslední větev vedle appky/sdíleného
@@ -5654,6 +6112,38 @@ const app = createApp({
         .slice(0, 20);
     });
 
+    /* ---------- Nejslabší témata podle TYPU ----------
+       Přehled výš (weakestSpotsOverview) je po jednotlivých otázkách/zápisech -
+       u procedurálně generovaných příkladů (matematika/čeština/angličtina)
+       má ale appka navíc rozpoznatelný PODTYP (viz MATH_SUBTYPE_LABELS a
+       spol.), takže jde chyby sečíst po tématech ("zlomky", "shoda podmětu s
+       přísudkem"...), ne jen po jednotlivých znění. Vlastní otázky/zápisy/
+       rozbory vět žádný takový podtyp nemají (jsou to jednotlivé, na sobě
+       nezávislé položky) - ty proto zůstávají jen v přehledu podle otázek. */
+    const showWeakTopics = ref(false);
+    const weakestTopicsOverview = computed(() => {
+      const mc = stats.mistakeCounts || {};
+      const buckets = {};
+      for (const [key, count] of Object.entries(mc)) {
+        if (count <= 0) continue;
+        const parts = key.split(':');
+        const kind = parts[0];
+        const subtype = parts[1];
+        if (!subtype) continue;
+        let label;
+        if (kind === 'math') label = MATH_SUBTYPE_LABELS[subtype];
+        else if (kind === 'czech') label = CZECH_SUBTYPE_LABELS[subtype];
+        else if (kind === 'english') label = ENGLISH_SUBTYPE_LABELS[subtype];
+        else continue;
+        if (!label) continue;
+        const emoji = kind === 'math' ? '📐' : kind === 'czech' ? '📖' : '🗣️';
+        const bucketKey = kind + ':' + subtype;
+        if (!buckets[bucketKey]) buckets[bucketKey] = { key: bucketKey, label: `${emoji} ${label}`, count: 0 };
+        buckets[bucketKey].count += count;
+      }
+      return Object.values(buckets).sort((a, b) => b.count - a.count).slice(0, 10);
+    });
+
     /* ---------- Kalendář naplánovaného opakování (SRS) ----------
        Appka už dřív sama počítala, kdy se má otázka podle rozloženého
        opakování objevit znovu (viz srsGrade/srsWeight), ale uživatel nikde
@@ -5927,8 +6417,24 @@ const app = createApp({
 
     /* ---------- Archivace předmětů ---------- */
     const showArchived = ref(false);
+    /* ---------- Složky/kategorie předmětů ----------
+       Volný text u předmětu (subject.folder, viz normalizeSubject) - appka
+       z existujících hodnot jen sestaví přehled pro filtr na dashboardu a
+       pro autocomplete při zadávání. Žádná samostatná datová struktura navíc -
+       "složka" je čistě odvozená vlastnost jednotlivých předmětů. */
+    const folderFilter = ref(null);
+    const subjectFolders = computed(() => {
+      const set = new Set();
+      subjects.forEach((s) => { if (s.folder) set.add(s.folder); });
+      return [...set].sort((a, b) => a.localeCompare(b, 'cs'));
+    });
+    function setSubjectFolder(subject, value) {
+      if (!subject) return;
+      const trimmed = String(value || '').trim();
+      subject.folder = trimmed || null;
+    }
     const visibleSubjects = computed(() =>
-      subjects.filter((s) => showArchived.value || !s.archived)
+      subjects.filter((s) => (showArchived.value || !s.archived) && (!folderFilter.value || s.folder === folderFilter.value))
     );
     watch(() => visibleSubjects.value.length, () => nextTick(updateScrollState));
     const archivedCount = computed(() => subjects.filter((s) => s.archived).length);
@@ -6070,6 +6576,137 @@ const app = createApp({
         best.score = Math.max(0, best.score - 40); // po přiřazení dne "odpočine", ať dostanou šanci i ostatní
       }
       return days;
+    });
+
+    /* ---------- Rozvrh hodin ----------
+       Na rozdíl od "Týdenní plánovač" výš (appka SAMA doporučuje, co se učit)
+       jde o skutečný rozvrh - kdy má uživatel který předmět opravdu VE
+       ŠKOLE. Appka ho jen ukládá a na dashboardu ukáže, co je dnes na
+       programu (s odkazem rovnou na procvičení). Klíč dne je string '0'-'6'
+       podle Date.getDay() (0 = neděle), ať jde JSON.stringify/parse bez
+       potíží s číselnými klíči objektu. */
+    const DAY_LABELS = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+    const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // appka zobrazuje týden od pondělí, ne od neděle
+    const showTimetable = ref(false);
+    const timetableForm = reactive({ day: new Date().getDay(), subjectId: null, time: '08:00' });
+    function timetableSlotsForDay(day) {
+      const dayKey = String(day);
+      const list = (stats.timetable && Array.isArray(stats.timetable[dayKey])) ? stats.timetable[dayKey] : [];
+      return [...list]
+        .map((slot) => ({ ...slot, subject: subjects.find((s) => s.id === slot.subjectId) || null }))
+        .filter((x) => x.subject)
+        .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    }
+    function addTimetableSlot() {
+      if (timetableForm.subjectId == null) return;
+      if (!stats.timetable) stats.timetable = {};
+      const dayKey = String(timetableForm.day);
+      if (!Array.isArray(stats.timetable[dayKey])) stats.timetable[dayKey] = [];
+      stats.timetable[dayKey].push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        subjectId: timetableForm.subjectId,
+        time: timetableForm.time || '',
+      });
+      timetableForm.time = '';
+    }
+    function removeTimetableSlot(day, slotId) {
+      const dayKey = String(day);
+      if (!stats.timetable || !Array.isArray(stats.timetable[dayKey])) return;
+      const idx = stats.timetable[dayKey].findIndex((x) => x.id === slotId);
+      if (idx !== -1) stats.timetable[dayKey].splice(idx, 1);
+    }
+    const todayTimetable = computed(() => timetableSlotsForDay(new Date().getDay()));
+
+    /* ---------- Vlastní cíle ----------
+       Dva typy cíle - "celkem vyřešeno" (čte se z stats.dailyHistory, stejný
+       zdroj jako graf pokroku výš) a "u konkrétního předmětu" (čte se z
+       stats.practiceLog, viz logPracticeEvent - jediné místo, které si
+       pamatuje KTERÝ předmět byl procvičován kdy, ne jen souhrnné číslo za
+       den). Cíle appka počítá vždy za AKTUÁLNÍ kalendářní týden (pondělí-
+       neděle, viz mondayOfWeek výš) - týden se v neděli o půlnoci potichu
+       "vynuluje" tím, že se posune okno, ze kterého se progress počítá, ne
+       mazáním - appka žádnou historii minulých týdnů u cílů neukládá. */
+    const showGoals = ref(false);
+    const newGoalForm = reactive({ type: 'total', subjectId: null, target: 20 });
+    function addGoal() {
+      const target = Math.round(Number(newGoalForm.target));
+      if (!target || target <= 0) return;
+      if (newGoalForm.type === 'subject' && newGoalForm.subjectId == null) return;
+      if (!Array.isArray(stats.goals)) stats.goals = [];
+      stats.goals.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        type: newGoalForm.type,
+        subjectId: newGoalForm.type === 'subject' ? newGoalForm.subjectId : null,
+        target,
+        createdAt: new Date().toISOString(),
+      });
+      newGoalForm.target = 20;
+    }
+    function removeGoal(id) {
+      if (!Array.isArray(stats.goals)) return;
+      const idx = stats.goals.findIndex((g) => g.id === id);
+      if (idx !== -1) stats.goals.splice(idx, 1);
+    }
+    function goalWeekProgress(goal) {
+      const monday = mondayOfWeek(new Date());
+      if (goal.type === 'subject') {
+        const mondayTime = monday.getTime();
+        return (stats.practiceLog || []).filter((e) => e.subjectId === goal.subjectId && new Date(e.ts).getTime() >= mondayTime).length;
+      }
+      let sum = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(d.getDate() + i);
+        sum += (stats.dailyHistory[dateKey(d)] || 0);
+      }
+      return sum;
+    }
+    const activeGoalsWithProgress = computed(() => (stats.goals || []).map((g) => {
+      const progress = goalWeekProgress(g);
+      const percent = g.target > 0 ? Math.min(100, Math.round((progress / g.target) * 100)) : 0;
+      return {
+        ...g,
+        progress,
+        percent,
+        done: progress >= g.target,
+        subject: g.type === 'subject' ? (subjects.find((s) => s.id === g.subjectId) || null) : null,
+      };
+    }));
+
+    /* ---------- Sledování času u studia ----------
+       Appka nemá žádnou spolehlivou informaci o tom, kdy uživatel appku
+       doopravdy AKTIVNĚ používá (na rozdíl třeba o Pomodoro časovači, který
+       uživatel sám zapíná) - tohle je proto záměrně jen "appka otevřená a
+       karta viditelná na popředí" (document.hidden), přesně tak appka o
+       sobě i mluví v UI, ať si uživatel nemyslí, že jde o měření skutečné
+       pozornosti/soustředění. Přičítá se po STUDY_TIME_TICK_SECONDS, dokud
+       je appka na popředí - viz startStudyTimeTracking, volané z onMounted. */
+    const STUDY_TIME_TICK_SECONDS = 30;
+    let studyTimeInterval = null;
+    function addStudySeconds(sec) {
+      if (!stats.studyTimeByDay) stats.studyTimeByDay = {};
+      const today = dateKey(new Date());
+      stats.studyTimeByDay[today] = (stats.studyTimeByDay[today] || 0) + sec;
+    }
+    function startStudyTimeTracking() {
+      if (studyTimeInterval) return;
+      studyTimeInterval = setInterval(() => {
+        if (!document.hidden) addStudySeconds(STUDY_TIME_TICK_SECONDS);
+      }, STUDY_TIME_TICK_SECONDS * 1000);
+    }
+    function stopStudyTimeTracking() {
+      if (studyTimeInterval) { clearInterval(studyTimeInterval); studyTimeInterval = null; }
+    }
+    const todayStudyMinutes = computed(() => Math.round((stats.studyTimeByDay[dateKey(new Date())] || 0) / 60));
+    const weekStudyMinutes = computed(() => {
+      const monday = mondayOfWeek(new Date());
+      let sum = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(d.getDate() + i);
+        sum += (stats.studyTimeByDay[dateKey(d)] || 0);
+      }
+      return Math.round(sum / 60);
     });
 
     /* ---------- Připomínky (místní notifikace prohlížeče) ----------
@@ -6222,6 +6859,24 @@ const app = createApp({
       }
       return best;
     }
+    /* ---------- Kalkulačka studijního plánu ----------
+       Čistě odvozená pomůcka, žádná vlastní data navíc - z počtu položek
+       (zápisy + vlastní otázky + rozbory vět) u předmětu a dní zbývajících
+       do NEJBLIŽŠÍHO termínu (viz examInfo výš) spočítá, kolik položek denně
+       by bylo potřeba projít, aby appka stihla ukázat úplně všechno aspoň
+       jednou před zkouškou. Vrací null, pokud předmět nemá nastavený žádný
+       termín, nebo pokud zatím nemá žádný obsah k naplánování. */
+    function studyPlanForSubject(subject) {
+      if (!subject) return null;
+      const info = examInfo(subject);
+      if (!info || info.days < 0) return null;
+      const itemCount = (subject.notes || []).length + (subject.customQuestions || []).length + (subject.sentenceAnalyses || []).length;
+      if (itemCount === 0) return null;
+      const daysLeft = Math.max(1, info.days);
+      const perDay = Math.max(1, Math.ceil(itemCount / daysLeft));
+      return { itemCount, daysLeft, perDay };
+    }
+    const activeSubjectStudyPlan = computed(() => studyPlanForSubject(activeSubject.value));
     /* ---------- Doplňkové termíny u předmětu (zápočet, dílčí test...) ----
        Na rozdíl od subject.examDate výš (jedna hlavní zkouška) jde tohle
        nastavit vícekrát u stejného předmětu - appka je se stejnou vahou
@@ -6295,6 +6950,7 @@ const app = createApp({
         attemptsCount: 0,
         lastPracticedAt: null,
         archived: false,
+        folder: null,
         examDate: null,
         extraExamDates: [],
         difficulty: 'medium',
@@ -6766,6 +7422,93 @@ const app = createApp({
       const m = Math.floor(s / 60);
       const r = s % 60;
       return `${m}:${String(r).padStart(2, '0')}`;
+    }
+
+    /* ---------- Kreslení do zápisků ----------
+       Jednoduché plátno (canvas), kam appka umí nakreslit rukou/myší náčrtek
+       nebo diagram - výsledek se ulož jako obyčejný obrázek přes stejnou
+       infrastrukturu jako fotky (targetState.images, viz handleNoteImageUpload
+       výš), takže appka nikde jinde nemusí rozlišovat "nakreslený" a
+       "vyfocený" obrázek - v zápisu, PDF exportu i taháku vypadají stejně. */
+    const drawModal = reactive({ open: false, targetState: null, color: '#0891b2', size: 4 });
+    const drawCanvasEl = ref(null);
+    let drawingActive = false;
+    let drawLastPoint = null;
+    function openDrawModal(targetState) {
+      if (!targetState) return;
+      if (!targetState.images) targetState.images = [];
+      if (targetState.images.length >= MAX_IMAGES_PER_NOTE) {
+        alert(`K jednomu zápisu lze přidat maximálně ${MAX_IMAGES_PER_NOTE} obrázky.`);
+        return;
+      }
+      drawModal.targetState = targetState;
+      drawModal.open = true;
+      nextTick(() => {
+        const canvas = drawCanvasEl.value;
+        if (!canvas || !canvas.getContext) return;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      });
+    }
+    function closeDrawModal() {
+      drawModal.open = false;
+      drawModal.targetState = null;
+      drawingActive = false;
+      drawLastPoint = null;
+    }
+    function drawPointerPos(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width || canvas.width);
+      const scaleY = canvas.height / (rect.height || canvas.height);
+      return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+    }
+    function drawStart(e) {
+      const canvas = drawCanvasEl.value;
+      if (!canvas) return;
+      drawingActive = true;
+      drawLastPoint = drawPointerPos(e, canvas);
+    }
+    function drawMove(e) {
+      if (!drawingActive) return;
+      const canvas = drawCanvasEl.value;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const point = drawPointerPos(e, canvas);
+      ctx.strokeStyle = drawModal.color;
+      ctx.lineWidth = drawModal.size;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(drawLastPoint.x, drawLastPoint.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+      drawLastPoint = point;
+    }
+    function drawEnd() {
+      drawingActive = false;
+      drawLastPoint = null;
+    }
+    function clearDrawCanvas() {
+      const canvas = drawCanvasEl.value;
+      if (!canvas || !canvas.getContext) return;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    function insertDrawingIntoNote() {
+      const canvas = drawCanvasEl.value;
+      const targetState = drawModal.targetState;
+      if (!canvas || !targetState) return;
+      if (!targetState.images) targetState.images = [];
+      if (targetState.images.length >= MAX_IMAGES_PER_NOTE) {
+        alert(`K jednomu zápisu lze přidat maximálně ${MAX_IMAGES_PER_NOTE} obrázky.`);
+        closeDrawModal();
+        return;
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      targetState.images.push({ src: dataUrl, caption: '' });
+      closeDrawModal();
     }
 
     /* ---------- Rozpoznávání textu z fotky (OCR) ----------
@@ -7341,6 +8084,9 @@ const app = createApp({
               streakFreezeCreditWeekKey: typeof importedStats.streakFreezeCreditWeekKey === 'string' ? importedStats.streakFreezeCreditWeekKey : null,
               streakFreezeUsedDates: Array.isArray(importedStats.streakFreezeUsedDates) ? importedStats.streakFreezeUsedDates.slice(-60) : [],
               practiceLog: Array.isArray(importedStats.practiceLog) ? importedStats.practiceLog.slice(-300) : [],
+              timetable: (importedStats.timetable && typeof importedStats.timetable === 'object') ? importedStats.timetable : {},
+              goals: Array.isArray(importedStats.goals) ? importedStats.goals : [],
+              studyTimeByDay: (importedStats.studyTimeByDay && typeof importedStats.studyTimeByDay === 'object') ? importedStats.studyTimeByDay : {},
             });
           }
           activeSubjectId.value = null;
@@ -8104,6 +8850,8 @@ const app = createApp({
         else if (showTrashModal.value) showTrashModal.value = false;
         else if (showShortcutsHelp.value) showShortcutsHelp.value = false;
         else if (shareModal.open) closeShareModal();
+        else if (drawModal.open) closeDrawModal();
+        else if (challengeModal.open && challengeModal.step === 'confirm') closeChallengeModal();
         return;
       }
 
@@ -8149,6 +8897,10 @@ const app = createApp({
       // statistiky, viz loadReportFromUrl/reportView výš.
       loadReportFromUrl();
       if (reportView.active) return;
+      // Stejný princip pro výzvu se spolužákem (?challenge=<id>) - viz
+      // loadChallengeFromUrl/challengeView výš.
+      loadChallengeFromUrl();
+      if (challengeView.active) return;
       // Vlastní data appky (předměty/statistiky/koš) se musí nejdřív doopravdy
       // načíst z IndexedDB (asynchronní) - teprve pak dává smysl cokoliv, co
       // s nimi pracuje (detekce sdílení volí výchozí předmět, synchronizace s
@@ -8160,6 +8912,7 @@ const app = createApp({
       // po ruce doopravdy načtená stats.dailyHistory.
       refreshStreakFreeze();
       detectIncomingShare();
+      startStudyTimeTracking();
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
       // Při startu appky se zkusí porovnat lokální data s cloudem a použije se
@@ -8184,6 +8937,7 @@ const app = createApp({
       clearTimedInterval();
       clearPomodoroInterval();
       stopDictation();
+      stopStudyTimeTracking();
     });
 
     return {
@@ -8198,6 +8952,7 @@ const app = createApp({
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
       showArchived, visibleSubjects, archivedCount,
+      folderFilter, subjectFolders, setSubjectFolder, studyPlanForSubject, activeSubjectStudyPlan,
       showAddModal, newSubject,
       confirmState,
       trash, showTrashModal, TRASH_RETENTION_DAYS,
@@ -8214,6 +8969,7 @@ const app = createApp({
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
       showWeakSpots, weakestSpotsOverview,
+      showWeakTopics, weakestTopicsOverview,
       showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel,
       showPracticeLog, practiceLogRecent, formatPracticeLogTime, clearPracticeLog,
       showTimeOfDayInsight, practiceByTimeOfDay, timeOfDayInsight, MIN_TIME_OF_DAY_SAMPLE,
@@ -8233,6 +8989,8 @@ const app = createApp({
       renderNoteContent, renderChecklistHtml, applyFormat, handleNoteImageUpload, removeComposingImage,
       shareModal, shareSubject, closeShareModal, copyShareLink, shareView,
       progressReportModal, shareProgressReport, closeProgressReportModal, copyProgressReportLink, reportView,
+      challengeModal, openChallengeModal, closeChallengeModal, startChallengePlaying, challengeModalReveal, challengeModalGrade, finishChallengeCreation, copyChallengeLink, challengeModalCurrentQuestion,
+      challengeView, challengeViewReveal, challengeViewGrade, challengeViewCurrentQuestion,
       dictationSupported, isDictatingTarget, toggleDictation,
       voiceRecordingSupported, voiceRecordingActive, voiceRecordingSeconds, isVoiceRecordingTarget,
       toggleVoiceRecording, removeVoiceNote, formatVoiceDuration, startVoiceRecording, stopVoiceRecording, cancelVoiceRecording,
@@ -8250,10 +9008,14 @@ const app = createApp({
       exportExamDatesToIcs,
       incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
+      drawModal, drawCanvasEl, openDrawModal, closeDrawModal, drawStart, drawMove, drawEnd, clearDrawCanvas, insertDrawingIntoNote,
       importTextFileEl, openImportTextPicker, handleImportTextFile,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
       newExtraExamLabel, addExtraExamDate, setExtraExamDate, removeExtraExamDate,
       showWeeklyPlan, weeklyPlan,
+      showTimetable, DAY_LABELS, DAY_ORDER, timetableForm, timetableSlotsForDay, addTimetableSlot, removeTimetableSlot, todayTimetable,
+      showGoals, newGoalForm, addGoal, removeGoal, activeGoalsWithProgress,
+      todayStudyMinutes, weekStudyMinutes, addStudySeconds,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
       heatmapCellClass, heatmapCellTitle,
