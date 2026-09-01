@@ -579,6 +579,8 @@
     line-height: 1.7;
   }
   .hint-box h4 { color: var(--accent-text); font-weight: 700; margin-bottom: 0.5rem; font-size: 0.95rem; }
+  .hint-image { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 0.6rem; padding: 0.6rem; margin-bottom: 0.75rem; text-align: center; }
+  .hint-image svg { max-width: 100%; height: auto; }
   .hint-box p { margin-bottom: 0.5rem; }
   .hint-box p:last-child { margin-bottom: 0; }
   .success-box {
@@ -2136,6 +2138,7 @@
             <Transition name="fade">
               <div v-if="quiz.showHint" class="hint-box">
                 <h4>{{ quiz.hintTitle }}</h4>
+                <div v-if="quiz.hintImage" class="hint-image" v-html="quiz.hintImage"></div>
                 <p v-for="(line, i) in quiz.hintBody" :key="i">{{ line }}</p>
               </div>
             </Transition>
@@ -4427,15 +4430,244 @@ function parseTrashJson(raw) {
  *  původnímu (jedinému) chování appky před přidáním nastavitelné obtížnosti,
  *  takže výchozí zážitek se přidáním téhle funkce nijak nezměnil. */
 const MATH_DIFFICULTY_RANGES = {
-  easy:   { aMax: 5,  xMax: 8,  bMax: 8,  denomMin: 2, denomMax: 6,  baseMin: 2,  baseMax: 20,  percents: [10, 20, 25, 50] },
-  medium: { aMax: 9,  xMax: 12, bMax: 15, denomMin: 2, denomMax: 9,  baseMin: 4,  baseMax: 60,  percents: [5, 10, 15, 20, 25, 30, 40, 50, 60, 75] },
-  hard:   { aMax: 15, xMax: 25, bMax: 30, denomMin: 4, denomMax: 14, baseMin: 10, baseMax: 150, percents: [5, 8, 12, 15, 18, 22, 28, 35, 42, 55, 65, 80, 85, 90] },
+  easy:   { aMax: 5,  xMax: 8,  bMax: 8,  denomMin: 2, denomMax: 6,  baseMin: 2,  baseMax: 20,  percents: [10, 20, 25, 50],
+            quadRoot: 6,  triLeg: 9,  seqStart: 10, seqDiff: 5,  seqRatio: [2, 3],       combN: 6,  combK: 3 },
+  medium: { aMax: 9,  xMax: 12, bMax: 15, denomMin: 2, denomMax: 9,  baseMin: 4,  baseMax: 60,  percents: [5, 10, 15, 20, 25, 30, 40, 50, 60, 75],
+            quadRoot: 10, triLeg: 15, seqStart: 20, seqDiff: 8,  seqRatio: [2, 3, 4],    combN: 8,  combK: 4 },
+  hard:   { aMax: 15, xMax: 25, bMax: 30, denomMin: 4, denomMax: 14, baseMin: 10, baseMax: 150, percents: [5, 8, 12, 15, 18, 22, 28, 35, 42, 55, 65, 80, 85, 90],
+            quadRoot: 15, triLeg: 24, seqStart: 40, seqDiff: 12, seqRatio: [2, 3, 4, 5], combN: 10, combK: 5 },
 };
+
+/* =====================================================================
+   OBRÁZKOVÉ NÁPOVĚDY (SVG schémata)
+   Appka nemá k dispozici žádné externí obrázky/fotky (je to jeden HTML
+   soubor bez serveru) - "obrázek" v nápovědě je proto vždy jednoduché,
+   appkou samotnou vykreslené vektorové schéma (inline SVG), které appka
+   vloží do DOM přes v-html (viz šablona - quiz.hintImage). Barvy jsou
+   zadané přes CSS proměnné appky (--accent-text, --page-text, ...), takže
+   schéma automaticky respektuje tmavý/světlý režim i vlastní akcentovou
+   barvu appky - s pevnou hex hodnotou jako fallbackem pro jistotu.
+   DŮLEŽITÉ pravidlo (platí pro všechny generátory níž): schéma i doprovodný
+   text nápovědy vždy jen VYSVĚTLUJÍ POSTUP/PRAVIDLO (případně ho ukážou na
+   jiném, pevně daném příkladu) - nikdy nesmí prozradit VÝSLEDEK aktuální
+   generované otázky. */
+function svgWrap(viewBox, inner, maxWidth) {
+  return `<svg viewBox="${viewBox}" style="width:100%;max-width:${maxWidth || 340}px;height:auto;display:block;margin:0.35rem auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">${inner}</svg>`;
+}
+
+/** Rovnice jako váhy v rovnováze - pro lineární rovnice. */
+function svgBalanceScale(leftLabel, rightLabel) {
+  return svgWrap('0 0 300 160', `
+    <line x1="150" y1="40" x2="150" y2="120" stroke="var(--border-strong,#64748b)" stroke-width="4"/>
+    <polygon points="120,120 180,120 150,150" fill="var(--border-strong,#64748b)"/>
+    <line x1="40" y1="40" x2="260" y2="40" stroke="var(--accent-text,#67e8f9)" stroke-width="4"/>
+    <line x1="40" y1="40" x2="40" y2="70" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <line x1="260" y1="40" x2="260" y2="70" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <ellipse cx="40" cy="78" rx="36" ry="13" fill="none" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <ellipse cx="260" cy="78" rx="36" ry="13" fill="none" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <text x="40" y="82" text-anchor="middle" font-size="13" fill="var(--page-text,#e2e8f0)">${leftLabel}</text>
+    <text x="260" y="82" text-anchor="middle" font-size="13" fill="var(--page-text,#e2e8f0)">${rightLabel}</text>
+    <text x="150" y="18" text-anchor="middle" font-size="11" fill="var(--text-muted,#94a3b8)">obě strany musí zůstat v rovnováze</text>
+  `, 320);
+}
+
+/** Dva pruhy rozdělené na b, resp. d dílů se zvýrazněným počtem n1/n2 - pro sčítání zlomků. */
+function svgFractionBars(b, n1, d, n2) {
+  function bar(y, count, highlight, label) {
+    const w = 260, h = 26;
+    const segW = w / count;
+    let rects = '';
+    for (let i = 0; i < count; i++) {
+      const filled = i < highlight;
+      rects += `<rect x="${(i * segW).toFixed(1)}" y="0" width="${segW.toFixed(1)}" height="${h}" fill="${filled ? 'var(--accent-text,#67e8f9)' : 'none'}" fill-opacity="0.35" stroke="var(--border-strong,#64748b)" stroke-width="1"/>`;
+    }
+    return `<g transform="translate(10, ${y})">${rects}<text x="${w + 10}" y="${h / 2 + 4}" font-size="13" fill="var(--page-text,#e2e8f0)">${label}</text></g>`;
+  }
+  return svgWrap('0 0 400 90', `${bar(8, b, n1, `${n1}/${b}`)}${bar(48, d, n2, `${n2}/${d}`)}`, 380);
+}
+
+/** Jeden pruh 0-100 % se zvýrazněnou částí - pro procenta. */
+function svgPercentBar(percent) {
+  const w = 300, h = 34;
+  const fillW = (w * Math.min(100, Math.max(0, percent))) / 100;
+  const ticks = [0, 25, 50, 75, 100].map((t) => {
+    const x = (w * t) / 100;
+    return `<line x1="${x}" y1="${h}" x2="${x}" y2="${h + 6}" stroke="var(--text-muted,#94a3b8)" stroke-width="1"/><text x="${x}" y="${h + 20}" font-size="10" text-anchor="middle" fill="var(--text-muted,#94a3b8)">${t}%</text>`;
+  }).join('');
+  return svgWrap('0 0 320 70', `
+    <rect x="10" y="0" width="${w}" height="${h}" fill="none" stroke="var(--border-strong,#64748b)" stroke-width="1.5" rx="4"/>
+    <rect x="10" y="0" width="${fillW.toFixed(1)}" height="${h}" fill="var(--accent-text,#67e8f9)" fill-opacity="0.4" rx="4"/>
+    <text x="${(10 + fillW / 2).toFixed(1)}" y="${h / 2 + 4}" text-anchor="middle" font-size="12" fill="var(--page-text,#e2e8f0)">${percent} %</text>
+    <g transform="translate(10,0)">${ticks}</g>
+  `, 320);
+}
+
+/** Graf paraboly y = ax²+bx+c s vyznačeným vrcholem (kořeny se NEvyznačují, aby nápověda neprozradila výsledek). */
+function svgParabola(a, b, c) {
+  const vx = -b / (2 * a);
+  const vy = a * vx * vx + b * vx + c;
+  const xMin = vx - 4, xMax = vx + 4;
+  const samples = 32;
+  const pts = [];
+  for (let i = 0; i <= samples; i++) {
+    const x = xMin + ((xMax - xMin) * i) / samples;
+    pts.push([x, a * x * x + b * x + c]);
+  }
+  const ys = pts.map((p) => p[1]).concat([vy, 0]);
+  let yMin = Math.min(...ys), yMax = Math.max(...ys);
+  if (yMax === yMin) { yMax += 1; yMin -= 1; }
+  const W = 300, H = 190, pad = 18;
+  const sx = (x) => pad + ((x - xMin) / (xMax - xMin)) * (W - 2 * pad);
+  const sy = (y) => H - pad - ((y - yMin) / (yMax - yMin)) * (H - 2 * pad);
+  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p[0]).toFixed(1)} ${sy(p[1]).toFixed(1)}`).join(' ');
+  return svgWrap(`0 0 ${W} ${H}`, `
+    <line x1="0" y1="${sy(0).toFixed(1)}" x2="${W}" y2="${sy(0).toFixed(1)}" stroke="var(--border-strong,#64748b)" stroke-width="1"/>
+    <line x1="${sx(0).toFixed(1)}" y1="0" x2="${sx(0).toFixed(1)}" y2="${H}" stroke="var(--border-strong,#64748b)" stroke-width="1"/>
+    <path d="${path}" fill="none" stroke="var(--accent-text,#67e8f9)" stroke-width="2.5"/>
+    <circle cx="${sx(vx).toFixed(1)}" cy="${sy(vy).toFixed(1)}" r="4" fill="var(--page-text,#e2e8f0)"/>
+    <text x="10" y="14" font-size="10" fill="var(--text-muted,#94a3b8)">graf: y = ax² + bx + c (parabola)</text>
+  `, 320);
+}
+
+/** Pravoúhlý trojúhelník se stranami a, b, c a vyznačeným pravým úhlem - pro Pythagorovu větu. */
+function svgRightTriangle(a, b, c) {
+  const scale = 130 / Math.max(a, b);
+  const legA = a * scale, legB = b * scale;
+  const W = legA + 70, H = legB + 60;
+  const x0 = 40, y0 = H - 30, x1 = x0 + legA, y2 = y0 - legB;
+  return svgWrap(`0 0 ${W} ${H}`, `
+    <polygon points="${x0},${y0} ${x1},${y0} ${x0},${y2}" fill="var(--accent-text,#67e8f9)" fill-opacity="0.14" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <rect x="${x0}" y="${y0 - 14}" width="14" height="14" fill="none" stroke="var(--text-muted,#94a3b8)" stroke-width="1.5"/>
+    <text x="${(x0 + x1) / 2}" y="${y0 + 18}" text-anchor="middle" font-size="13" fill="var(--page-text,#e2e8f0)">a = ${a}</text>
+    <text x="${x0 - 8}" y="${(y0 + y2) / 2}" text-anchor="end" font-size="13" fill="var(--page-text,#e2e8f0)">b = ${b}</text>
+    <text x="${(x1 + x0) / 2 + 16}" y="${(y0 + y2) / 2 - 8}" text-anchor="middle" font-size="13" fill="var(--page-text,#e2e8f0)">c = ${c}</text>
+  `, 300);
+}
+
+/** Číselná osa s několika (obecnými) členy posloupnosti spojenými šipkami popsanými operací mezi nimi. */
+function svgNumberLineSeq(terms, opLabel) {
+  const n = terms.length;
+  const W = Math.max(300, n * 80), H = 90, y = 45;
+  const stepX = (W - 60) / (n - 1);
+  let dots = '', arrows = '';
+  for (let i = 0; i < n; i++) {
+    const x = 30 + i * stepX;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y}" r="5" fill="var(--accent-text,#67e8f9)"/><text x="${x.toFixed(1)}" y="${y + 26}" text-anchor="middle" font-size="12" fill="var(--page-text,#e2e8f0)">${terms[i]}</text><text x="${x.toFixed(1)}" y="${y - 14}" text-anchor="middle" font-size="10" fill="var(--text-muted,#94a3b8)">a${i + 1}</text>`;
+    if (i < n - 1) {
+      const x2 = 30 + (i + 1) * stepX;
+      arrows += `<line x1="${(x + 8).toFixed(1)}" y1="${y}" x2="${(x2 - 8).toFixed(1)}" y2="${y}" stroke="var(--border-strong,#64748b)" stroke-width="1.5" marker-end="url(#seqArrow)"/><text x="${((x + x2) / 2).toFixed(1)}" y="${y - 4}" text-anchor="middle" font-size="10" fill="var(--text-muted,#94a3b8)">${opLabel}</text>`;
+    }
+  }
+  return svgWrap(`0 0 ${W} ${H}`, `<defs><marker id="seqArrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="var(--border-strong,#64748b)"/></marker></defs>${arrows}${dots}`, 380);
+}
+
+/** Mřížka n čtverečků se zvýrazněnými k z nich - pro kombinace. */
+function svgChooseGrid(n, k) {
+  const perRow = Math.min(n, 8);
+  const rows = Math.ceil(n / perRow);
+  const cell = 26, gap = 6;
+  const W = perRow * (cell + gap) + gap, H = rows * (cell + gap) + gap;
+  let cells = '';
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / perRow), col = i % perRow;
+    const x = gap + col * (cell + gap), y = gap + row * (cell + gap);
+    const filled = i < k;
+    cells += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="4" fill="${filled ? 'var(--accent-text,#67e8f9)' : 'none'}" fill-opacity="${filled ? '0.45' : '1'}" stroke="var(--border-strong,#64748b)" stroke-width="1.5"/>`;
+  }
+  return svgWrap(`0 0 ${W} ${H + 22}`, `${cells}<text x="${W / 2}" y="${H + 16}" text-anchor="middle" font-size="11" fill="var(--text-muted,#94a3b8)">n = ${n} prvků, k = ${k} vybráno (zvýrazněno)</text>`, 300);
+}
+
+/** Rozhodovací schéma: kořenová podmínka a několik větví "podmínka → výsledek" - obecný přehled pravidla. */
+function svgDecisionBranch(rootLabel, branches) {
+  const rowH = 44, H = 42 + branches.length * rowH, W = 340;
+  let rows = '';
+  branches.forEach((b, i) => {
+    const y = 48 + i * rowH;
+    rows += `
+      <line x1="150" y1="30" x2="150" y2="${y - 12}" stroke="var(--border-strong,#64748b)" stroke-width="1.5"/>
+      <line x1="150" y1="${y - 12}" x2="235" y2="${y - 12}" stroke="var(--border-strong,#64748b)" stroke-width="1.5"/>
+      <text x="238" y="${y - 8}" font-size="10.5" fill="var(--text-muted,#94a3b8)">${b.cond}</text>
+      <rect x="20" y="${y}" width="215" height="26" rx="6" fill="var(--accent-text,#67e8f9)" fill-opacity="0.15" stroke="var(--accent-text,#67e8f9)" stroke-width="1.5"/>
+      <text x="127" y="${y + 18}" text-anchor="middle" font-size="12" fill="var(--page-text,#e2e8f0)">${b.result}</text>`;
+  });
+  return svgWrap(`0 0 ${W} ${H}`, `
+    <rect x="60" y="4" width="180" height="26" rx="6" fill="none" stroke="var(--page-text,#e2e8f0)" stroke-width="1.5"/>
+    <text x="150" y="21" text-anchor="middle" font-size="11.5" fill="var(--page-text,#e2e8f0)">${rootLabel}</text>
+    ${rows}
+  `, 340);
+}
+
+/** Časová osa s několika body, jeden zvýrazněný - pro slovesné časy/nepravidelná slovesa. */
+function svgTimeline(points, highlightIndex, note) {
+  const n = points.length;
+  const W = Math.max(300, n * 105), H = 100, y = 48;
+  const stepX = (W - 60) / (n - 1);
+  let marks = '';
+  for (let i = 0; i < n; i++) {
+    const x = 30 + i * stepX;
+    const isHi = i === highlightIndex;
+    marks += `<circle cx="${x.toFixed(1)}" cy="${y}" r="${isHi ? 7 : 5}" fill="${isHi ? 'var(--accent-text,#67e8f9)' : 'var(--text-muted,#94a3b8)'}"/><text x="${x.toFixed(1)}" y="${y + 24}" text-anchor="middle" font-size="11.5" fill="${isHi ? 'var(--page-text,#e2e8f0)' : 'var(--text-muted,#94a3b8)'}" font-weight="${isHi ? '700' : '400'}">${points[i]}</text>`;
+  }
+  const noteMarkup = note ? `<text x="${W / 2}" y="18" text-anchor="middle" font-size="10.5" fill="var(--accent-text,#67e8f9)">${note}</text>` : '';
+  return svgWrap(`0 0 ${W} ${H}`, `<line x1="20" y1="${y}" x2="${W - 20}" y2="${y}" stroke="var(--border-strong,#64748b)" stroke-width="2"/>${marks}${noteMarkup}`, 380);
+}
+
+/** Dva propojené "díly", které tvoří pevné (nerozlučné) spojení - pro vazby s předložkou a frázová slovesa. */
+function svgChainLink(part1, part2, note) {
+  return svgWrap('0 0 300 100', `
+    <rect x="15" y="28" width="120" height="40" rx="8" fill="var(--accent-text,#67e8f9)" fill-opacity="0.16" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <text x="75" y="53" text-anchor="middle" font-size="14" fill="var(--page-text,#e2e8f0)">${part1}</text>
+    <rect x="148" y="28" width="130" height="40" rx="8" fill="var(--accent-text,#67e8f9)" fill-opacity="0.32" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>
+    <text x="213" y="53" text-anchor="middle" font-size="14" fill="var(--page-text,#e2e8f0)">${part2}</text>
+    <line x1="135" y1="48" x2="148" y2="48" stroke="var(--accent-text,#67e8f9)" stroke-width="3"/>
+    ${note ? `<text x="150" y="88" text-anchor="middle" font-size="11" fill="var(--text-muted,#94a3b8)">${note}</text>` : ''}
+  `, 300);
+}
+
+/** Šipka od jednoho "tvaru/pořadí" věty ke druhému - pro trpný rod a nepřímou řeč. */
+function svgFlowBoxes(fromLabel, toLabel, arrowLabel) {
+  return svgWrap('0 0 320 130', `
+    <rect x="8" y="18" width="200" height="40" rx="8" fill="none" stroke="var(--border-strong,#64748b)" stroke-width="1.5"/>
+    <text x="108" y="43" text-anchor="middle" font-size="11.5" fill="var(--page-text,#e2e8f0)">${fromLabel}</text>
+    <line x1="70" y1="58" x2="180" y2="72" stroke="var(--accent-text,#67e8f9)" stroke-width="2" marker-end="url(#flowArrow)"/>
+    <defs><marker id="flowArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent-text,#67e8f9)"/></marker></defs>
+    <rect x="112" y="72" width="200" height="40" rx="8" fill="var(--accent-text,#67e8f9)" fill-opacity="0.15" stroke="var(--accent-text,#67e8f9)" stroke-width="1.5"/>
+    <text x="212" y="97" text-anchor="middle" font-size="11.5" fill="var(--page-text,#e2e8f0)">${toLabel}</text>
+    ${arrowLabel ? `<text x="90" y="63" font-size="10" fill="var(--text-muted,#94a3b8)">${arrowLabel}</text>` : ''}
+  `, 340);
+}
+
+/** Malé piktogramy pro slovní zásobu - vizuální mnemotechnika k danému anglickému slovu. */
+const VOCAB_ICONS = {
+  apple: `<circle cx="60" cy="70" r="32" fill="var(--danger-text,#fb7185)" fill-opacity="0.35" stroke="var(--danger-text,#fb7185)" stroke-width="2"/><path d="M60 38 q6 -13 17 -9" fill="none" stroke="var(--success-text,#6ee7b7)" stroke-width="3" stroke-linecap="round"/><line x1="60" y1="42" x2="60" y2="32" stroke="#8b5e34" stroke-width="3"/>`,
+  book: `<rect x="30" y="30" width="60" height="70" rx="3" fill="var(--accent-text,#67e8f9)" fill-opacity="0.18" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><line x1="60" y1="30" x2="60" y2="100" stroke="var(--accent-text,#67e8f9)" stroke-width="1.5"/>`,
+  window: `<rect x="30" y="25" width="60" height="70" rx="2" fill="none" stroke="var(--page-text,#e2e8f0)" stroke-width="2.5"/><line x1="60" y1="25" x2="60" y2="95" stroke="var(--page-text,#e2e8f0)" stroke-width="2"/><line x1="30" y1="60" x2="90" y2="60" stroke="var(--page-text,#e2e8f0)" stroke-width="2"/>`,
+  teacher: `<rect x="35" y="55" width="50" height="12" fill="var(--page-text,#e2e8f0)"/><polygon points="60,25 95,55 25,55" fill="var(--accent-text,#67e8f9)" fill-opacity="0.4" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><line x1="90" y1="55" x2="90" y2="80" stroke="var(--page-text,#e2e8f0)" stroke-width="2"/>`,
+  water: `<path d="M60 25 C40 55 30 75 60 95 C90 75 80 55 60 25 Z" fill="var(--accent-text,#67e8f9)" fill-opacity="0.35" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/>`,
+  car: `<rect x="20" y="55" width="80" height="25" rx="8" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><polygon points="35,55 45,38 75,38 85,55" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><circle cx="38" cy="82" r="9" fill="var(--page-text,#e2e8f0)"/><circle cx="82" cy="82" r="9" fill="var(--page-text,#e2e8f0)"/>`,
+  dog: `<circle cx="60" cy="65" r="30" fill="var(--text-muted,#94a3b8)" fill-opacity="0.25" stroke="var(--text-muted,#94a3b8)" stroke-width="2"/><polygon points="35,45 25,20 45,40" fill="var(--text-muted,#94a3b8)" fill-opacity="0.4"/><polygon points="85,45 95,20 75,40" fill="var(--text-muted,#94a3b8)" fill-opacity="0.4"/><circle cx="50" cy="60" r="3" fill="var(--page-text,#e2e8f0)"/><circle cx="70" cy="60" r="3" fill="var(--page-text,#e2e8f0)"/><ellipse cx="60" cy="75" rx="8" ry="5" fill="var(--page-text,#e2e8f0)"/>`,
+  cat: `<circle cx="60" cy="65" r="28" fill="var(--accent-text,#67e8f9)" fill-opacity="0.2" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><polygon points="38,42 30,18 50,38" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3"/><polygon points="82,42 90,18 70,38" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3"/><circle cx="50" cy="60" r="3" fill="var(--page-text,#e2e8f0)"/><circle cx="70" cy="60" r="3" fill="var(--page-text,#e2e8f0)"/><line x1="20" y1="68" x2="40" y2="66" stroke="var(--page-text,#e2e8f0)" stroke-width="1.5"/><line x1="80" y1="66" x2="100" y2="68" stroke="var(--page-text,#e2e8f0)" stroke-width="1.5"/>`,
+  house: `<polygon points="60,20 100,55 20,55" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><rect x="30" y="55" width="60" height="45" fill="none" stroke="var(--page-text,#e2e8f0)" stroke-width="2"/><rect x="52" y="72" width="16" height="28" fill="var(--page-text,#e2e8f0)"/>`,
+  tree: `<rect x="53" y="70" width="14" height="30" fill="#8b5e34"/><circle cx="60" cy="50" r="32" fill="var(--success-text,#6ee7b7)" fill-opacity="0.3" stroke="var(--success-text,#6ee7b7)" stroke-width="2"/>`,
+  sun: `<circle cx="60" cy="60" r="22" fill="#fbbf24" fill-opacity="0.35" stroke="#fbbf24" stroke-width="2"/>${[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+    const rad = (deg * Math.PI) / 180, x1 = 60 + 28 * Math.cos(rad), y1 = 60 + 28 * Math.sin(rad), x2 = 60 + 40 * Math.cos(rad), y2 = 60 + 40 * Math.sin(rad);
+    return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round"/>`;
+  }).join('')}`,
+  friend: `<circle cx="40" cy="40" r="14" fill="var(--accent-text,#67e8f9)" fill-opacity="0.4"/><path d="M18 95 q22 -30 44 0" fill="var(--accent-text,#67e8f9)" fill-opacity="0.3" stroke="var(--accent-text,#67e8f9)" stroke-width="2"/><circle cx="80" cy="40" r="14" fill="var(--success-text,#6ee7b7)" fill-opacity="0.4"/><path d="M58 95 q22 -30 44 0" fill="var(--success-text,#6ee7b7)" fill-opacity="0.3" stroke="var(--success-text,#6ee7b7)" stroke-width="2"/>`,
+};
+function svgWordIcon(enWord) {
+  const inner = VOCAB_ICONS[enWord];
+  if (!inner) return '';
+  return svgWrap('0 0 120 120', inner, 130);
+}
 
 function generateMath(mistakeCounts, difficulty) {
   const mc = mistakeCounts || {};
   const range = MATH_DIFFICULTY_RANGES[difficulty] || MATH_DIFFICULTY_RANGES.medium;
-  const subtype = weightedChoice(['linear', 'fraction', 'percentage'], (s) => mistakeWeight(mc, `math:${s}`));
+  const subtype = weightedChoice(
+    ['linear', 'fraction', 'percentage', 'quadratic', 'geometry', 'sequence', 'combinatorics'],
+    (s) => mistakeWeight(mc, `math:${s}`)
+  );
 
   if (subtype === 'linear') {
     const a = randInt(2, range.aMax);
@@ -4456,8 +4688,11 @@ function generateMath(mistakeCounts, difficulty) {
         'Poté vyděl obě strany rovnice číslem, které stojí přímo u x (jeho koeficientem). Výsledkem je hledaná hodnota x.',
         `Konkrétně u této rovnice nejprve ${b >= 0 ? 'odečti' : 'přičti'} ${Math.abs(b)} na obou stranách a poté výsledek vyděl číslem ${a}.`,
       ],
+      hintImage: svgBalanceScale(`${a}x${bStr}`, `${c}`),
       check: (input) => {
-        const v = parseFloat(String(input).replace(',', '.'));
+        // Vstup může být čisté číslo (psaná odpověď), ale i celý answerText
+        // "x = 5" (odpověď zvolená ve výběru ze 4 možností) - "x =" nejdřív odřízneme.
+        const v = parseFloat(String(input).replace(',', '.').replace(/^\s*x\s*=\s*/i, ''));
         return !isNaN(v) && Math.abs(v - x) < 0.001;
       },
     };
@@ -4486,6 +4721,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Každý zlomek podle toho rozšiř (čitatele i jmenovatele vynásob stejným číslem) a poté už jen sečti čitatele nad společným jmenovatelem.',
         'Nakonec výsledný zlomek zkrať vydělením čitatele i jmenovatele jejich největším společným dělitelem (NSD), pokud to jde.',
       ],
+      hintImage: svgFractionBars(b, n1, d, n2),
       check: (input) => {
         const m = String(input).replace(/\s+/g, '').match(/^(-?\d+)\/(\d+)$/);
         if (!m) return false;
@@ -4497,26 +4733,168 @@ function generateMath(mistakeCounts, difficulty) {
     };
   }
 
-  // percentage
-  const base = randInt(range.baseMin, range.baseMax) * 5;
-  const percent = choice(range.percents);
-  const result = (base * percent) / 100;
+  if (subtype === 'percentage') {
+    const base = randInt(range.baseMin, range.baseMax) * 5;
+    const percent = choice(range.percents);
+    const result = (base * percent) / 100;
+
+    return {
+      key: `math:${subtype}`,
+      answerText: String(result),
+      prompt: `Kolik je ${percent} % z čísla ${base}?`,
+      hintTitle: 'Jak počítat procenta',
+      hintBody: [
+        '1 % (jedno procento) znamená jednu setinu celku, tedy základ vydělený stem.',
+        'Chceš-li zjistit, kolik je určitý počet procent ze základu, použij vzorec: (základ × počet procent) / 100.',
+        `V tomto příkladu tedy spočítáš: (${base} × ${percent}) / 100.`,
+        'Výsledek si můžeš ověřit i opačným postupem — vydělením základu stem a vynásobením počtem procent.',
+      ],
+      hintImage: svgPercentBar(percent),
+      check: (input) => {
+        const v = parseFloat(String(input).replace(',', '.'));
+        return !isNaN(v) && Math.abs(v - result) < 0.05;
+      },
+    };
+  }
+
+  if (subtype === 'quadratic') {
+    const a = choice([1, 1, 1, 2]);
+    let r1 = randInt(-range.quadRoot, range.quadRoot);
+    if (r1 === 0) r1 = 1;
+    let r2 = randInt(-range.quadRoot, range.quadRoot);
+    if (r2 === 0) r2 = -1;
+    if (r2 === r1) r2 = r1 + 1;
+    const b = -a * (r1 + r2);
+    const c = a * r1 * r2;
+    const roots = [r1, r2].sort((x, y) => x - y);
+    const aStr = a === 1 ? '' : String(a);
+    const bStr = b === 0 ? '' : (b > 0 ? ` + ${b}x` : ` - ${Math.abs(b)}x`);
+    const cStr = c === 0 ? '' : (c > 0 ? ` + ${c}` : ` - ${Math.abs(c)}`);
+
+    return {
+      key: `math:${subtype}`,
+      answerText: `x1 = ${roots[0]}; x2 = ${roots[1]}`,
+      prompt: `Vyřeš kvadratickou rovnici (najdi oba kořeny x1, x2):\n\n${aStr}x²${bStr}${cStr} = 0\n\n(odpověz ve tvaru "x1 = ...; x2 = ...", na pořadí kořenů nezáleží)`,
+      hintTitle: 'Jak řešit kvadratickou rovnici',
+      hintBody: [
+        'Kvadratická rovnice má tvar ax² + bx + c = 0. Ke zjištění kořenů nejdřív spočítej diskriminant D = b² − 4ac.',
+        `V této rovnici je a = ${a}, b = ${b}, c = ${c}, takže dosadíš do vzorce D = ${b}² − 4·${a}·${c}.`,
+        'Je-li D > 0, rovnice má dva různé reálné kořeny podle vzorce x = (−b ± √D) / (2a) — dosaď svoje a, b i vypočtené D a oba kořeny dopočítej.',
+        'Graf takové rovnice je parabola (viz obrázek) — kořeny jsou přesně ta místa, kde parabola protíná osu x.',
+      ],
+      hintImage: svgParabola(a, b, c),
+      check: (input) => {
+        // "x1"/"x2" nálepky se nejdřív odstraní (jinak by jejich číslice 1/2
+        // znečistily seznam nalezených čísel - viz odpověď "x1 = ...; x2 = ...").
+        const cleaned = String(input).replace(',', '.').replace(/x\s*\d/gi, ' ');
+        const nums = cleaned.match(/-?\d+(\.\d+)?/g);
+        if (!nums || nums.length < 2) return false;
+        const vals = nums.map(Number).sort((x, y) => x - y);
+        return Math.abs(vals[0] - roots[0]) < 0.001 && Math.abs(vals[1] - roots[1]) < 0.001;
+      },
+    };
+  }
+
+  if (subtype === 'geometry') {
+    const triples = [[3, 4, 5], [5, 12, 13], [8, 15, 17], [7, 24, 25], [20, 21, 29]];
+    const base = choice(triples);
+    const maxLeg = Math.max(...base);
+    const kMax = Math.max(1, Math.floor(range.triLeg / maxLeg));
+    const k = randInt(1, kMax);
+    const [a, b, c] = base.map((n) => n * k);
+    const unknown = choice(['a', 'b', 'c']);
+    let promptSides, answer, labelUnknown, hintLine;
+    if (unknown === 'c') {
+      promptSides = `odvěsny a = ${a}, b = ${b}`;
+      answer = c; labelUnknown = 'přeponu c';
+      hintLine = `Přeponu spočítáš jako c = √(a² + b²) = √(${a}² + ${b}²) — dosaď a odmocni.`;
+    } else if (unknown === 'b') {
+      promptSides = `odvěsna a = ${a}, přepona c = ${c}`;
+      answer = b; labelUnknown = 'odvěsnu b';
+      hintLine = `Odvěsnu spočítáš jako b = √(c² − a²) = √(${c}² − ${a}²) — dosaď a odmocni.`;
+    } else {
+      promptSides = `odvěsna b = ${b}, přepona c = ${c}`;
+      answer = a; labelUnknown = 'odvěsnu a';
+      hintLine = `Odvěsnu spočítáš jako a = √(c² − b²) = √(${c}² − ${b}²) — dosaď a odmocni.`;
+    }
+
+    return {
+      key: `math:${subtype}`,
+      answerText: String(answer),
+      prompt: `V pravoúhlém trojúhelníku znáš ${promptSides}. Vypočítej ${labelUnknown} (Pythagorova věta).`,
+      hintTitle: 'Pythagorova věta',
+      hintBody: [
+        'Pythagorova věta platí v pravoúhlém trojúhelníku a zní: a² + b² = c², kde c je přepona (nejdelší strana, leží naproti pravému úhlu) a a, b jsou odvěsny.',
+        hintLine,
+        'Postup: nejdřív urči, která strana je přepona, pak podle toho, co je neznámé, ze vzorce osamostatni hledanou stranu a dosaď.',
+      ],
+      hintImage: svgRightTriangle(a, b, c),
+      check: (input) => {
+        const v = parseFloat(String(input).replace(',', '.'));
+        return !isNaN(v) && Math.abs(v - answer) < 0.01;
+      },
+    };
+  }
+
+  if (subtype === 'sequence') {
+    const isArithmetic = Math.random() < 0.5;
+    const a1 = randInt(1, range.seqStart);
+    if (isArithmetic) {
+      let d = randInt(-range.seqDiff, range.seqDiff);
+      if (d === 0) d = 3;
+      const n = randInt(5, 10);
+      const term = a1 + (n - 1) * d;
+      return {
+        key: `math:${subtype}:arithmetic`,
+        answerText: String(term),
+        prompt: `Aritmetická posloupnost má první člen a1 = ${a1} a diferenci d = ${d}. Urči hodnotu ${n}. členu (a${n}).`,
+        hintTitle: 'Aritmetická posloupnost',
+        hintBody: [
+          'U aritmetické posloupnosti se každý další člen liší od předchozího o stejnou hodnotu — diferenci d (pořád se přičítá/odečítá stejné číslo).',
+          'Vzorec pro n-tý člen: an = a1 + (n − 1) · d.',
+          `Zde tedy dosadíš a${n} = ${a1} + (${n} − 1) · ${d} — zbývá jen dopočítat.`,
+        ],
+        hintImage: svgNumberLineSeq([a1, a1 + d, a1 + 2 * d, a1 + 3 * d], `${d >= 0 ? '+' : ''}${d}`),
+        check: (input) => { const v = parseFloat(String(input).replace(',', '.')); return !isNaN(v) && Math.abs(v - term) < 0.001; },
+      };
+    }
+    let q = choice(range.seqRatio) * (Math.random() < 0.5 ? -1 : 1);
+    if (q === 0) q = 2;
+    const n = randInt(4, 6);
+    const term = a1 * Math.pow(q, n - 1);
+    return {
+      key: `math:${subtype}:geometric`,
+      answerText: String(term),
+      prompt: `Geometrická posloupnost má první člen a1 = ${a1} a kvocient q = ${q}. Urči hodnotu ${n}. členu (a${n}).`,
+      hintTitle: 'Geometrická posloupnost',
+      hintBody: [
+        'U geometrické posloupnosti se každý další člen získá vynásobením předchozího členu stejným číslem — kvocientem q.',
+        'Vzorec pro n-tý člen: an = a1 · q^(n − 1).',
+        `Zde tedy dosadíš a${n} = ${a1} · ${q}^${n - 1} — zbývá jen dopočítat.`,
+      ],
+      hintImage: svgNumberLineSeq([a1, a1 * q, a1 * q * q, a1 * q * q * q], `×${q}`),
+      check: (input) => { const v = parseFloat(String(input).replace(',', '.')); return !isNaN(v) && Math.abs(v - term) < 0.001; },
+    };
+  }
+
+  // combinatorics
+  function factorial(x) { let r = 1; for (let i = 2; i <= x; i++) r *= i; return r; }
+  const n = randInt(Math.max(4, range.combK + 2), range.combN);
+  const k = randInt(2, Math.min(range.combK, n - 1));
+  const combinations = Math.round(factorial(n) / (factorial(k) * factorial(n - k)));
 
   return {
     key: `math:${subtype}`,
-    answerText: String(result),
-    prompt: `Kolik je ${percent} % z čísla ${base}?`,
-    hintTitle: 'Jak počítat procenta',
+    answerText: String(combinations),
+    prompt: `Kolika způsoby lze vybrat ${k} prvky z celkem ${n} prvků, pokud nezáleží na pořadí výběru? (kombinace)`,
+    hintTitle: 'Kombinace bez opakování',
     hintBody: [
-      '1 % (jedno procento) znamená jednu setinu celku, tedy základ vydělený stem.',
-      'Chceš-li zjistit, kolik je určitý počet procent ze základu, použij vzorec: (základ × počet procent) / 100.',
-      `V tomto příkladu tedy spočítáš: (${base} × ${percent}) / 100.`,
-      'Výsledek si můžeš ověřit i opačným postupem — vydělením základu stem a vynásobením počtem procent.',
+      'Jde-li o výběr prvků, u kterého NEZÁLEŽÍ na pořadí, použij vzorec pro kombinace: C(n, k) = n! / (k! · (n − k)!).',
+      `Zde je n = ${n} a k = ${k}, takže dosadíš do vzorce C(${n}, ${k}) = ${n}! / (${k}! · ${n - k}!).`,
+      'Postup: spočítej faktoriály n, k a (n − k) a dosaď do vzorce.',
     ],
-    check: (input) => {
-      const v = parseFloat(String(input).replace(',', '.'));
-      return !isNaN(v) && Math.abs(v - result) < 0.05;
-    },
+    hintImage: svgChooseGrid(n, k),
+    check: (input) => { const v = parseInt(String(input).replace(/\s+/g, ''), 10); return !isNaN(v) && v === combinations; },
   };
 }
 
@@ -4581,7 +4959,7 @@ function generateCzech(mistakeCounts) {
 
 function generateEnglish(mistakeCounts) {
   const mc = mistakeCounts || {};
-  const subtype = choice(['article', 'preposition', 'irregular', 'vocabulary']);
+  const subtype = choice(['article', 'preposition', 'irregular', 'vocabulary', 'tense', 'passive', 'phrasal', 'reported']);
 
   if (subtype === 'article') {
     const items = [
@@ -4606,22 +4984,28 @@ function generateEnglish(mistakeCounts) {
         'Určitý člen "the" se používá, mluvíme-li o konkrétní, již zmíněné nebo jedinečné věci (the sun, the book I mentioned).',
         'Postup: nejprve urči, jde-li o obecnou/nezmíněnou věc (a/an), nebo o konkrétní/známou věc (the); u a/an rozhoduje první hláska následujícího slova.',
       ],
+      hintImage: svgDecisionBranch('Jaké podstatné jméno?', [
+        { cond: 'j. č., nezmíněné, začíná souhláskou', result: 'a (a car, a university)' },
+        { cond: 'j. č., nezmíněné, začíná samohláskou', result: 'an (an apple, an hour)' },
+        { cond: 'konkrétní / už zmíněná / jedinečná věc', result: 'the (the sun, the book)' },
+      ]),
       check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
     };
   }
 
   if (subtype === 'preposition') {
     const items = [
-      { text: 'I am interested ___ history.', answer: ['in'] },
-      { text: 'She is afraid ___ spiders.', answer: ['of'] },
-      { text: 'We arrived ___ the airport early.', answer: ['at'] },
-      { text: 'He is good ___ tennis.', answer: ['at'] },
-      { text: 'I depend ___ you completely.', answer: ['on'] },
-      { text: 'Listen carefully ___ me!', answer: ['to'] },
-      { text: 'She apologized ___ her mistake.', answer: ['for'] },
-      { text: 'They talked ___ the weather all day.', answer: ['about'] },
+      { text: 'I am interested ___ history.', answer: ['in'], head: 'interested' },
+      { text: 'She is afraid ___ spiders.', answer: ['of'], head: 'afraid' },
+      { text: 'We arrived ___ the airport early.', answer: ['at'], head: 'arrived' },
+      { text: 'He is good ___ tennis.', answer: ['at'], head: 'good' },
+      { text: 'I depend ___ you completely.', answer: ['on'], head: 'depend' },
+      { text: 'Listen carefully ___ me!', answer: ['to'], head: 'listen' },
+      { text: 'She apologized ___ her mistake.', answer: ['for'], head: 'apologized' },
+      { text: 'They talked ___ the weather all day.', answer: ['about'], head: 'talked' },
     ];
     const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
+    const example = choice(items.filter((it) => it !== item)) || item;
     return {
       key: `english:${subtype}:${item.text}`,
       answerText: item.answer[0],
@@ -4632,6 +5016,7 @@ function generateEnglish(mistakeCounts) {
         'Tyto vazby je potřeba se učit jako celek — spolu se slovem, ne odděleně.',
         'Postup: zapamatuj si sloveso/přídavné jméno i s jeho typickou předložkou jako jednu frázi a tu pak dosazuj do vět.',
       ],
+      hintImage: svgChainLink(example.head, example.answer[0], 'pevná vazba – uč se jako jeden celek'),
       check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
     };
   }
@@ -4666,33 +5051,161 @@ function generateEnglish(mistakeCounts) {
         'Základní tvar (infinitiv) se používá v přítomném čase, Past Simple pro dokončený děj v minulosti, Past Participle pak v předpřítomném čase a v trpném rodě.',
         'Postup: tyto tvary je nutné se naučit nazpaměť ve trojicích (go – went – gone) a pravidelně si je opakovat.',
       ],
+      hintImage: svgTimeline(['go (infinitiv)', 'went (Past Simple)', 'gone (Past Participle)'], form === 'past' ? 1 : 2, `hledaný tvar: ${label}`),
       check: (input) => normalizeAnswer(input) === normalizeAnswer(answer),
     };
   }
 
-  // vocabulary
-  const words = [
-    { cz: 'jablko', en: 'apple' }, { cz: 'kniha', en: 'book' }, { cz: 'okno', en: 'window' },
-    { cz: 'učitel', en: 'teacher' }, { cz: 'voda', en: 'water' }, { cz: 'auto', en: 'car' },
-    { cz: 'pes', en: 'dog' }, { cz: 'kočka', en: 'cat' }, { cz: 'dům', en: 'house' },
-    { cz: 'strom', en: 'tree' }, { cz: 'slunce', en: 'sun' }, { cz: 'přítel', en: 'friend' },
-  ];
-  const word = weightedChoice(words, (w) => mistakeWeight(mc, `english:vocab:${w.cz}`));
-  const czToEn = Math.random() < 0.5;
+  if (subtype === 'vocabulary') {
+    const words = [
+      { cz: 'jablko', en: 'apple' }, { cz: 'kniha', en: 'book' }, { cz: 'okno', en: 'window' },
+      { cz: 'učitel', en: 'teacher' }, { cz: 'voda', en: 'water' }, { cz: 'auto', en: 'car' },
+      { cz: 'pes', en: 'dog' }, { cz: 'kočka', en: 'cat' }, { cz: 'dům', en: 'house' },
+      { cz: 'strom', en: 'tree' }, { cz: 'slunce', en: 'sun' }, { cz: 'přítel', en: 'friend' },
+    ];
+    const word = weightedChoice(words, (w) => mistakeWeight(mc, `english:vocab:${w.cz}`));
+    const czToEn = Math.random() < 0.5;
 
+    return {
+      key: `english:vocab:${word.cz}`,
+      answerText: czToEn ? word.en : word.cz,
+      prompt: czToEn
+        ? `Přelož do angličtiny: "${word.cz}"`
+        : `Přelož do češtiny: "${word.en}"`,
+      hintTitle: 'Rozšiřování slovní zásoby',
+      hintBody: [
+        'Při učení nových slovíček pomáhá spojovat slovo s konkrétním obrazem, situací nebo příkladovou větou, ne jen s izolovaným překladem.',
+        'Osvědčenou metodou je opakování s odstupem (tzv. spaced repetition) — slovíčko si zopakovat po chvíli, po dni, po týdnu.',
+        'Postup: pokud si nejsi jistý/á překladem, zkus si vybavit konkrétní větu nebo situaci, ve které jsi dané slovo už viděl/a.',
+      ],
+      hintImage: svgWordIcon(word.en),
+      check: (input) => normalizeAnswer(input) === normalizeAnswer(czToEn ? word.en : word.cz),
+    };
+  }
+
+  if (subtype === 'tense') {
+    const items = [
+      { text: 'She usually ___ (get) up at seven.', answer: ['gets'], variant: 'tense' },
+      { text: 'Look! It ___ (rain) outside right now.', answer: ['is raining'], variant: 'tense' },
+      { text: 'They ___ (visit) their grandparents last summer.', answer: ['visited'], variant: 'tense' },
+      { text: 'I ___ (never/be) to Japan.', answer: ['have never been'], variant: 'tense' },
+      { text: 'While I ___ (cook) dinner, the phone rang.', answer: ['was cooking'], variant: 'tense' },
+      { text: 'We ___ (already/finish) the project.', answer: ['have already finished'], variant: 'tense' },
+      { text: 'If it ___ (rain) tomorrow, we will stay at home.', answer: ['rains'], variant: 'conditional' },
+      { text: 'If I ___ (be) you, I would apologize immediately.', answer: ['were'], variant: 'conditional' },
+      { text: 'If she studies harder, she ___ (pass) the exam.', answer: ['will pass'], variant: 'conditional' },
+      { text: 'If we had more time, we ___ (travel) around Europe.', answer: ['would travel'], variant: 'conditional' },
+    ];
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
+    const isConditional = item.variant === 'conditional';
+    return {
+      key: `english:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: `Doplň sloveso v závorce ve správném tvaru:\n\n${item.text}`,
+      hintTitle: isConditional ? 'Podmínkové věty (if-clauses)' : 'Anglické slovesné časy',
+      hintBody: isConditional
+        ? [
+            'Reálná/možná podmínka v budoucnosti (1. typ): If + přítomný čas prostý, ... will + infinitiv (If it rains, we will stay home.).',
+            'Nereálná/hypotetická podmínka v přítomnosti (2. typ): If + minulý čas prostý, ... would + infinitiv (If I were you, I would apologize.).',
+            'Postup: nejprve rozhodni, jestli je podmínka reálně splnitelná (1. typ), nebo jde o vymyšlenou/nepravděpodobnou situaci (2. typ), a podle toho zvol odpovídající dvojici časů.',
+          ]
+        : [
+            'Volba anglického slovesného času závisí na tom, KDY se děj odehrává a jaký má vztah k přítomnosti — ne na doslovném překladu do češtiny.',
+            'Obecná pravidla/fakta a pravidelné děje → Present Simple. Děj probíhající právě teď/dočasně → Present Continuous.',
+            'Děj ukončený v minulosti s uvedeným časem (last year, in 2010, yesterday) → Past Simple. Minulý děj se vztahem k přítomnosti (already, never, just, for/since, bez udání přesného času) → Present Perfect.',
+            'Postup: v zadání hledej signální slovo/kontext (usually, right now, last year, never…) — to napoví, který čas použít.',
+          ],
+      hintImage: isConditional
+        ? svgDecisionBranch('Jak reálná je podmínka?', [
+            { cond: 'reálná / možná v budoucnu', result: 'If + Present Simple → will + infinitiv' },
+            { cond: 'nereálná / hypotetická teď', result: 'If + Past Simple → would + infinitiv' },
+          ])
+        : svgDecisionBranch('Kdy a jak se děj odehrává?', [
+            { cond: 'obecně, pravidelně, fakta', result: 'Present Simple' },
+            { cond: 'právě teď, dočasně', result: 'Present Continuous' },
+            { cond: 'ukončeno v minulosti (last year…)', result: 'Past Simple' },
+            { cond: 'minulost → vztah k přítomnosti (never, already…)', result: 'Present Perfect' },
+          ]),
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  if (subtype === 'passive') {
+    const items = [
+      { text: 'They built this house in 1990. → This house ___ (build) in 1990.', answer: ['was built'] },
+      { text: 'Someone cleans the office every day. → The office ___ (clean) every day.', answer: ['is cleaned'] },
+      { text: 'People speak English all over the world. → English ___ (speak) all over the world.', answer: ['is spoken'] },
+      { text: 'They will finish the bridge next year. → The bridge ___ (finish) next year.', answer: ['will be finished'] },
+      { text: 'Someone has stolen my bike. → My bike ___ (steal).', answer: ['has been stolen'] },
+      { text: 'They are painting the fence today. → The fence ___ (paint) today.', answer: ['is being painted'] },
+    ];
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
+    return {
+      key: `english:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: `Doplň sloveso v závorce ve správném tvaru trpného rodu:\n\n${item.text}`,
+      hintTitle: 'Trpný rod (passive voice)',
+      hintBody: [
+        'Trpný rod se používá, když je důležitější DĚJ nebo jeho VÝSLEDEK než to, KDO ho vykonal (činitel se často vůbec neuvádí).',
+        'Tvoří se pomocí slovesa "to be" ve stejném čase, jaký měla věta v činném rodě, + třetí tvar významového slovesa (Past Participle).',
+        'Předmět činné věty se stává podmětem trpné věty — proto je potřeba nejdřív poznat, v jakém čase byla původní věta.',
+        'Postup: 1) urči čas původní (činné) věty, 2) vezmi odpovídající tvar "to be" (is/was/will be/has been…), 3) přidej 3. tvar (Past Participle) významového slovesa.',
+      ],
+      hintImage: svgFlowBoxes('Podmět — sloveso (činný rod) — Předmět', 'Nový podmět (býv. předmět) — be + 3. tvar slovesa', 'předmět se stává podmětem'),
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  if (subtype === 'phrasal') {
+    const items = [
+      { text: "Can you ___ the volume? I can't hear it.", answer: ['turn up'], verb: 'turn', particle: 'up', meaning: 'zesílit' },
+      { text: 'I need to ___ my little sister tonight.', answer: ['look after'], verb: 'look', particle: 'after', meaning: 'starat se o' },
+      { text: 'Please ___ this form before you leave.', answer: ['fill in'], verb: 'fill', particle: 'in', meaning: 'vyplnit' },
+      { text: 'They decided to ___ smoking.', answer: ['give up'], verb: 'give', particle: 'up', meaning: 'vzdát se' },
+      { text: 'Could you ___ the kids from school?', answer: ['pick up'], verb: 'pick', particle: 'up', meaning: 'vyzvednout' },
+      { text: 'The meeting was ___ until next week.', answer: ['put off'], verb: 'put', particle: 'off', meaning: 'odložit' },
+    ];
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
+    const example = choice(items.filter((it) => it !== item)) || item;
+    return {
+      key: `english:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: `Doplň vhodné frázové sloveso (ve významu „${item.meaning}“):\n\n${item.text}`,
+      hintTitle: 'Frázová slovesa (phrasal verbs)',
+      hintBody: [
+        'Frázové sloveso je spojení slovesa a jedné či dvou částic (up, off, on, in…), které dohromady dávají VÝZNAM ODLIŠNÝ od základního slovesa — nedá se odvodit doslovným překladem.',
+        `Například "${example.verb} ${example.particle}" znamená "${example.meaning}", přestože samotné sloveso "${example.verb}" znamená něco jiného.`,
+        'Frázová slovesa je proto potřeba učit se jako CELEK (sloveso + částice + význam), ne po jednotlivých slovech.',
+        'Postup: podle českého významu v zadání zkus vybavit celé spojení sloveso + částice, které ses ho naučil/a nazpaměť.',
+      ],
+      hintImage: svgChainLink(example.verb, example.particle, `= „${example.meaning}“`),
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  // reported speech
+  const items = [
+    { text: 'He said: "I am tired." → He said (that) he ___ tired.', answer: ['was'] },
+    { text: 'She said: "I am watching TV." → She said (that) she ___ watching TV.', answer: ['was'] },
+    { text: 'He said: "I have finished my homework." → He said (that) he ___ finished his homework.', answer: ['had'] },
+    { text: 'She said: "I will call you tomorrow." → She said (that) she ___ call me the next day.', answer: ['would'] },
+    { text: 'He said: "I can swim." → He said (that) he ___ swim.', answer: ['could'] },
+    { text: 'She said: "I went home." → She said (that) she ___ gone home.', answer: ['had'] },
+  ];
+  const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
   return {
-    key: `english:vocab:${word.cz}`,
-    answerText: czToEn ? word.en : word.cz,
-    prompt: czToEn
-      ? `Přelož do angličtiny: "${word.cz}"`
-      : `Přelož do češtiny: "${word.en}"`,
-    hintTitle: 'Rozšiřování slovní zásoby',
+    key: `english:${subtype}:${item.text}`,
+    answerText: item.answer[0],
+    prompt: `Doplň chybějící slovo v nepřímé řeči:\n\n${item.text}`,
+    hintTitle: 'Nepřímá řeč (reported speech)',
     hintBody: [
-      'Při učení nových slovíček pomáhá spojovat slovo s konkrétním obrazem, situací nebo příkladovou větou, ne jen s izolovaným překladem.',
-      'Osvědčenou metodou je opakování s odstupem (tzv. spaced repetition) — slovíčko si zopakovat po chvíli, po dni, po týdnu.',
-      'Postup: pokud si nejsi jistý/á překladem, zkus si vybavit konkrétní větu nebo situaci, ve které jsi dané slovo už viděl/a.',
+      'Když převádíš přímou řeč do nepřímé a uvozovací sloveso je v minulém čase (např. "said"), sloveso se v čase obvykle posune o jeden krok do minulosti — tzv. posun časů (backshift).',
+      'Present Simple/Continuous → Past Simple/Continuous. Present Perfect / Past Simple → Past Perfect. Modální slovesa: will → would, can → could.',
+      'Uvozovky mizí a věta se mění na vedlejší větu uvozenou spojkou "that" (často se vynechává).',
+      'Postup: nejprve urči čas ve větě s uvozovkami, pak ho podle pravidla posunu (viz výše) posuň o jeden stupeň do minulosti.',
     ],
-    check: (input) => normalizeAnswer(input) === normalizeAnswer(czToEn ? word.en : word.cz),
+    hintImage: svgFlowBoxes('Přímá řeč: "…Present/Past…"', 'Nepřímá řeč: (that) …o krok v minulosti…', 'posun času (backshift)'),
+    check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
   };
 }
 
@@ -5044,9 +5557,9 @@ function buildQuiz(subject, mistakeCounts, mode, srs, examOnly) {
 }
 
 const CATEGORY_LABELS = {
-  math: 'Automaticky generované matematické příklady (rovnice, zlomky, procenta).',
+  math: 'Automaticky generované maturitní příklady z matematiky (lineární a kvadratické rovnice, zlomky, procenta, Pythagorova věta, posloupnosti, kombinatorika).',
   czech: 'Automaticky generovaná cvičení z českého jazyka (i/y, předložky).',
-  english: 'Automaticky generovaná cvičení z angličtiny (členy, předložky, nepravidelná slovesa, slovní zásoba).',
+  english: 'Automaticky generovaná maturitní cvičení z angličtiny (členy, předložky, nepravidelná slovesa, slovní zásoba, časy, podmínkové věty, trpný rod, frázová slovesa, nepřímá řeč).',
   generic: 'Obecné znalostní otázky přizpůsobené libovolnému předmětu.',
   custom: 'Tvoje vlastní otázka přidaná k tomuto předmětu.',
   notes: 'Otázka vygenerovaná přímo z tvých vlastních zápisů u tohoto předmětu.',
@@ -5066,9 +5579,17 @@ const CATEGORY_LABELS = {
    využije to, že si čitelný text nesou přímo v klíči (viz generateMath
    apod. výš). Nikdy nevrací null/undefined, i pro smazanou položku vrátí
    rozumný náhradní text. */
-const MATH_SUBTYPE_LABELS = { linear: 'lineární rovnice', fraction: 'zlomky', percentage: 'procenta' };
+const MATH_SUBTYPE_LABELS = {
+  linear: 'lineární rovnice', fraction: 'zlomky', percentage: 'procenta',
+  quadratic: 'kvadratická rovnice', geometry: 'Pythagorova věta', sequence: 'posloupnosti a řady', combinatorics: 'kombinatorika',
+};
 const CZECH_SUBTYPE_LABELS = { iy: 'i/y v příčestí minulém', preposition: 'předložka' };
-const ENGLISH_SUBTYPE_LABELS = { article: 'člen', preposition: 'předložka', irregular: 'nepravidelné sloveso', vocabulary: 'slovní zásoba' };
+const ENGLISH_SUBTYPE_LABELS = {
+  // pozor: generateEnglish ukládá slovní zásobu pod klíčem "english:vocab:...", ne
+  // "vocabulary" (viz generateEnglish výš) - klíč v mapě proto musí být "vocab".
+  article: 'člen', preposition: 'předložka', irregular: 'nepravidelné sloveso', vocab: 'slovní zásoba',
+  tense: 'slovesný čas / podmínkové věty', passive: 'trpný rod', phrasal: 'frázové sloveso', reported: 'nepřímá řeč',
+};
 function describeMistakeKey(key, subjectsList) {
   const list = Array.isArray(subjectsList) ? subjectsList : [];
   const parts = String(key || '').split(':');
@@ -8100,7 +8621,7 @@ const app = createApp({
 
     /* ---------- Procvičování ---------- */
     const quiz = reactive({
-      type: 'generic', prompt: '', hintTitle: '', hintBody: [],
+      type: 'generic', prompt: '', hintTitle: '', hintBody: [], hintImage: '',
       userInput: '', solved: false, wrongAttempt: false, showHint: false, _check: null,
       key: null, wasReview: false, answerText: '', shakeToken: 0, options: [],
     });
@@ -8264,6 +8785,7 @@ const app = createApp({
         quiz.prompt = '';
         quiz.hintTitle = '';
         quiz.hintBody = [];
+        quiz.hintImage = '';
         quiz._check = null;
         quiz.answerText = '';
         quiz.key = null;
@@ -8280,6 +8802,7 @@ const app = createApp({
       quiz.prompt = built.prompt;
       quiz.hintTitle = built.hintTitle;
       quiz.hintBody = built.hintBody;
+      quiz.hintImage = built.hintImage || '';
       quiz._check = built.check;
       quiz.answerText = built.answerText || '';
       quiz.key = built.key || null;
