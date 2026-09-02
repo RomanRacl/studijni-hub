@@ -4698,6 +4698,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Cílem je osamostatnit proměnnou x na jedné straně rovnice, tedy dostat rovnici do tvaru "x = číslo".',
         'Nejprve odstraň číslo, které je na stejné straně jako x — pokud se přičítá, na obou stranách rovnice ho odečti, pokud se odečítá, na obou stranách ho přičti.',
         'Poté vyděl obě strany rovnice číslem, které stojí přímo u x (jeho koeficientem). Výsledkem je hledaná hodnota x.',
+        `Ve tvé rovnici je: a = ${a} — číslo stojící přímo u x (jeho koeficient), b = ${b} — samostatné číslo na levé straně (bez x), c = ${c} — číslo na pravé straně za rovnítkem.`,
         `Konkrétně u této rovnice nejprve ${b >= 0 ? 'odečti' : 'přičti'} ${Math.abs(b)} na obou stranách a poté výsledek vyděl číslem ${a}.`,
         'Vzorový příklad krok za krokem (jiná čísla, aby ti to nedalo rovnou tuhle odpověď): 2x + 3 = 11 → odečti 3 na obou stranách → 2x = 8 → vyděl 2 → x = 4. Přesně tenhle postup teď použij na svoje čísla.',
       ],
@@ -4733,6 +4734,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Společného jmenovatele nejjednodušeji získáš vynásobením obou jmenovatelů mezi sebou.',
         'Každý zlomek podle toho rozšiř (čitatele i jmenovatele vynásob stejným číslem) a poté už jen sečti čitatele nad společným jmenovatelem.',
         'Nakonec výsledný zlomek zkrať vydělením čitatele i jmenovatele jejich největším společným dělitelem (NSD), pokud to jde.',
+        `Ve tvém příkladu je čitatel prvního zlomku n1 = ${n1} a jeho jmenovatel b = ${b}; čitatel druhého zlomku n2 = ${n2} a jeho jmenovatel d = ${d}. Společný jmenovatel bude b × d (tedy ${b} × ${d}) — první zlomek proto rozšíříš číslem d (${d}) a druhý číslem b (${b}).`,
         'Vzorový příklad krok za krokem (jiná čísla): 1/4 + 1/6 → společný jmenovatel 4 · 6 = 24 → 1/4 = 6/24 a 1/6 = 4/24 → 6/24 + 4/24 = 10/24 → NSD(10, 24) = 2 → zkráceno na 5/12. Stejné kroky použij na svoje zlomky.',
       ],
       hintImage: svgFractionBars(b, n1, d, n2),
@@ -4760,6 +4762,7 @@ function generateMath(mistakeCounts, difficulty) {
       hintBody: [
         '1 % (jedno procento) znamená jednu setinu celku, tedy základ vydělený stem.',
         'Chceš-li zjistit, kolik je určitý počet procent ze základu, použij vzorec: (základ × počet procent) / 100.',
+        `Ve tvém zadání "${percent} % z čísla ${base}" je základ = ${base} (číslo, ze kterého procenta počítáš) a počet procent = ${percent}.`,
         `V tomto příkladu tedy spočítáš: (${base} × ${percent}) / 100.`,
         'Výsledek si můžeš ověřit i opačným postupem — vydělením základu stem a vynásobením počtem procent.',
         'Vzorový příklad krok za krokem (jiná čísla): kolik je 20 % z čísla 50? → (50 × 20) / 100 = 1000 / 100 = 10. Stejný postup (jen se svými čísly) použij na tenhle příklad.',
@@ -4793,6 +4796,7 @@ function generateMath(mistakeCounts, difficulty) {
       hintTitle: 'Jak řešit kvadratickou rovnici',
       hintBody: [
         'Kvadratická rovnice má tvar ax² + bx + c = 0. Ke zjištění kořenů nejdřív spočítej diskriminant D = b² − 4ac.',
+        'V zápisu rovnice je a číslo přímo před x² (když tam žádné nevidíš, znamená to a = 1), b je číslo (i se znaménkem) stojící u samotného x a c je samostatné číslo bez x na konci (i se znaménkem).',
         `V této rovnici je a = ${a}, b = ${b}, c = ${c}, takže dosadíš do vzorce D = ${b}² − 4·${a}·${c}.`,
         'Je-li D > 0, rovnice má dva různé reálné kořeny podle vzorce x = (−b ± √D) / (2a) — dosaď svoje a, b i vypočtené D a oba kořeny dopočítej.',
         'Graf takové rovnice je parabola (viz obrázek) — kořeny jsou přesně ta místa, kde parabola protíná osu x.',
@@ -4841,6 +4845,7 @@ function generateMath(mistakeCounts, difficulty) {
       hintTitle: 'Pythagorova věta',
       hintBody: [
         'Pythagorova věta platí v pravoúhlém trojúhelníku a zní: a² + b² = c², kde c je přepona (nejdelší strana, leží naproti pravému úhlu) a a, b jsou odvěsny.',
+        `Ve tvém zadání jsou dané (a tedy přímo dosaditelné) hodnoty: ${promptSides}. To, co počítáš, je ${labelUnknown} — tu ze vzorce vyjádříš přes ty dvě dané strany.`,
         hintLine,
         'Postup: nejdřív urči, která strana je přepona, pak podle toho, co je neznámé, ze vzorce osamostatni hledanou stranu a dosaď.',
         'Vzorový příklad krok za krokem (jiná čísla): odvěsny a = 3, b = 4 → c = √(a² + b²) = √(3² + 4²) = √(9 + 16) = √25 = 5. Stejný postup (jen se svými čísly a případně opačně osamostatněnou stranou) použij tady.',
@@ -4869,6 +4874,7 @@ function generateMath(mistakeCounts, difficulty) {
         hintBody: [
           'U aritmetické posloupnosti se každý další člen liší od předchozího o stejnou hodnotu — diferenci d (pořád se přičítá/odečítá stejné číslo).',
           'Vzorec pro n-tý člen: an = a1 + (n − 1) · d.',
+          `Ve tvém zadání je a1 = ${a1} (první člen), d = ${d} (diference — o kolik se každý další člen liší od předchozího) a n = ${n} (pořadové číslo členu, který počítáš).`,
           `Zde tedy dosadíš a${n} = ${a1} + (${n} − 1) · ${d} — zbývá jen dopočítat.`,
           'Vzorový příklad krok za krokem (jiná čísla): a1 = 2, d = 3 → a5 = a1 + (5 − 1) · d = 2 + 4 · 3 = 2 + 12 = 14. Stejný vzorec použij se svým a1, d a n.',
         ],
@@ -4888,6 +4894,7 @@ function generateMath(mistakeCounts, difficulty) {
       hintBody: [
         'U geometrické posloupnosti se každý další člen získá vynásobením předchozího členu stejným číslem — kvocientem q.',
         'Vzorec pro n-tý člen: an = a1 · q^(n − 1).',
+        `Ve tvém zadání je a1 = ${a1} (první člen), q = ${q} (kvocient — číslo, kterým se násobí každý další člen) a n = ${n} (pořadové číslo členu, který počítáš).`,
         `Zde tedy dosadíš a${n} = ${a1} · ${q}^${n - 1} — zbývá jen dopočítat.`,
         'Vzorový příklad krok za krokem (jiná čísla): a1 = 3, q = 2 → a4 = a1 · q^(4 − 1) = 3 · 2³ = 3 · 8 = 24. Stejný vzorec použij se svým a1, q a n.',
       ],
@@ -4909,6 +4916,7 @@ function generateMath(mistakeCounts, difficulty) {
     hintTitle: 'Kombinace bez opakování',
     hintBody: [
       'Jde-li o výběr prvků, u kterého NEZÁLEŽÍ na pořadí, použij vzorec pro kombinace: C(n, k) = n! / (k! · (n − k)!).',
+      `Ve tvém zadání je n = ${n} (celkový počet prvků, ze kterých vybíráš) a k = ${k} (počet prvků, které vybíráš najednou — na jejich pořadí nezáleží).`,
       `Zde je n = ${n} a k = ${k}, takže dosadíš do vzorce C(${n}, ${k}) = ${n}! / (${k}! · ${n - k}!).`,
       'Postup: spočítej faktoriály n, k a (n − k) a dosaď do vzorce.',
       'Vzorový příklad krok za krokem (jiná čísla): vyber 2 prvky z 5 → C(5, 2) = 5! / (2! · 3!) = 120 / (2 · 6) = 120 / 12 = 10. Stejný postup použij se svými n a k.',
