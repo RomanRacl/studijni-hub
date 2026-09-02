@@ -4915,6 +4915,7 @@ function generateMath(mistakeCounts, difficulty) {
     prompt: `Kolika způsoby lze vybrat ${k} prvky z celkem ${n} prvků, pokud nezáleží na pořadí výběru? (kombinace)`,
     hintTitle: 'Kombinace bez opakování',
     hintBody: [
+      'Vykřičník za číslem (např. 5!) není překlep ani chyba — je to matematický znak „faktoriál". Znamená součin všech celých čísel od 1 až po dané číslo: 5! = 5 × 4 × 3 × 2 × 1 = 120. Podobně 3! = 3 × 2 × 1 = 6 a 0! = 1 (dohodou).',
       'Jde-li o výběr prvků, u kterého NEZÁLEŽÍ na pořadí, použij vzorec pro kombinace: C(n, k) = n! / (k! · (n − k)!).',
       `Ve tvém zadání je n = ${n} (celkový počet prvků, ze kterých vybíráš) a k = ${k} (počet prvků, které vybíráš najednou — na jejich pořadí nezáleží).`,
       `Zde je n = ${n} a k = ${k}, takže dosadíš do vzorce C(${n}, ${k}) = ${n}! / (${k}! · ${n - k}!).`,
