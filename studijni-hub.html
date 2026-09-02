@@ -1918,7 +1918,7 @@
                 <option v-for="f in subjectFolders" :key="f" :value="f"></option>
               </datalist>
             </div>
-            <div v-if="activeSubjectIsMath" class="flex items-center flex-wrap gap-1.5 mt-2">
+            <div v-if="activeSubjectIsMath || activeSubjectIsEnglish" class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">🎚️ Obtížnost:</span>
               <button
                 v-for="lvl in DIFFICULTY_LEVELS" :key="lvl"
@@ -1926,6 +1926,18 @@
                 class="px-2 py-0.5 rounded-full text-xs font-semibold border transition"
                 :class="activeSubject.difficulty === lvl ? 'bg-white/25 border-white/40' : 'bg-black/20 border-white/15 opacity-70 hover:opacity-100'"
               >{{ DIFFICULTY_LABELS[lvl] }}</button>
+            </div>
+            <div v-if="activeSubjectIsEnglish" class="flex items-center flex-wrap gap-1.5 mt-2">
+              <span class="text-xs opacity-80">⏳ Trénink konkrétního času:</span>
+              <select
+                :value="englishTenseFocus || ''"
+                @change="setEnglishTenseFocus($event.target.value || null)"
+                class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20"
+                title="Namísto namíchaných otázek dostaneš věty jen na vybraný čas, dokud ho nezvládneš"
+              >
+                <option value="">Namíchané (výchozí)</option>
+                <option v-for="(label, formKey) in TENSE_FORM_LABELS" :key="formKey" :value="formKey">{{ label }}</option>
+              </select>
             </div>
           </div>
         </div>
@@ -4687,6 +4699,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Nejprve odstraň číslo, které je na stejné straně jako x — pokud se přičítá, na obou stranách rovnice ho odečti, pokud se odečítá, na obou stranách ho přičti.',
         'Poté vyděl obě strany rovnice číslem, které stojí přímo u x (jeho koeficientem). Výsledkem je hledaná hodnota x.',
         `Konkrétně u této rovnice nejprve ${b >= 0 ? 'odečti' : 'přičti'} ${Math.abs(b)} na obou stranách a poté výsledek vyděl číslem ${a}.`,
+        'Vzorový příklad krok za krokem (jiná čísla, aby ti to nedalo rovnou tuhle odpověď): 2x + 3 = 11 → odečti 3 na obou stranách → 2x = 8 → vyděl 2 → x = 4. Přesně tenhle postup teď použij na svoje čísla.',
       ],
       hintImage: svgBalanceScale(`${a}x${bStr}`, `${c}`),
       check: (input) => {
@@ -4720,6 +4733,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Společného jmenovatele nejjednodušeji získáš vynásobením obou jmenovatelů mezi sebou.',
         'Každý zlomek podle toho rozšiř (čitatele i jmenovatele vynásob stejným číslem) a poté už jen sečti čitatele nad společným jmenovatelem.',
         'Nakonec výsledný zlomek zkrať vydělením čitatele i jmenovatele jejich největším společným dělitelem (NSD), pokud to jde.',
+        'Vzorový příklad krok za krokem (jiná čísla): 1/4 + 1/6 → společný jmenovatel 4 · 6 = 24 → 1/4 = 6/24 a 1/6 = 4/24 → 6/24 + 4/24 = 10/24 → NSD(10, 24) = 2 → zkráceno na 5/12. Stejné kroky použij na svoje zlomky.',
       ],
       hintImage: svgFractionBars(b, n1, d, n2),
       check: (input) => {
@@ -4748,6 +4762,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Chceš-li zjistit, kolik je určitý počet procent ze základu, použij vzorec: (základ × počet procent) / 100.',
         `V tomto příkladu tedy spočítáš: (${base} × ${percent}) / 100.`,
         'Výsledek si můžeš ověřit i opačným postupem — vydělením základu stem a vynásobením počtem procent.',
+        'Vzorový příklad krok za krokem (jiná čísla): kolik je 20 % z čísla 50? → (50 × 20) / 100 = 1000 / 100 = 10. Stejný postup (jen se svými čísly) použij na tenhle příklad.',
       ],
       hintImage: svgPercentBar(percent),
       check: (input) => {
@@ -4781,6 +4796,7 @@ function generateMath(mistakeCounts, difficulty) {
         `V této rovnici je a = ${a}, b = ${b}, c = ${c}, takže dosadíš do vzorce D = ${b}² − 4·${a}·${c}.`,
         'Je-li D > 0, rovnice má dva různé reálné kořeny podle vzorce x = (−b ± √D) / (2a) — dosaď svoje a, b i vypočtené D a oba kořeny dopočítej.',
         'Graf takové rovnice je parabola (viz obrázek) — kořeny jsou přesně ta místa, kde parabola protíná osu x.',
+        'Vzorový příklad krok za krokem (jiná rovnice): x² − 5x + 6 = 0 → a=1, b=−5, c=6 → D = (−5)² − 4·1·6 = 25 − 24 = 1 → √D = 1 → x = (5 ± 1) / 2 → x1 = 3, x2 = 2. Stejný postup použij na svoje a, b, c.',
       ],
       hintImage: svgParabola(a, b, c),
       check: (input) => {
@@ -4827,6 +4843,7 @@ function generateMath(mistakeCounts, difficulty) {
         'Pythagorova věta platí v pravoúhlém trojúhelníku a zní: a² + b² = c², kde c je přepona (nejdelší strana, leží naproti pravému úhlu) a a, b jsou odvěsny.',
         hintLine,
         'Postup: nejdřív urči, která strana je přepona, pak podle toho, co je neznámé, ze vzorce osamostatni hledanou stranu a dosaď.',
+        'Vzorový příklad krok za krokem (jiná čísla): odvěsny a = 3, b = 4 → c = √(a² + b²) = √(3² + 4²) = √(9 + 16) = √25 = 5. Stejný postup (jen se svými čísly a případně opačně osamostatněnou stranou) použij tady.',
       ],
       hintImage: svgRightTriangle(a, b, c),
       check: (input) => {
@@ -4853,6 +4870,7 @@ function generateMath(mistakeCounts, difficulty) {
           'U aritmetické posloupnosti se každý další člen liší od předchozího o stejnou hodnotu — diferenci d (pořád se přičítá/odečítá stejné číslo).',
           'Vzorec pro n-tý člen: an = a1 + (n − 1) · d.',
           `Zde tedy dosadíš a${n} = ${a1} + (${n} − 1) · ${d} — zbývá jen dopočítat.`,
+          'Vzorový příklad krok za krokem (jiná čísla): a1 = 2, d = 3 → a5 = a1 + (5 − 1) · d = 2 + 4 · 3 = 2 + 12 = 14. Stejný vzorec použij se svým a1, d a n.',
         ],
         hintImage: svgNumberLineSeq([a1, a1 + d, a1 + 2 * d, a1 + 3 * d], `${d >= 0 ? '+' : ''}${d}`),
         check: (input) => { const v = parseFloat(String(input).replace(',', '.')); return !isNaN(v) && Math.abs(v - term) < 0.001; },
@@ -4871,6 +4889,7 @@ function generateMath(mistakeCounts, difficulty) {
         'U geometrické posloupnosti se každý další člen získá vynásobením předchozího členu stejným číslem — kvocientem q.',
         'Vzorec pro n-tý člen: an = a1 · q^(n − 1).',
         `Zde tedy dosadíš a${n} = ${a1} · ${q}^${n - 1} — zbývá jen dopočítat.`,
+        'Vzorový příklad krok za krokem (jiná čísla): a1 = 3, q = 2 → a4 = a1 · q^(4 − 1) = 3 · 2³ = 3 · 8 = 24. Stejný vzorec použij se svým a1, q a n.',
       ],
       hintImage: svgNumberLineSeq([a1, a1 * q, a1 * q * q, a1 * q * q * q], `×${q}`),
       check: (input) => { const v = parseFloat(String(input).replace(',', '.')); return !isNaN(v) && Math.abs(v - term) < 0.001; },
@@ -4892,6 +4911,7 @@ function generateMath(mistakeCounts, difficulty) {
       'Jde-li o výběr prvků, u kterého NEZÁLEŽÍ na pořadí, použij vzorec pro kombinace: C(n, k) = n! / (k! · (n − k)!).',
       `Zde je n = ${n} a k = ${k}, takže dosadíš do vzorce C(${n}, ${k}) = ${n}! / (${k}! · ${n - k}!).`,
       'Postup: spočítej faktoriály n, k a (n − k) a dosaď do vzorce.',
+      'Vzorový příklad krok za krokem (jiná čísla): vyber 2 prvky z 5 → C(5, 2) = 5! / (2! · 3!) = 120 / (2 · 6) = 120 / 12 = 10. Stejný postup použij se svými n a k.',
     ],
     hintImage: svgChooseGrid(n, k),
     check: (input) => { const v = parseInt(String(input).replace(/\s+/g, ''), 10); return !isNaN(v) && v === combinations; },
@@ -4957,9 +4977,54 @@ function generateCzech(mistakeCounts) {
   };
 }
 
-function generateEnglish(mistakeCounts) {
+/** Obtížnost u angličtiny (stejný přepínač easy/medium/hard jako u matematiky,
+ *  viz subject.difficulty) reguluje, jaké typy cvičení se vůbec objeví -
+ *  "easy" jen základy, "medium" k tomu přidá běžné časy, "hard" i zbytek
+ *  (trpný rod, frázová slovesa, nepřímou řeč a nejsložitější časy). */
+const ENGLISH_DIFFICULTY_SETTINGS = {
+  easy: {
+    subtypes: ['article', 'preposition', 'irregular', 'vocabulary'],
+    tenseForms: ['present_simple', 'present_continuous', 'past_simple'],
+  },
+  medium: {
+    subtypes: ['article', 'preposition', 'irregular', 'vocabulary', 'tense'],
+    tenseForms: ['present_simple', 'present_continuous', 'past_simple', 'past_continuous', 'present_perfect', 'conditional1', 'conditional2'],
+  },
+  hard: {
+    subtypes: ['article', 'preposition', 'irregular', 'vocabulary', 'tense', 'passive', 'phrasal', 'reported'],
+    tenseForms: ['present_simple', 'present_continuous', 'past_simple', 'past_continuous', 'present_perfect', 'present_perfect_continuous', 'past_perfect', 'future', 'conditional1', 'conditional2'],
+  },
+};
+/** Čitelné názvy jednotlivých časů/podmínek pro select "Trénink konkrétního
+ *  času" a pro nápovědu, když je takový trénink zapnutý (viz tenseFocus). */
+const TENSE_FORM_LABELS = {
+  present_simple: 'Present Simple', present_continuous: 'Present Continuous',
+  past_simple: 'Past Simple', past_continuous: 'Past Continuous',
+  present_perfect: 'Present Perfect', present_perfect_continuous: 'Present Perfect Continuous',
+  past_perfect: 'Past Perfect', future: 'Budoucí čas (will / going to)',
+  conditional1: 'Podmínkové věty - 1. typ', conditional2: 'Podmínkové věty - 2. typ',
+};
+/** Pravidlo + obecný (na aktuální otázce nezávislý) příklad pro každý čas -
+ *  používá se v nápovědě POUZE když je zapnutý trénink konkrétního času
+ *  (tenseFocus), protože tam už uživatel sám ví, který čas cvičí - jmenovat
+ *  ho v nápovědě tedy nic neprozrazuje a pomáhá si spojit pravidlo s časem. */
+const TENSE_FORM_RULES = {
+  present_simple: 'Pro obecné pravdy, zvyky a pravidelné děje (signální slova: usually, always, every day, on Mondays). Např. "She works in a bank."',
+  present_continuous: 'Pro děj probíhající právě teď nebo dočasně (signální slova: now, right now, at the moment, Look!, Listen!). Např. "They are watching a movie right now."',
+  past_simple: 'Pro děj, který proběhl a SKONČIL v minulosti v určeném čase (signální slova: yesterday, last week, in 2010, ago). Např. "We visited Rome last year."',
+  past_continuous: 'Pro děj, který probíhal v určitém okamžiku minulosti, často přerušený jiným dějem (signální slova: while, when, at that moment). Např. "I was reading when the lights went out."',
+  present_perfect: 'Pro minulý děj, který má vztah k přítomnosti nebo jehož přesný čas neuvádíme (signální slova: already, just, never, ever, yet, since, for). Např. "I have already finished my homework."',
+  present_perfect_continuous: 'Zdůrazňuje TRVÁNÍ děje, který začal v minulosti a pokračuje (nebo právě skončil) až do teď (signální slova: for, since, how long, all day). Např. "I have been waiting for an hour."',
+  past_perfect: 'Pro děj, který proběhl ještě PŘED jiným dějem v minulosti (signální slova: already, before, after, by the time). Např. "I had already left when she arrived."',
+  future: '"will" pro spontánní rozhodnutí/predikce bez důkazu (signální slova: I think, probably, tomorrow); "going to" pro plánované věci nebo predikci s viditelným důkazem (signální slova: plan, Look at those clouds!). Např. "I will call you later." / "It is going to rain."',
+  conditional1: 'Reálná/možná podmínka v budoucnosti: If + přítomný čas prostý, ... will + infinitiv. Např. "If it rains, we will stay home."',
+  conditional2: 'Nereálná/hypotetická podmínka v přítomnosti: If + minulý čas prostý, ... would + infinitiv. Např. "If I were you, I would apologize."',
+};
+
+function generateEnglish(mistakeCounts, difficulty, tenseFocus) {
   const mc = mistakeCounts || {};
-  const subtype = choice(['article', 'preposition', 'irregular', 'vocabulary', 'tense', 'passive', 'phrasal', 'reported']);
+  const settings = ENGLISH_DIFFICULTY_SETTINGS[difficulty] || ENGLISH_DIFFICULTY_SETTINGS.medium;
+  const subtype = tenseFocus ? 'tense' : choice(settings.subtypes);
 
   if (subtype === 'article') {
     const items = [
@@ -5085,47 +5150,79 @@ function generateEnglish(mistakeCounts) {
 
   if (subtype === 'tense') {
     const items = [
-      { text: 'She usually ___ (get) up at seven.', answer: ['gets'], variant: 'tense' },
-      { text: 'Look! It ___ (rain) outside right now.', answer: ['is raining'], variant: 'tense' },
-      { text: 'They ___ (visit) their grandparents last summer.', answer: ['visited'], variant: 'tense' },
-      { text: 'I ___ (never/be) to Japan.', answer: ['have never been'], variant: 'tense' },
-      { text: 'While I ___ (cook) dinner, the phone rang.', answer: ['was cooking'], variant: 'tense' },
-      { text: 'We ___ (already/finish) the project.', answer: ['have already finished'], variant: 'tense' },
-      { text: 'If it ___ (rain) tomorrow, we will stay at home.', answer: ['rains'], variant: 'conditional' },
-      { text: 'If I ___ (be) you, I would apologize immediately.', answer: ['were'], variant: 'conditional' },
-      { text: 'If she studies harder, she ___ (pass) the exam.', answer: ['will pass'], variant: 'conditional' },
-      { text: 'If we had more time, we ___ (travel) around Europe.', answer: ['would travel'], variant: 'conditional' },
+      { text: 'She usually ___ (get) up at seven.', answer: ['gets'], variant: 'tense', form: 'present_simple' },
+      { text: "My brother ___ (not/like) coffee.", answer: ["doesn't like"], variant: 'tense', form: 'present_simple' },
+      { text: 'Look! It ___ (rain) outside right now.', answer: ['is raining'], variant: 'tense', form: 'present_continuous' },
+      { text: 'Be quiet, the baby ___ (sleep).', answer: ['is sleeping'], variant: 'tense', form: 'present_continuous' },
+      { text: 'They ___ (visit) their grandparents last summer.', answer: ['visited'], variant: 'tense', form: 'past_simple' },
+      { text: "She ___ (not/go) to school yesterday.", answer: ["didn't go"], variant: 'tense', form: 'past_simple' },
+      { text: 'While I ___ (cook) dinner, the phone rang.', answer: ['was cooking'], variant: 'tense', form: 'past_continuous' },
+      { text: 'They ___ (play) football when it started to rain.', answer: ['were playing'], variant: 'tense', form: 'past_continuous' },
+      { text: 'I ___ (never/be) to Japan.', answer: ['have never been'], variant: 'tense', form: 'present_perfect' },
+      { text: 'We ___ (already/finish) the project.', answer: ['have already finished'], variant: 'tense', form: 'present_perfect' },
+      { text: 'I ___ (wait) for you for an hour.', answer: ['have been waiting'], variant: 'tense', form: 'present_perfect_continuous' },
+      { text: 'She ___ (study) English since morning.', answer: ['has been studying'], variant: 'tense', form: 'present_perfect_continuous' },
+      { text: 'It ___ (rain) all day, so the ground is wet.', answer: ['has been raining'], variant: 'tense', form: 'present_perfect_continuous' },
+      { text: 'I ___ (already/leave) when she arrived.', answer: ['had already left'], variant: 'tense', form: 'past_perfect' },
+      { text: 'By the time we got there, the film ___ (start).', answer: ['had started'], variant: 'tense', form: 'past_perfect' },
+      { text: "She was tired because she ___ (not/sleep) well.", answer: ["hadn't slept"], variant: 'tense', form: 'past_perfect' },
+      { text: 'I think it ___ (rain) tomorrow.', answer: ['will rain'], variant: 'tense', form: 'future' },
+      { text: 'Look at those clouds! It ___ (rain).', answer: ['is going to rain'], variant: 'tense', form: 'future' },
+      { text: 'We ___ (visit) my grandma next weekend - it is already planned.', answer: ['are going to visit'], variant: 'tense', form: 'future' },
+      { text: 'If it ___ (rain) tomorrow, we will stay at home.', answer: ['rains'], variant: 'conditional', form: 'conditional1' },
+      { text: 'If she studies harder, she ___ (pass) the exam.', answer: ['will pass'], variant: 'conditional', form: 'conditional1' },
+      { text: 'If I ___ (be) you, I would apologize immediately.', answer: ['were'], variant: 'conditional', form: 'conditional2' },
+      { text: 'If we had more time, we ___ (travel) around Europe.', answer: ['would travel'], variant: 'conditional', form: 'conditional2' },
     ];
-    const item = weightedChoice(items, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
+    const allowedForms = tenseFocus ? [tenseFocus] : settings.tenseForms;
+    const pool = items.filter((it) => allowedForms.includes(it.form));
+    const finalPool = pool.length ? pool : items; // pojistka, kdyby nastavení/výběr nesedělo na žádnou položku
+    const item = weightedChoice(finalPool, (it) => mistakeWeight(mc, `english:${subtype}:${it.text}`));
     const isConditional = item.variant === 'conditional';
+    const focused = !!tenseFocus;
+    const timelinePoints = ['minulost dokončená', 'minulost', 'minulost → nyní', 'nyní', 'budoucnost'];
+    const timelineIndex = { past_perfect: 0, past_simple: 1, past_continuous: 1, present_perfect: 2, present_perfect_continuous: 2, present_simple: 3, present_continuous: 3, future: 4 };
+
     return {
       key: `english:${subtype}:${item.text}`,
       answerText: item.answer[0],
       prompt: `Doplň sloveso v závorce ve správném tvaru:\n\n${item.text}`,
-      hintTitle: isConditional ? 'Podmínkové věty (if-clauses)' : 'Anglické slovesné časy',
-      hintBody: isConditional
+      hintTitle: focused ? `${TENSE_FORM_LABELS[item.form]} — kdy se používá` : (isConditional ? 'Podmínkové věty (if-clauses)' : 'Anglické slovesné časy'),
+      hintBody: focused
         ? [
-            'Reálná/možná podmínka v budoucnosti (1. typ): If + přítomný čas prostý, ... will + infinitiv (If it rains, we will stay home.).',
-            'Nereálná/hypotetická podmínka v přítomnosti (2. typ): If + minulý čas prostý, ... would + infinitiv (If I were you, I would apologize.).',
-            'Postup: nejprve rozhodni, jestli je podmínka reálně splnitelná (1. typ), nebo jde o vymyšlenou/nepravděpodobnou situaci (2. typ), a podle toho zvol odpovídající dvojici časů.',
+            TENSE_FORM_RULES[item.form],
+            'Tohle pravidlo teď trénuješ cíleně (viz "Trénink konkrétního času" nahoře) — čím víc podobných vět projdeš, tím líp si zafixuješ, PODLE ČEHO tenhle čas ve větě poznat příště sám/sama.',
           ]
-        : [
-            'Volba anglického slovesného času závisí na tom, KDY se děj odehrává a jaký má vztah k přítomnosti — ne na doslovném překladu do češtiny.',
-            'Obecná pravidla/fakta a pravidelné děje → Present Simple. Děj probíhající právě teď/dočasně → Present Continuous.',
-            'Děj ukončený v minulosti s uvedeným časem (last year, in 2010, yesterday) → Past Simple. Minulý děj se vztahem k přítomnosti (already, never, just, for/since, bez udání přesného času) → Present Perfect.',
-            'Postup: v zadání hledej signální slovo/kontext (usually, right now, last year, never…) — to napoví, který čas použít.',
-          ],
-      hintImage: isConditional
-        ? svgDecisionBranch('Jak reálná je podmínka?', [
-            { cond: 'reálná / možná v budoucnu', result: 'If + Present Simple → will + infinitiv' },
-            { cond: 'nereálná / hypotetická teď', result: 'If + Past Simple → would + infinitiv' },
-          ])
-        : svgDecisionBranch('Kdy a jak se děj odehrává?', [
-            { cond: 'obecně, pravidelně, fakta', result: 'Present Simple' },
-            { cond: 'právě teď, dočasně', result: 'Present Continuous' },
-            { cond: 'ukončeno v minulosti (last year…)', result: 'Past Simple' },
-            { cond: 'minulost → vztah k přítomnosti (never, already…)', result: 'Present Perfect' },
-          ]),
+        : (isConditional
+            ? [
+                'Reálná/možná podmínka v budoucnosti (1. typ): If + přítomný čas prostý, ... will + infinitiv (If it rains, we will stay home.).',
+                'Nereálná/hypotetická podmínka v přítomnosti (2. typ): If + minulý čas prostý, ... would + infinitiv (If I were you, I would apologize.).',
+                'Postup: nejprve rozhodni, jestli je podmínka reálně splnitelná (1. typ), nebo jde o vymyšlenou/nepravděpodobnou situaci (2. typ), a podle toho zvol odpovídající dvojici časů.',
+              ]
+            : [
+                'Volba anglického slovesného času závisí na tom, KDY se děj odehrává a jaký má vztah k přítomnosti — ne na doslovném překladu do češtiny.',
+                'Obecná pravidla/fakta a pravidelné děje → Present Simple. Děj probíhající právě teď/dočasně → Present Continuous.',
+                'Děj ukončený v minulosti s uvedeným časem (last year, in 2010, yesterday) → Past Simple. Minulý děj se vztahem k přítomnosti (already, never, just, for/since, bez udání přesného času) → Present Perfect.',
+                'Postup: v zadání hledej signální slovo/kontext (usually, right now, last year, never…) — to napoví, který čas použít. Pokud ti nejde poznat konkrétní čas, zkus appce nahoře zapnout "Trénink konkrétního času" a procvič si je jednotlivě.',
+              ]
+          ),
+      hintImage: focused
+        ? (isConditional
+            ? svgDecisionBranch(TENSE_FORM_LABELS[item.form], [
+                { cond: item.form === 'conditional1' ? 'reálná / možná v budoucnu' : 'nereálná / hypotetická teď', result: item.form === 'conditional1' ? 'If + Present Simple → will + infinitiv' : 'If + Past Simple → would + infinitiv' },
+              ])
+            : svgTimeline(timelinePoints, timelineIndex[item.form], `trénuješ: ${TENSE_FORM_LABELS[item.form]}`))
+        : (isConditional
+            ? svgDecisionBranch('Jak reálná je podmínka?', [
+                { cond: 'reálná / možná v budoucnu', result: 'If + Present Simple → will + infinitiv' },
+                { cond: 'nereálná / hypotetická teď', result: 'If + Past Simple → would + infinitiv' },
+              ])
+            : svgDecisionBranch('Kdy a jak se děj odehrává?', [
+                { cond: 'obecně, pravidelně, fakta', result: 'Present Simple' },
+                { cond: 'právě teď, dočasně', result: 'Present Continuous' },
+                { cond: 'ukončeno v minulosti (last year…)', result: 'Past Simple' },
+                { cond: 'minulost → vztah k přítomnosti (never, already…)', result: 'Present Perfect' },
+              ])),
       check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
     };
   }
@@ -5510,7 +5607,7 @@ function srsWeightForSentence(srs, id) {
  *  vybírat (žádný označený zápis, nebo jsou moc krátké na doplňovačku),
  *  vrátí null - volající (generateNewQuiz) na to musí reagovat srozumitelnou
  *  hláškou místo rozbité otázky. */
-function buildQuiz(subject, mistakeCounts, mode, srs, examOnly) {
+function buildQuiz(subject, mistakeCounts, mode, srs, examOnly, tenseFocus) {
   const mc = mistakeCounts || {};
   const name = typeof subject === 'string' ? subject : subject.name;
   const isObj = subject && typeof subject === 'object';
@@ -5551,7 +5648,7 @@ function buildQuiz(subject, mistakeCounts, mode, srs, examOnly) {
   let gen;
   if (type === 'math') gen = generateMath(mc, difficulty);
   else if (type === 'czech') gen = generateCzech(mc);
-  else if (type === 'english') gen = generateEnglish(mc);
+  else if (type === 'english') gen = generateEnglish(mc, difficulty, tenseFocus);
   else gen = generateGeneric(mc);
   return { type, ...gen };
 }
@@ -8648,7 +8745,7 @@ const app = createApp({
       let tries = 0;
       while (options.length < 4 && tries < 15) {
         tries++;
-        const candidate = buildQuiz(subject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value);
+        const candidate = buildQuiz(subject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value, englishTenseFocus.value);
         if (!candidate) continue;
         const candAnswer = String(candidate.answerText || '').trim();
         if (!candAnswer) continue;
@@ -8775,7 +8872,7 @@ const app = createApp({
           examQuizSubjectId.value = sourceSubject.id;
         }
       }
-      const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value);
+      const built = buildQuiz(sourceSubject, stats.mistakeCounts, practiceMode.value, stats.srs, examPracticeMode.value, englishTenseFocus.value);
       if (!built) {
         // Zkouškový režim je zapnutý, ale ze současné kombinace předmětu/módu
         // (psaná doplňovačka vs. kartičky) zrovna nejde sestavit žádná otázka
@@ -9196,13 +9293,28 @@ const app = createApp({
       }
     }
     const quizCategoryLabel = computed(() => CATEGORY_LABELS[quiz.type] || CATEGORY_LABELS.generic);
-    // Obtížnost zatím reálně ovlivňuje jen matematické příklady (rozsahy čísel),
-    // takže přepínač obtížnosti se v UI zobrazuje jen u matematických předmětů.
+    // Obtížnost reálně ovlivňuje matematické příklady (rozsahy čísel) i angličtinu
+    // (jaké typy cvičení/časy se vůbec objeví - viz ENGLISH_DIFFICULTY_SETTINGS),
+    // takže přepínač obtížnosti se v UI zobrazuje u obou.
     const activeSubjectIsMath = computed(() => !!activeSubject.value && detectSubjectType(activeSubject.value.name) === 'math');
+    const activeSubjectIsEnglish = computed(() => !!activeSubject.value && detectSubjectType(activeSubject.value.name) === 'english');
     // Rozbor vět dává smysl jen u předmětu typu čeština - stejný princip jako
     // u activeSubjectIsMath výš (přepínač obtížnosti se taky zobrazuje jen
     // tam, kde má reálný efekt).
     const activeSubjectIsCzech = computed(() => !!activeSubject.value && detectSubjectType(activeSubject.value.name) === 'czech');
+
+    /* ---------- Trénink konkrétního anglického času ----------
+       Normálně (englishTenseFocus === null) generateEnglish míchá typy cvičení
+       podle obtížnosti (viz ENGLISH_DIFFICULTY_SETTINGS). Když si uživatel
+       vybere konkrétní čas, appka mu dá VÝHRADNĚ věty na tenhle čas (subtyp
+       "tense" se vynutí a bank vět se zúží jen na položky se stejným .form) -
+       hodí se, když se chce doučit zrovna jeden konkrétní čas, dokud ho
+       nezvládne, místo aby na něj čekal v namíchaném pořadí. */
+    const englishTenseFocus = ref(null);
+    function setEnglishTenseFocus(value) {
+      englishTenseFocus.value = value || null;
+      if (activeSubjectIsEnglish.value) generateNewQuiz();
+    }
 
     /* ---------- Statistiky za právě otevřený předmět ---------- */
     const activeSubjectStats = computed(() => {
@@ -9546,7 +9658,8 @@ const app = createApp({
       speechSupported, speakingNoteId, isSpeakingQuizPrompt, stopSpeaking, speakNote, speakQuizPrompt,
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
       showPomodoro, pomodoro, pomodoroTimeLabel, startPomodoro, pausePomodoro, resetPomodoro,
-      setDifficulty, activeSubjectIsMath, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
+      setDifficulty, activeSubjectIsMath, activeSubjectIsEnglish, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
+      englishTenseFocus, setEnglishTenseFocus, TENSE_FORM_LABELS,
       activeSubjectIsCzech, showSentenceAnalyses, newSentenceAnalysis, addSentenceAnalysis, deleteSentenceAnalysis,
       recommendedSubject, recommendationReason, dailyPlanItems,
       addChecklistItem, removeChecklistItem, toggleChecklistItem,
