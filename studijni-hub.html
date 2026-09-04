@@ -1736,61 +1736,105 @@
 
         <Transition name="fade">
           <div v-if="showBookAnalysis" class="px-5 pb-5 pt-1 border-t border-slate-800">
-            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">📚 Rozbor knih (povinná četba)</p>
-            <p class="text-xs text-slate-500 mb-3">Vyber nejdřív spisovatele a pak knihu, kterou napsal - appka ti ukáže hotový rozbor (spisovatel, žánr a doba, děj, postavy, hlavní myšlenka, ukázka), který si můžeš i vytisknout na jednu stránku A4.</p>
-
-            <div class="flex flex-wrap items-end gap-2 mb-4">
-              <label class="text-xs text-slate-500">Spisovatel
-                <select :value="bookAnalysisAuthor" @change="selectBookAnalysisAuthor($event.target.value)" class="input !py-1.5 !text-sm block mt-0.5 !min-w-[14rem]">
-                  <option value="" disabled>Vyber spisovatele…</option>
-                  <option v-for="a in bookAnalysisAuthors" :key="a" :value="a">{{ a }}</option>
-                </select>
-              </label>
-              <label v-if="bookAnalysisAuthor" class="text-xs text-slate-500">Kniha
-                <select v-model="bookAnalysisTitle" class="input !py-1.5 !text-sm block mt-0.5 !min-w-[14rem]">
-                  <option value="" disabled>Vyber knihu…</option>
-                  <option v-for="t in bookAnalysisTitlesForAuthor" :key="t" :value="t">{{ t }}</option>
-                </select>
-              </label>
-              <button v-if="activeBookAnalysis" @click="printBookAnalysis(activeBookAnalysis)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🖨️ Tisk na A4</button>
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-1 mt-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">📚 Rozbor knih (povinná četba)</p>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500" title="Kolik z 128 knih na seznamu máš označených jako přečtené">📗 Přečteno {{ readBooksCount }}/128</span>
+                <button @click="bookQuizActive ? stopBookQuiz() : startBookQuiz()" class="btn-ghost !text-xs !py-1 !px-2 !text-violet-300">
+                  {{ bookQuizActive ? '← Zpět na rozbory' : '🧠 Kvíz z četby' }}
+                </button>
+              </div>
             </div>
 
-            <div v-if="activeBookAnalysis" class="rounded-lg bg-slate-800/40 p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <div class="md:col-span-2">
-                <p class="text-base font-semibold">{{ activeBookAnalysis.title }}</p>
-                <p class="text-xs text-cyan-300">{{ activeBookAnalysis.author }}</p>
-                <div class="flex flex-wrap gap-1.5 mt-1.5">
-                  <span v-if="activeBookAnalysis.genre" class="text-xs px-2 py-0.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-300">📚 {{ activeBookAnalysis.genre }}</span>
-                  <span v-if="activeBookAnalysis.movement" class="text-xs px-2 py-0.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-300">🖋️ {{ activeBookAnalysis.movement }}</span>
+            <template v-if="!bookQuizActive">
+              <p class="text-xs text-slate-500 mb-3">Vyber nejdřív spisovatele a pak knihu, kterou napsal - appka ti ukáže hotový rozbor (spisovatel, žánr a doba, děj, postavy, hlavní myšlenka, ukázka), který si můžeš i vytisknout na jednu stránku A4.</p>
+
+              <div class="flex flex-wrap items-end gap-2 mb-4">
+                <label class="text-xs text-slate-500">Spisovatel
+                  <select :value="bookAnalysisAuthor" @change="selectBookAnalysisAuthor($event.target.value)" class="input !py-1.5 !text-sm block mt-0.5 !min-w-[14rem]">
+                    <option value="" disabled>Vyber spisovatele…</option>
+                    <option v-for="a in bookAnalysisAuthors" :key="a" :value="a">{{ a }}</option>
+                  </select>
+                </label>
+                <label v-if="bookAnalysisAuthor" class="text-xs text-slate-500">Kniha
+                  <select v-model="bookAnalysisTitle" class="input !py-1.5 !text-sm block mt-0.5 !min-w-[14rem]">
+                    <option value="" disabled>Vyber knihu…</option>
+                    <option v-for="t in bookAnalysisTitlesForAuthor" :key="t" :value="t">{{ t }}</option>
+                  </select>
+                </label>
+                <button v-if="activeBookAnalysis" @click="toggleBookRead(activeBookAnalysis)" class="btn-secondary !py-1.5 text-sm" :class="isBookRead(activeBookAnalysis) ? '!bg-emerald-900/40 !border-emerald-700 !text-emerald-300' : '!bg-black/25 !border-white/20 hover:!bg-black/40'">
+                  {{ isBookRead(activeBookAnalysis) ? '✅ Přečteno' : '📗 Označit jako přečtené' }}
+                </button>
+                <button v-if="activeBookAnalysis" @click="printBookAnalysis(activeBookAnalysis)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 text-sm">🖨️ Tisk na A4</button>
+              </div>
+
+              <div v-if="activeBookAnalysis" class="rounded-lg bg-slate-800/40 p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div class="md:col-span-2">
+                  <p class="text-base font-semibold">{{ activeBookAnalysis.title }}</p>
+                  <p class="text-xs text-cyan-300">{{ activeBookAnalysis.author }}</p>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    <span v-if="activeBookAnalysis.genre" class="text-xs px-2 py-0.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-300">📚 {{ activeBookAnalysis.genre }}</span>
+                    <span v-if="activeBookAnalysis.movement" class="text-xs px-2 py-0.5 rounded-full bg-slate-900/60 border border-slate-700 text-slate-300">🖋️ {{ activeBookAnalysis.movement }}</span>
+                  </div>
+                </div>
+                <div class="md:col-span-2">
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">✍️ O spisovateli</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.authorBio }}</p>
+                </div>
+                <div class="md:col-span-2">
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">📖 Dílo autora a spolupráce</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.authorWorks }}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🕰️ Doba vzniku</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.era }}</p>
+                </div>
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🎯 Hlavní myšlenka</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.theme }}</p>
+                </div>
+                <div class="md:col-span-2">
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">📜 Děj</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.plot }}</p>
+                </div>
+                <div class="md:col-span-2">
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🎭 Postavy</p>
+                  <p class="text-slate-300">{{ activeBookAnalysis.characters }}</p>
+                </div>
+                <div class="md:col-span-2 border-l-2 border-cyan-700 pl-2 italic text-cyan-200">„{{ activeBookAnalysis.quote }}“</div>
+                <div class="md:col-span-2">
+                  <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">📝 Moje poznámky <span class="normal-case opacity-70">(uloží se automaticky, přidají se i do tisku)</span></p>
+                  <textarea v-model="activeBookNote" rows="2" placeholder="Vlastní postřehy z hodiny, co si k téhle knize chceš zapamatovat…" class="input !text-sm w-full"></textarea>
                 </div>
               </div>
-              <div class="md:col-span-2">
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">✍️ O spisovateli</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.authorBio }}</p>
+              <div v-else class="text-slate-500 text-sm">Vyber spisovatele a knihu, pro kterou chceš zobrazit rozbor.</div>
+            </template>
+
+            <template v-else>
+              <p class="text-xs text-slate-500 mb-3">Namíchané otázky o autorech, žánrech a literárních směrech ze všech 128 knih na tvém seznamu. Nejde o klasický bodovaný kvíz appky (SRS/slabá místa) - je to jen rychlé opáknutí faktů.</p>
+              <div v-if="bookQuizQuestion" class="rounded-lg bg-slate-800/40 p-4">
+                <div class="flex items-center justify-between mb-2">
+                  <p class="font-medium">{{ bookQuizQuestion.prompt }}</p>
+                  <span class="text-xs text-slate-500 shrink-0 ml-2">Skóre: {{ bookQuizScore.correct }}/{{ bookQuizScore.total }}</span>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <button
+                    v-for="(opt, idx) in bookQuizQuestion.options"
+                    :key="idx"
+                    @click="answerBookQuiz(idx)"
+                    :disabled="bookQuizSelected !== null"
+                    class="text-left px-3 py-2 rounded-lg border text-sm transition-colors"
+                    :class="{
+                      'border-slate-700 bg-slate-900/40 hover:bg-slate-900/70 cursor-pointer': bookQuizSelected === null,
+                      'border-emerald-600 bg-emerald-900/30 text-emerald-300': bookQuizSelected !== null && idx === bookQuizQuestion.correctIndex,
+                      'border-rose-600 bg-rose-900/30 text-rose-300': bookQuizSelected === idx && idx !== bookQuizQuestion.correctIndex,
+                      'border-slate-800 opacity-60': bookQuizSelected !== null && idx !== bookQuizQuestion.correctIndex && idx !== bookQuizSelected,
+                    }"
+                  >{{ opt }}</button>
+                </div>
+                <button v-if="bookQuizSelected !== null" @click="nextBookQuizQuestion" class="btn-primary !py-1.5 !px-4 text-sm mt-3">Další otázka ➡️</button>
               </div>
-              <div class="md:col-span-2">
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">📖 Dílo autora a spolupráce</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.authorWorks }}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🕰️ Doba vzniku</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.era }}</p>
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🎯 Hlavní myšlenka</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.theme }}</p>
-              </div>
-              <div class="md:col-span-2">
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">📜 Děj</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.plot }}</p>
-              </div>
-              <div class="md:col-span-2">
-                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-0.5">🎭 Postavy</p>
-                <p class="text-slate-300">{{ activeBookAnalysis.characters }}</p>
-              </div>
-              <div class="md:col-span-2 border-l-2 border-cyan-700 pl-2 italic text-cyan-200">„{{ activeBookAnalysis.quote }}“</div>
-            </div>
-            <div v-else class="text-slate-500 text-sm">Vyber spisovatele a knihu, pro kterou chceš zobrazit rozbor.</div>
+            </template>
           </div>
         </Transition>
 
@@ -5784,8 +5828,11 @@ const BOOK_ANALYSES = [
 /** Sestaví jednostránkové A4 HTML s rozborem jedné knihy - stejný vzor
  *  (nové okno + window.print(), viz printBookAnalysis ve setup()) jako
  *  buildCheatSheetHtml výš. */
-function buildBookAnalysisHtml(book) {
+function buildBookAnalysisHtml(book, note) {
   if (!book) return '<!DOCTYPE html><html><body><p>Rozbor nenalezen.</p></body></html>';
+  const noteHtml = (note && note.trim()) ? `
+    <div class="ba-section ba-span2 ba-note"><h2>📝 Moje poznámky</h2><p>${escapeHtml(note.trim())}</p></div>
+  ` : '';
   return `<!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -5802,8 +5849,10 @@ function buildBookAnalysisHtml(book) {
   .ba-section { margin-bottom: 0.7rem; break-inside: avoid; page-break-inside: avoid; }
   .ba-section.ba-span2 { grid-column: 1 / -1; }
   .ba-section h2 { font-size: 0.82rem; margin: 0 0 0.2rem; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.12rem; color: #0f172a; }
-  .ba-section p { margin: 0; color: #334155; }
+  .ba-section p { margin: 0; color: #334155; white-space: pre-wrap; }
   .ba-quote { font-style: italic; border-left: 3px solid #0e7490; padding-left: 0.6rem; color: #0e7490; }
+  .ba-note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.5rem; padding: 0.5rem 0.7rem; }
+  .ba-note h2 { border-bottom-color: #fde68a; }
   @media print { body { margin: 0; padding: 0.5rem; } }
   @page { size: A4; margin: 12mm; }
 </style>
@@ -5822,10 +5871,64 @@ function buildBookAnalysisHtml(book) {
     <div class="ba-section ba-span2"><h2>📜 Děj</h2><p>${escapeHtml(book.plot)}</p></div>
     <div class="ba-section ba-span2"><h2>🎭 Postavy</h2><p>${escapeHtml(book.characters)}</p></div>
     <div class="ba-section ba-span2"><h2>💬 Ukázka</h2><p class="ba-quote">„${escapeHtml(book.quote)}“</p></div>
+    ${noteHtml}
   </div>
   <p class="cs-subtitle" style="color:#94a3b8;font-size:0.65rem;margin-top:1rem;">Vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu · rozbor k povinné četbě.</p>
 </body>
 </html>`;
+}
+
+/** Stabilní klíč jedné knihy (autor+název) - používá se jako identita v
+ *  stats.readBooks (přečtené tituly) a stats.bookNotes (vlastní poznámky),
+ *  protože BOOK_ANALYSES samo o sobě žádná id nemá. */
+function bookKey(book) {
+  return `${book.author}|||${book.title}`;
+}
+
+/** Vybere `count` navzájem různých "vnadidel" z pole hodnot `pool`, která se
+ *  liší od správné odpovědi `correctValue` (a od sebe navzájem) - používá se
+ *  k sestavení možností kvízu z povinné četby (viz generateBookQuizQuestion). */
+function pickDistractors(pool, correctValue, count) {
+  const unique = [...new Set(pool.filter((v) => v && v !== correctValue))];
+  const idxs = shuffledIndices(unique.length).slice(0, count);
+  return idxs.map((i) => unique[i]);
+}
+
+/** Vygeneruje jednu otázku kvízu z povinné četby - náhodně zvolí typ otázky
+ *  (kdo je autor / které dílo napsal / jaký žánr / jaký literární směr) a
+ *  4 možnosti (1 správná + vnadidla z jiných knih databáze BOOK_ANALYSES).
+ *  Vrací { type, prompt, options[], correctIndex, book } - čistá funkce bez
+ *  vazby na Vue/appku, testovatelná samostatně. */
+function generateBookQuizQuestion() {
+  const book = choice(BOOK_ANALYSES);
+  const type = choice(['author', 'title', 'genre', 'movement']);
+  let prompt;
+  let correct;
+  let pool;
+  if (type === 'author') {
+    prompt = `Kdo napsal dílo „${book.title}“?`;
+    correct = book.author;
+    pool = BOOK_ANALYSES.map((b) => b.author);
+  } else if (type === 'title') {
+    prompt = `Které z těchto děl napsal(a) ${book.author}?`;
+    correct = book.title;
+    // Vnadidla jen od JINÝCH autorů, ať má otázka jednoznačně jednu správnou odpověď.
+    pool = BOOK_ANALYSES.filter((b) => b.author !== book.author).map((b) => b.title);
+  } else if (type === 'genre') {
+    prompt = `Jaký literární druh/žánr má dílo „${book.title}“ (${book.author})?`;
+    correct = book.genre;
+    pool = BOOK_ANALYSES.map((b) => b.genre);
+  } else {
+    prompt = `Do jakého literárního směru/období se řadí dílo „${book.title}“ (${book.author})?`;
+    correct = book.movement;
+    pool = BOOK_ANALYSES.map((b) => b.movement);
+  }
+  const distractors = pickDistractors(pool, correct, 3);
+  const allOptions = [correct, ...distractors];
+  const order = shuffledIndices(allOptions.length);
+  const options = order.map((i) => allOptions[i]);
+  const correctIndex = options.indexOf(correct);
+  return { type, prompt, options, correctIndex, book };
 }
 
 /* =====================================================================
@@ -6170,6 +6273,11 @@ function parseStatsJson(raw) {
     goals: [],
     // Sledování aktivního času s appkou otevřenou - viz addStudySeconds.
     studyTimeByDay: {},
+    // Rozbor knih (povinná četba) - přečtené tituly (pole klíčů "autor|||název",
+    // viz bookKey/toggleBookRead) a vlastní poznámky k jednotlivým knihám
+    // (objekt klíč -> text, viz updateBookNote).
+    readBooks: [],
+    bookNotes: {},
   };
   try {
     if (raw) {
@@ -6199,6 +6307,8 @@ function parseStatsJson(raw) {
         timetable: (parsed && typeof parsed.timetable === 'object' && parsed.timetable) || {},
         goals: Array.isArray(parsed && parsed.goals) ? parsed.goals : [],
         studyTimeByDay: (parsed && typeof parsed.studyTimeByDay === 'object' && parsed.studyTimeByDay) || {},
+        readBooks: Array.isArray(parsed && parsed.readBooks) ? parsed.readBooks : [],
+        bookNotes: (parsed && typeof parsed.bookNotes === 'object' && parsed.bookNotes) || {},
       };
     }
   } catch (e) {
@@ -7697,6 +7807,7 @@ const app = createApp({
       streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
       practiceLog: [],
       timetable: {}, goals: [], studyTimeByDay: {},
+      readBooks: [], bookNotes: {},
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -7841,6 +7952,8 @@ const app = createApp({
               timetable: (remote.stats.timetable && typeof remote.stats.timetable === 'object') ? remote.stats.timetable : {},
               goals: Array.isArray(remote.stats.goals) ? remote.stats.goals : [],
               studyTimeByDay: (remote.stats.studyTimeByDay && typeof remote.stats.studyTimeByDay === 'object') ? remote.stats.studyTimeByDay : {},
+              readBooks: Array.isArray(remote.stats.readBooks) ? remote.stats.readBooks : [],
+              bookNotes: (remote.stats.bookNotes && typeof remote.stats.bookNotes === 'object') ? remote.stats.bookNotes : {},
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
@@ -9107,6 +9220,36 @@ const app = createApp({
       bookAnalysisTitle.value = '';
     }
     const activeBookAnalysis = computed(() => BOOK_ANALYSES.find((b) => b.author === bookAnalysisAuthor.value && b.title === bookAnalysisTitle.value) || null);
+
+    /* ---- Sledování přečtených knih (stats.readBooks - pole klíčů bookKey) ---- */
+    const readBooksCount = computed(() => (stats.readBooks || []).length);
+    function isBookRead(book) {
+      return !!book && (stats.readBooks || []).includes(bookKey(book));
+    }
+    function toggleBookRead(book) {
+      if (!book) return;
+      if (!Array.isArray(stats.readBooks)) stats.readBooks = [];
+      const key = bookKey(book);
+      const idx = stats.readBooks.indexOf(key);
+      if (idx === -1) stats.readBooks.push(key);
+      else stats.readBooks.splice(idx, 1);
+    }
+
+    /* ---- Vlastní poznámky ke knize (stats.bookNotes - objekt klíč -> text) ---- */
+    const activeBookNote = computed({
+      get: () => {
+        if (!activeBookAnalysis.value) return '';
+        return (stats.bookNotes || {})[bookKey(activeBookAnalysis.value)] || '';
+      },
+      set: (value) => {
+        if (!activeBookAnalysis.value) return;
+        if (!stats.bookNotes || typeof stats.bookNotes !== 'object') stats.bookNotes = {};
+        const key = bookKey(activeBookAnalysis.value);
+        if (value && value.trim()) stats.bookNotes[key] = value;
+        else delete stats.bookNotes[key];
+      },
+    });
+
     function printBookAnalysis(book) {
       if (!book) return;
       const printWindow = window.open('', '_blank');
@@ -9114,11 +9257,41 @@ const app = createApp({
         alert('Prohlížeč zablokoval vyskakovací okno potřebné pro tisk rozboru. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
         return;
       }
+      const note = (stats.bookNotes || {})[bookKey(book)] || '';
       printWindow.document.open();
-      printWindow.document.write(buildBookAnalysisHtml(book));
+      printWindow.document.write(buildBookAnalysisHtml(book, note));
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => { printWindow.print(); }, 350);
+    }
+
+    /* ---- Kvíz z povinné četby (samostatný, lehký kvíz nad BOOK_ANALYSES -
+       viz generateBookQuizQuestion výš; NENÍ propojený s SRS/slabými místy
+       ostatních předmětů, jde o rychlé opáknutí faktů o knihách). ---- */
+    const bookQuizActive = ref(false);
+    const bookQuizQuestion = ref(null);
+    const bookQuizSelected = ref(null);
+    const bookQuizScore = reactive({ correct: 0, total: 0 });
+    function nextBookQuizQuestion() {
+      bookQuizQuestion.value = generateBookQuizQuestion();
+      bookQuizSelected.value = null;
+    }
+    function startBookQuiz() {
+      bookQuizScore.correct = 0;
+      bookQuizScore.total = 0;
+      bookQuizActive.value = true;
+      nextBookQuizQuestion();
+    }
+    function answerBookQuiz(idx) {
+      if (bookQuizSelected.value !== null || !bookQuizQuestion.value) return;
+      bookQuizSelected.value = idx;
+      bookQuizScore.total += 1;
+      if (idx === bookQuizQuestion.value.correctIndex) bookQuizScore.correct += 1;
+    }
+    function stopBookQuiz() {
+      bookQuizActive.value = false;
+      bookQuizQuestion.value = null;
+      bookQuizSelected.value = null;
     }
 
     /* ---------- Sledování času u studia ----------
@@ -10535,6 +10708,8 @@ const app = createApp({
               timetable: (importedStats.timetable && typeof importedStats.timetable === 'object') ? importedStats.timetable : {},
               goals: Array.isArray(importedStats.goals) ? importedStats.goals : [],
               studyTimeByDay: (importedStats.studyTimeByDay && typeof importedStats.studyTimeByDay === 'object') ? importedStats.studyTimeByDay : {},
+              readBooks: Array.isArray(importedStats.readBooks) ? importedStats.readBooks : [],
+              bookNotes: (importedStats.bookNotes && typeof importedStats.bookNotes === 'object') ? importedStats.bookNotes : {},
             });
           }
           activeSubjectId.value = null;
@@ -11481,6 +11656,8 @@ const app = createApp({
       showTimetable, DAY_LABELS, DAY_ORDER, timetableForm, timetableSlotsForDay, addTimetableSlot, removeTimetableSlot, todayTimetable,
       showGoals, newGoalForm, addGoal, removeGoal, activeGoalsWithProgress,
       showBookAnalysis, bookAnalysisAuthor, bookAnalysisTitle, bookAnalysisAuthors, bookAnalysisTitlesForAuthor, selectBookAnalysisAuthor, activeBookAnalysis, printBookAnalysis,
+      readBooksCount, isBookRead, toggleBookRead, activeBookNote,
+      bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
       todayStudyMinutes, weekStudyMinutes, addStudySeconds,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
