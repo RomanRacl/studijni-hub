@@ -1844,38 +1844,203 @@
         <Transition name="fade">
           <div v-if="showEnglishExtra" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🌍 Angličtina navíc (mimo appku)</p>
-            <p class="text-xs text-slate-500 mb-4">Appka sama tě naučí gramatiku a slovní zásobu, ale mluvení a poslech reálné angličtiny nenahradí. Tady je týdenní plán a pár konkrétních zdrojů, ať se z toho stane pravidelný rituál.</p>
+            <p class="text-xs text-slate-500 mb-3">Appka sama tě naučí gramatiku a slovní zásobu, ale mluvení a poslech reálné angličtiny nenahradí. Tady je týdenní plán, zdroje a čtyři procvičovací cvičení navíc.</p>
 
-            <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">📅 Týdenní plán {{ englishPlanAllDone ? '🎉' : '' }}</p>
-            <div class="flex flex-col gap-2 mb-5">
-              <div v-for="a in englishPlanProgress" :key="a.key" class="rounded-lg bg-slate-800/40 p-2.5">
-                <div class="flex items-center justify-between gap-2 mb-1.5">
-                  <span class="text-sm font-medium">{{ a.label }}</span>
-                  <div class="flex items-center gap-2 shrink-0">
-                    <span class="text-xs" :class="a.done ? 'text-emerald-400' : 'text-slate-400'">{{ a.count }} / {{ a.weeklyTarget }}{{ a.done ? ' ✅' : '' }}</span>
-                    <button @click="unlogEnglishPractice(a.key)" :disabled="a.count === 0" class="btn-ghost !text-xs !p-1 disabled:opacity-30" title="Odebrat jeden záznam (překlep)">➖</button>
-                    <button @click="logEnglishPractice(a.key)" class="btn-secondary !text-xs !py-1 !px-2 !bg-black/25 !border-white/20 hover:!bg-black/40">➕ Splněno</button>
+            <div class="flex flex-wrap gap-1.5 mb-4">
+              <button @click="selectEnglishExtraTab('plan')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'plan' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">📅 Plán</button>
+              <button @click="selectEnglishExtraTab('resources')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'resources' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🔗 Zdroje</button>
+              <button @click="selectEnglishExtraTab('listening')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'listening' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🎧 Poslech</button>
+              <button @click="selectEnglishExtraTab('vocab')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'vocab' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">📇 Slovníček</button>
+              <button @click="selectEnglishExtraTab('speaking')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'speaking' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🎤 Maturita nanečisto</button>
+              <button @click="selectEnglishExtraTab('builder')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'builder' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🔀 Skládání vět</button>
+            </div>
+
+            <!-- Plán -->
+            <div v-if="englishExtraTab === 'plan'">
+              <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">📅 Týdenní plán {{ englishPlanAllDone ? '🎉' : '' }}</p>
+              <div class="flex flex-col gap-2 mb-3">
+                <div v-for="a in englishPlanProgress" :key="a.key" class="rounded-lg bg-slate-800/40 p-2.5">
+                  <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <span class="text-sm font-medium">{{ a.label }}</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span class="text-xs" :class="a.done ? 'text-emerald-400' : 'text-slate-400'">{{ a.count }} / {{ a.weeklyTarget }}{{ a.done ? ' ✅' : '' }}</span>
+                      <button @click="unlogEnglishPractice(a.key)" :disabled="a.count === 0" class="btn-ghost !text-xs !p-1 disabled:opacity-30" title="Odebrat jeden záznam (překlep)">➖</button>
+                      <button @click="logEnglishPractice(a.key)" class="btn-secondary !text-xs !py-1 !px-2 !bg-black/25 !border-white/20 hover:!bg-black/40">➕ Splněno</button>
+                    </div>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-900 overflow-hidden">
+                    <div class="h-full rounded-full" :class="a.done ? 'bg-emerald-500' : 'bg-sky-500'" :style="{ width: a.percent + '%' }"></div>
                   </div>
                 </div>
-                <div class="h-2 rounded-full bg-slate-900 overflow-hidden">
-                  <div class="h-full rounded-full" :class="a.done ? 'bg-emerald-500' : 'bg-sky-500'" :style="{ width: a.percent + '%' }"></div>
+              </div>
+              <p class="text-xs text-slate-600">Plán se počítá vždy za aktuální kalendářní týden (pondělí až neděle), stejně jako appčiny vlastní cíle - appka nic nevynucuje, jen ti pomáhá vidět, co jsi tenhle týden stihl/a.</p>
+            </div>
+
+            <!-- Zdroje -->
+            <div v-if="englishExtraTab === 'resources'">
+              <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">🔗 Doporučené zdroje</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div v-for="cat in ENGLISH_RESOURCE_CATEGORIES" :key="cat.key" class="rounded-lg bg-slate-800/40 p-3">
+                  <p class="text-sm font-semibold mb-0.5">{{ cat.label }}</p>
+                  <p class="text-xs text-slate-500 mb-2 italic">{{ cat.tip }}</p>
+                  <ul class="flex flex-col gap-1.5">
+                    <li v-for="item in cat.items" :key="item.name" class="text-sm">
+                      <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="text-cyan-300 hover:underline font-medium">{{ item.name }} ↗</a>
+                      <span v-else class="font-medium">{{ item.name }}</span>
+                      <p class="text-xs text-slate-400">{{ item.description }}</p>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
-            <p class="text-xs text-slate-600 mb-4">Plán se počítá vždy za aktuální kalendářní týden (pondělí až neděle), stejně jako appčiny vlastní cíle - appka nic nevynucuje, jen ti pomáhá vidět, co jsi tenhle týden stihl/a.</p>
 
-            <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">🔗 Doporučené zdroje</p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div v-for="cat in ENGLISH_RESOURCE_CATEGORIES" :key="cat.key" class="rounded-lg bg-slate-800/40 p-3">
-                <p class="text-sm font-semibold mb-0.5">{{ cat.label }}</p>
-                <p class="text-xs text-slate-500 mb-2 italic">{{ cat.tip }}</p>
-                <ul class="flex flex-col gap-1.5">
-                  <li v-for="item in cat.items" :key="item.name" class="text-sm">
-                    <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="text-cyan-300 hover:underline font-medium">{{ item.name }} ↗</a>
-                    <span v-else class="font-medium">{{ item.name }}</span>
-                    <p class="text-xs text-slate-400">{{ item.description }}</p>
-                  </li>
+            <!-- Poslech / diktát -->
+            <div v-if="englishExtraTab === 'listening'">
+              <p class="text-xs text-slate-500 mb-3">Appka větu přečte nahlas anglicky - napiš, co jsi slyšel/a, a appka to vyhodnotí slovo po slově.</p>
+              <div class="flex flex-wrap items-center gap-1.5 mb-3">
+                <span class="text-xs text-slate-500 mr-1">Obtížnost:</span>
+                <button v-for="d in ['easy','medium','hard','all']" :key="d" @click="setEnglishListeningDifficulty(d)" class="!text-xs px-2.5 py-1 rounded-lg border transition" :class="englishListeningDifficulty === d ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">{{ d === 'all' ? 'Vše' : DIFFICULTY_LABELS[d] }}</button>
+              </div>
+              <div v-if="englishListeningSentence" class="rounded-lg bg-slate-800/40 p-4">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                  <button @click="englishSpeakingKey === 'listening' ? stopSpeakingEnglish() : playEnglishListeningSentence()" class="btn-primary !py-1.5 !px-4">{{ englishSpeakingKey === 'listening' ? '⏹️ Zastavit' : '🔊 Přehrát větu' }}</button>
+                  <button @click="nextEnglishListeningSentence" class="btn-ghost !text-xs">↻ Jiná věta</button>
+                </div>
+                <input v-model="englishListeningInput" @keyup.enter="checkEnglishDictation" type="text" placeholder="Napiš, co jsi slyšel/a..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-3 text-slate-200">
+                <div class="flex items-center gap-2 mb-3">
+                  <button @click="checkEnglishDictation" class="btn-secondary !text-sm">✅ Vyhodnotit</button>
+                  <button @click="revealEnglishListeningAnswer" class="btn-ghost !text-xs">👁️ Zobrazit větu</button>
+                </div>
+                <div v-if="englishListeningResult" class="mb-3">
+                  <p class="text-sm mb-1.5" :class="englishListeningResult.isPerfect ? 'text-emerald-400' : 'text-amber-300'">{{ englishListeningResult.isPerfect ? '🎉 Přesně tak!' : `Shoda ${englishListeningResult.accuracy}% (${englishListeningResult.correctCount}/${englishListeningResult.totalCount} slov)` }}</p>
+                  <p class="text-sm leading-relaxed">
+                    <span v-for="(r, i) in englishListeningResult.results" :key="i" :class="r.correct ? 'text-emerald-400' : 'text-rose-400 line-through'">{{ r.word + ' ' }}</span>
+                  </p>
+                </div>
+                <template v-if="englishListeningRevealed">
+                  <p class="text-sm text-slate-300 italic mb-1">„{{ englishListeningSentence.en }}“</p>
+                  <p class="text-xs text-slate-500">{{ englishListeningSentence.cz }}</p>
+                </template>
+              </div>
+            </div>
+
+            <!-- Slovníček -->
+            <div v-if="englishExtraTab === 'vocab'">
+              <div v-if="!activeVocabTopic">
+                <p class="text-xs text-slate-500 mb-3">Vyber si téma slovní zásoby - appka nabízí přednostně slovíčka, která "dluží" opakování (rozložené opakování stejné jako u zbytku appky).</p>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <button v-for="t in vocabTopicsOverview" :key="t.key" @click="selectVocabTopic(t.key)" class="rounded-lg bg-slate-800/40 hover:bg-slate-800/70 p-3 text-left transition">
+                    <p class="text-sm font-medium mb-1">{{ t.label }}</p>
+                    <p class="text-xs text-slate-500">{{ t.mastered }} / {{ t.total }} umím</p>
+                  </button>
+                </div>
+              </div>
+              <div v-else class="rounded-lg bg-slate-800/40 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <p class="text-sm font-semibold">{{ activeVocabTopic.label }}</p>
+                  <button @click="closeVocabTopic" class="btn-ghost !text-xs">← Zpět na témata</button>
+                </div>
+                <div v-if="englishVocabCurrentWord" class="text-center py-6">
+                  <p class="text-2xl font-bold mb-2">{{ englishVocabFlipped ? englishVocabCurrentWord.cz : englishVocabCurrentWord.en }}</p>
+                  <button @click="englishSpeakingKey === 'vocab' ? stopSpeakingEnglish() : speakVocabWord()" class="btn-ghost !text-xs mb-3">{{ englishSpeakingKey === 'vocab' ? '⏹️' : '🔊' }} Přehrát</button>
+                  <p v-if="englishVocabFlipped" class="text-sm text-slate-400 italic mb-4">{{ englishVocabCurrentWord.example }}</p>
+                  <button v-if="!englishVocabFlipped" @click="flipVocabCard" class="btn-primary w-full">🔄 Otočit kartu</button>
+                  <div v-else class="flex flex-wrap justify-center gap-2">
+                    <button @click="gradeVocabCard(0)" class="btn-danger !text-sm" title="Vůbec jsem si nevzpomněl/a">❌ Neumím</button>
+                    <button @click="gradeVocabCard(1)" class="!text-sm px-3 py-2 rounded-lg border border-amber-700/60 bg-amber-950/30 text-amber-300 hover:bg-amber-900/40 transition" title="Trvalo dlouho / dost jsem váhal/a">🤔 Váhal/a jsem</button>
+                    <button @click="gradeVocabCard(2)" class="!text-sm px-3 py-2 rounded-lg border border-emerald-700/60 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40 transition" title="Vzpomněl/a jsem si bez větších potíží">✅ Umím</button>
+                    <button @click="gradeVocabCard(3)" class="btn-success !text-sm" title="Věděl/a jsem to naprosto jistě a hned">🌟 Umím skvěle</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Maturita nanečisto -->
+            <div v-if="englishExtraTab === 'speaking'">
+              <div v-if="!activeMaturitaTopic">
+                <p class="text-xs text-slate-500 mb-3">15 typických maturitních ústních témat - rozcvičovací otázky, slovní zásoba, tipy na strukturu a užitečné fráze. Dá se i vytisknout na A4.</p>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <button v-for="t in MATURITA_SPEAKING_TOPICS" :key="t.key" @click="selectMaturitaTopic(t.key)" class="rounded-lg bg-slate-800/40 hover:bg-slate-800/70 p-3 text-left text-sm font-medium transition">{{ t.topic }}</button>
+                </div>
+              </div>
+              <div v-else class="rounded-lg bg-slate-800/40 p-4">
+                <div class="flex items-center justify-between mb-3 gap-2">
+                  <p class="text-sm font-semibold">🎤 {{ activeMaturitaTopic.topic }}</p>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <button @click="printMaturitaTopic(activeMaturitaTopic)" class="btn-secondary !text-xs">🖨️ Tisk A4</button>
+                    <button @click="selectMaturitaTopic(null)" class="btn-ghost !text-xs">← Zpět</button>
+                  </div>
+                </div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">💬 Rozcvičovací otázky</p>
+                <ul class="text-sm text-slate-300 list-disc list-inside mb-3 flex flex-col gap-1">
+                  <li v-for="(q, i) in activeMaturitaTopic.warmupQuestions" :key="i">{{ q }}</li>
                 </ul>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">📚 Slovní zásoba</p>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1 mb-3">
+                  <template v-for="(v, i) in activeMaturitaTopic.vocabulary" :key="i">
+                    <span class="text-sm font-medium">{{ v.en }}</span>
+                    <span class="text-sm text-slate-400">{{ v.cz }}</span>
+                  </template>
+                </div>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">🧩 Tipy na strukturu</p>
+                <p class="text-sm text-slate-300 mb-3">{{ activeMaturitaTopic.structureTips }}</p>
+                <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">🔑 Užitečné fráze</p>
+                <ul class="text-sm text-slate-300 list-disc list-inside flex flex-col gap-1">
+                  <li v-for="(p, i) in activeMaturitaTopic.usefulPhrases" :key="i">{{ p }}</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Skládání vět / doplňovací dialogy -->
+            <div v-if="englishExtraTab === 'builder'">
+              <div class="flex flex-wrap gap-1.5 mb-3">
+                <button @click="selectEnglishBuilderExercise('sentence')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishBuilderExercise === 'sentence' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🔀 Skládání vět</button>
+                <button @click="selectEnglishBuilderExercise('dialogue')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishBuilderExercise === 'dialogue' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">💬 Doplň dialog</button>
+              </div>
+
+              <div v-if="englishBuilderExercise === 'sentence' && englishBuilderSentence" class="rounded-lg bg-slate-800/40 p-4">
+                <p class="text-xs text-slate-500 mb-3">Seřaď slova tak, aby dala smysluplnou anglickou větu. Kliknutím na slovo ho umístíš, kliknutím na už umístěné slovo ho zase vrátíš.</p>
+                <div class="min-h-[3rem] flex flex-wrap gap-2 mb-3 p-2 rounded-lg bg-slate-900/60 border border-slate-700">
+                  <button v-for="(w, i) in englishBuilderPlaced" :key="'p'+i" @click="undoBuilderWord()" class="px-2.5 py-1 rounded-lg bg-sky-600/30 border border-sky-500 text-sky-100 text-sm">{{ w }}</button>
+                  <span v-if="englishBuilderPlaced.length === 0" class="text-xs text-slate-600 italic py-1">(zatím žádná slova)</span>
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3">
+                  <button v-for="(w, i) in englishBuilderWords" :key="'w'+i" @click="pickBuilderWord(i)" class="px-2.5 py-1 rounded-lg bg-slate-700/50 border border-slate-600 hover:bg-slate-700 text-sm transition">{{ w }}</button>
+                </div>
+                <div class="flex items-center gap-2 mb-2">
+                  <button @click="checkEnglishBuilder" :disabled="englishBuilderWords.length > 0" class="btn-secondary !text-sm disabled:opacity-40">✅ Zkontrolovat</button>
+                  <button @click="nextEnglishBuilderSentence" class="btn-ghost !text-xs">↻ Další věta</button>
+                </div>
+                <p v-if="englishBuilderResult === true" class="text-sm text-emerald-400">🎉 Přesně tak!</p>
+                <template v-if="englishBuilderResult === false">
+                  <p class="text-sm text-rose-400 mb-1">Ještě to nesedí - zkus to znovu, nebo mrkni na správné znění:</p>
+                  <p class="text-sm text-slate-300 italic">„{{ englishBuilderSentence.en }}“ <span class="text-slate-500 not-italic">({{ englishBuilderSentence.cz }})</span></p>
+                </template>
+              </div>
+
+              <div v-if="englishBuilderExercise === 'dialogue' && englishDialogueItem" class="rounded-lg bg-slate-800/40 p-4">
+                <div class="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span class="text-xs text-slate-500 mr-1">Obtížnost:</span>
+                  <button v-for="d in ['easy','medium','hard','all']" :key="d" @click="setEnglishDialogueDifficulty(d)" class="!text-xs px-2.5 py-1 rounded-lg border transition" :class="englishDialogueDifficulty === d ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">{{ d === 'all' ? 'Vše' : DIFFICULTY_LABELS[d] }}</button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3 italic">{{ englishDialogueItem.topicCz }}</p>
+                <div class="flex flex-col gap-1.5 mb-4">
+                  <div v-for="(line, i) in englishDialogueItem.lines" :key="i" class="text-sm">
+                    <span class="text-slate-500 font-mono mr-1.5">{{ line.speaker }}:</span>
+                    <span v-if="line.text !== '___BLANK___'" class="text-slate-200">{{ line.text }}</span>
+                    <span v-else class="text-amber-300 font-medium">{{ englishDialogueSelected !== null ? englishDialogueItem.options[englishDialogueSelected] : '_____________' }}</span>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-2 mb-3">
+                  <button
+                    v-for="(opt, i) in englishDialogueItem.options" :key="i"
+                    @click="answerEnglishDialogue(i)"
+                    :disabled="englishDialogueSelected !== null"
+                    class="text-left text-sm px-3 py-2 rounded-lg border transition disabled:cursor-default"
+                    :class="englishDialogueSelected === null ? 'bg-slate-800/60 border-slate-700 hover:bg-slate-800' : (i === englishDialogueItem.correctIndex ? 'bg-emerald-950/40 border-emerald-600 text-emerald-300' : (i === englishDialogueSelected ? 'bg-rose-950/40 border-rose-600 text-rose-300' : 'bg-slate-800/30 border-slate-700 text-slate-500'))"
+                  >{{ opt }}</button>
+                </div>
+                <button @click="nextEnglishDialogue" class="btn-ghost !text-xs">↻ Další dialog</button>
               </div>
             </div>
           </div>
@@ -5932,6 +6097,989 @@ const ENGLISH_PLAN_ACTIVITIES = [
   { key: 'app', label: '📱 Kvízy v appce (Angličtina)', weeklyTarget: 3 },
 ];
 
+/** Věty pro poslechové/diktátové cvičení (viz englishListeningTab ve setup())
+ *  - appka větu přečte nahlas (Web Speech API, hlas en-US) a uživatel napíše,
+ *  co slyšel; vyhodnocení viz scoreDictationAttempt výš. Stejné věty se
+ *  používají i pro "🔀 Skládání vět" (shuffleSentenceWords). */
+const ENGLISH_PRACTICE_SENTENCES = [
+  { en: "I wake up early every morning.", cz: "Vstávám brzy každé ráno.", difficulty: "easy" },
+  { en: "She drinks coffee before breakfast.", cz: "Pije kávu před snídaní.", difficulty: "easy" },
+  { en: "My brother plays football after school.", cz: "Můj bratr hraje po škole fotbal.", difficulty: "easy" },
+  { en: "We eat dinner together every evening.", cz: "Každý večer večeříme spolu.", difficulty: "easy" },
+  { en: "He walks his dog in the park.", cz: "Venčí svého psa v parku.", difficulty: "easy" },
+  { en: "My mother cooks dinner every night.", cz: "Moje maminka vaří večeři každý večer.", difficulty: "easy" },
+  { en: "The students study English at school.", cz: "Studenti se ve škole učí angličtinu.", difficulty: "easy" },
+  { en: "I brush my teeth twice a day.", cz: "Čistím si zuby dvakrát denně.", difficulty: "easy" },
+  { en: "My sister likes chocolate cake very much.", cz: "Moje sestra má moc ráda čokoládový dort.", difficulty: "easy" },
+  { en: "We watch television after dinner together.", cz: "Po večeři se spolu díváme na televizi.", difficulty: "easy" },
+  { en: "He reads a book before bed.", cz: "Před spaním čte knihu.", difficulty: "easy" },
+  { en: "My father drives to work every day.", cz: "Můj táta jezdí každý den do práce autem.", difficulty: "easy" },
+  { en: "The children play in the garden.", cz: "Děti si hrají na zahradě.", difficulty: "easy" },
+  { en: "What do you usually eat for breakfast?", cz: "Co obvykle snídáš?", difficulty: "easy" },
+  { en: "She feeds the cat every morning.", cz: "Krmí kočku každé ráno.", difficulty: "easy" },
+  { en: "We traveled to Spain last summer for vacation.", cz: "Minulé léto jsme jeli na dovolenou do Španělska.", difficulty: "medium" },
+  { en: "She will start a new job next month.", cz: "Příští měsíc nastoupí do nové práce.", difficulty: "medium" },
+  { en: "They visited their grandparents during the holidays.", cz: "O prázdninách navštívili své prarodiče.", difficulty: "medium" },
+  { en: "I must finish this report before Friday.", cz: "Musím dokončit tuto zprávu do pátku.", difficulty: "medium" },
+  { en: "He can speak three languages very fluently.", cz: "Umí velmi plynule mluvit třemi jazyky.", difficulty: "medium" },
+  { en: "We are going to visit Paris next year.", cz: "Příští rok se chystáme navštívit Paříž.", difficulty: "medium" },
+  { en: "My parents bought a new car last week.", cz: "Moji rodiče si minulý týden koupili nové auto.", difficulty: "medium" },
+  { en: "She learned how to play the guitar.", cz: "Naučila se hrát na kytaru.", difficulty: "medium" },
+  { en: "They will move to a bigger house soon.", cz: "Brzy se přestěhují do většího domu.", difficulty: "medium" },
+  { en: "I need to buy some new running shoes.", cz: "Potřebuji si koupit nové běžecké boty.", difficulty: "medium" },
+  { en: "He worked as a teacher for ten years.", cz: "Deset let pracoval jako učitel.", difficulty: "medium" },
+  { en: "We should plan our trip more carefully.", cz: "Měli bychom náš výlet naplánovat pečlivěji.", difficulty: "medium" },
+  { en: "She wrote a letter to her best friend.", cz: "Napsala dopis své nejlepší kamarádce.", difficulty: "medium" },
+  { en: "They played tennis every weekend last year.", cz: "Minulý rok hráli každý víkend tenis.", difficulty: "medium" },
+  { en: "Will you travel abroad again next year?", cz: "Pojedeš příští rok znovu do zahraničí?", difficulty: "medium" },
+  { en: "Have scientists already found a solution to global warming problems?", cz: "Našli už vědci řešení problémů s globálním oteplováním?", difficulty: "hard" },
+  { en: "The environment would be much cleaner if people used less plastic.", cz: "Životní prostředí by bylo mnohem čistší, kdyby lidé používali méně plastu.", difficulty: "hard" },
+  { en: "Many new jobs have been created by modern technology companies.", cz: "Mnoho nových pracovních míst bylo vytvořeno moderními technologickými firmami.", difficulty: "hard" },
+  { en: "This problem could be solved if governments invested more money.", cz: "Tento problém by bylo možné vyřešit, kdyby vlády investovaly více peněz.", difficulty: "hard" },
+  { en: "Many people are worried because climate change is getting worse every year.", cz: "Mnoho lidí má obavy, protože klimatické změny se každým rokem zhoršují.", difficulty: "hard" },
+  { en: "Technology has completely changed the way we communicate with each other.", cz: "Technologie zcela změnila způsob, jakým spolu komunikujeme.", difficulty: "hard" },
+  { en: "Renewable energy sources are being used more often in many countries.", cz: "Obnovitelné zdroje energie se v mnoha zemích používají stále častěji.", difficulty: "hard" },
+  { en: "The planet will suffer greatly if we do not act soon.", cz: "Planeta velmi utrpí, pokud brzy nezačneme jednat.", difficulty: "hard" },
+  { en: "Social media connects people although it can also cause loneliness.", cz: "Sociální sítě spojují lidi, i když mohou také způsobovat osamělost.", difficulty: "hard" },
+  { en: "A lot of research has been done on artificial intelligence recently.", cz: "V poslední době bylo provedeno mnoho výzkumu v oblasti umělé inteligence.", difficulty: "hard" },
+  { en: "More people would use bicycles if the city built better roads.", cz: "Více lidí by jezdilo na kole, kdyby město postavilo lepší silnice.", difficulty: "hard" },
+  { en: "Many families are struggling financially since prices have increased so much.", cz: "Mnoho rodin má finanční potíže, protože ceny se tak zvýšily.", difficulty: "hard" },
+  { en: "Our society has become extremely dependent on smartphones and computers.", cz: "Naše společnost se stala extrémně závislou na chytrých telefonech a počítačích.", difficulty: "hard" },
+  { en: "This ancient building was destroyed when a huge earthquake struck the city.", cz: "Tato starobylá budova byla zničena, když město zasáhlo obrovské zemětřesení.", difficulty: "hard" },
+  { en: "Fewer animals would disappear if humans protected the environment more carefully.", cz: "Méně zvířat by mizelo, kdyby lidé pečlivěji chránili životní prostředí.", difficulty: "hard" },
+];
+
+/** Slovníček/kartičky slovní zásoby po tématech (viz englishVocabTab ve
+ *  setup()) - rozložené opakování přes stejný srsGradeQuality engine jako
+ *  zbytek appky, ale pod vlastním prefixem klíče "vocab:" (viz
+ *  vocabWordKey), který isSrsEligibleKey záměrně NEPOVAŽUJE za způsobilý -
+ *  slovíčka se tak neobjeví v appčině kalendáři/slabých místech pro
+ *  vlastní otázky a zápisky, mají svůj vlastní, oddělený přehled přímo
+ *  v záložce Slovníček. */
+const VOCAB_DECK = [
+  {
+    key: "travel",
+    label: "Cestování",
+    words: [
+      { en: "journey", cz: "cesta", example: "The journey to the coast took almost five hours." },
+      { en: "flight", cz: "let", example: "Our flight was delayed by two hours." },
+      { en: "luggage", cz: "zavazadlo", example: "She checked her luggage at the airport counter." },
+      { en: "destination", cz: "cíl cesty", example: "Prague is a popular tourist destination." },
+      { en: "accommodation", cz: "ubytování", example: "We booked accommodation near the city center." },
+      { en: "itinerary", cz: "plán cesty", example: "The travel agent prepared a detailed itinerary for us." },
+      { en: "passport", cz: "cestovní pas", example: "Do not forget to bring your passport to the airport." },
+      { en: "abroad", cz: "v zahraničí", example: "She decided to study abroad for a year." },
+      { en: "sightseeing", cz: "prohlížení památek", example: "We spent the whole day sightseeing in Rome." },
+      { en: "souvenir", cz: "suvenýr", example: "He bought a souvenir for his little sister." },
+      { en: "delay", cz: "zpoždění", example: "The delay was caused by bad weather conditions." },
+      { en: "boarding pass", cz: "palubní vstupenka", example: "Please have your boarding pass ready before entering the gate." },
+      { en: "currency exchange", cz: "směnárna", example: "We found a currency exchange office near the hotel." },
+      { en: "backpacker", cz: "batůžkář", example: "Many backpackers travel through Southeast Asia on a low budget." },
+      { en: "round trip", cz: "cesta tam a zpět", example: "A round trip ticket is often cheaper than two one-way tickets." },
+    ],
+  },
+  {
+    key: "food",
+    label: "Jídlo a vaření",
+    words: [
+      { en: "recipe", cz: "recept", example: "I found this recipe in an old cookbook." },
+      { en: "ingredient", cz: "přísada", example: "Flour is the main ingredient in this cake." },
+      { en: "to chop", cz: "krájet, sekat", example: "Chop the onions finely before frying them." },
+      { en: "to bake", cz: "péct", example: "She bakes fresh bread every Sunday morning." },
+      { en: "flavor", cz: "chuť, příchuť", example: "The soup has a rich, spicy flavor." },
+      { en: "leftovers", cz: "zbytky jídla", example: "We had leftovers from dinner for lunch the next day." },
+      { en: "to taste", cz: "ochutnat", example: "Can you taste the sauce and tell me if it needs salt?" },
+      { en: "nutritious", cz: "výživný", example: "A nutritious breakfast helps you concentrate at school." },
+      { en: "to grill", cz: "grilovat", example: "We usually grill vegetables and meat in the summer." },
+      { en: "appetite", cz: "chuť k jídlu", example: "Long walks always give me a big appetite." },
+      { en: "dairy products", cz: "mléčné výrobky", example: "She avoids dairy products because of a lactose intolerance." },
+      { en: "to overcook", cz: "převařit, přepéct", example: "Be careful not to overcook the pasta." },
+      { en: "seasoning", cz: "koření, ochucení", example: "The chef added extra seasoning to the stew." },
+      { en: "takeaway", cz: "jídlo s sebou", example: "We ordered a takeaway pizza on Friday night." },
+      { en: "to be starving", cz: "mít hlad jako vlk", example: "I am starving, let us have lunch right now." },
+    ],
+  },
+  {
+    key: "work",
+    label: "Práce a kariéra",
+    words: [
+      { en: "job interview", cz: "pracovní pohovor", example: "He was nervous before his first job interview." },
+      { en: "to apply for", cz: "ucházet se o", example: "She applied for a position at a local newspaper." },
+      { en: "salary", cz: "plat", example: "The salary offered was higher than she expected." },
+      { en: "deadline", cz: "termín odevzdání", example: "We have to finish the report before the deadline." },
+      { en: "colleague", cz: "kolega", example: "My colleague helped me finish the project on time." },
+      { en: "promotion", cz: "povýšení", example: "He got a promotion after two years in the company." },
+      { en: "to resign", cz: "dát výpověď", example: "She decided to resign from her job last month." },
+      { en: "workload", cz: "pracovní zátěž", example: "The workload increases significantly at the end of the year." },
+      { en: "skill", cz: "dovednost", example: "Good communication skills are important in every job." },
+      { en: "internship", cz: "stáž", example: "He did an internship at a marketing agency last summer." },
+      { en: "to be in charge of", cz: "mít na starosti", example: "She is in charge of the whole sales department." },
+      { en: "qualification", cz: "kvalifikace", example: "You need a specific qualification to work as an electrician." },
+      { en: "to be unemployed", cz: "být nezaměstnaný", example: "Many people became unemployed during the crisis." },
+      { en: "team player", cz: "týmový hráč", example: "Employers often look for a good team player." },
+      { en: "to negotiate", cz: "vyjednávat", example: "They negotiated a better contract with the client." },
+    ],
+  },
+  {
+    key: "technology",
+    label: "Technologie a internet",
+    words: [
+      { en: "device", cz: "zařízení", example: "This device connects to the internet automatically." },
+      { en: "to download", cz: "stáhnout", example: "I downloaded a new app for learning languages." },
+      { en: "to upload", cz: "nahrát", example: "She uploaded the photos to a shared folder." },
+      { en: "password", cz: "heslo", example: "Never share your password with anyone else." },
+      { en: "software update", cz: "aktualizace softwaru", example: "My phone needs a software update." },
+      { en: "to browse the internet", cz: "prohlížet internet", example: "He spends hours browsing the internet every evening." },
+      { en: "social media", cz: "sociální sítě", example: "Teenagers spend a lot of time on social media." },
+      { en: "to hack", cz: "hacknout", example: "Hackers tried to hack into the company's system." },
+      { en: "artificial intelligence", cz: "umělá inteligence", example: "Artificial intelligence is changing the way we work." },
+      { en: "to back up", cz: "zálohovat", example: "Always back up your files before updating your computer." },
+      { en: "screen", cz: "obrazovka", example: "The laptop has a very bright screen." },
+      { en: "wireless connection", cz: "bezdrátové připojení", example: "The hotel offers a free wireless connection to guests." },
+      { en: "to crash", cz: "spadnout, zhroutit se", example: "My computer crashed while I was writing the essay." },
+      { en: "virtual reality", cz: "virtuální realita", example: "Virtual reality is often used in modern video games." },
+      { en: "data privacy", cz: "ochrana osobních údajů", example: "Data privacy has become a major concern online." },
+    ],
+  },
+  {
+    key: "nature",
+    label: "Příroda a životní prostředí",
+    words: [
+      { en: "environment", cz: "životní prostředí", example: "We should all try to protect the environment." },
+      { en: "pollution", cz: "znečištění", example: "Air pollution is a serious problem in big cities." },
+      { en: "climate change", cz: "změna klimatu", example: "Climate change affects weather patterns around the world." },
+      { en: "to recycle", cz: "recyklovat", example: "We recycle paper, plastic, and glass at home." },
+      { en: "wildlife", cz: "divoká příroda", example: "The national park protects endangered wildlife." },
+      { en: "renewable energy", cz: "obnovitelná energie", example: "Solar panels are a common source of renewable energy." },
+      { en: "drought", cz: "sucho", example: "The region suffered from a severe drought last summer." },
+      { en: "endangered species", cz: "ohrožený druh", example: "Tigers are considered an endangered species." },
+      { en: "greenhouse gas", cz: "skleníkový plyn", example: "Cars produce a large amount of greenhouse gas." },
+      { en: "deforestation", cz: "odlesňování", example: "Deforestation destroys the natural habitat of many animals." },
+      { en: "sustainable", cz: "udržitelný", example: "The company switched to sustainable packaging materials." },
+      { en: "ecosystem", cz: "ekosystém", example: "Coral reefs form a fragile ecosystem." },
+      { en: "to pollute", cz: "znečišťovat", example: "Factories should not pollute nearby rivers." },
+      { en: "natural resource", cz: "přírodní zdroj", example: "Water is a valuable natural resource." },
+      { en: "carbon footprint", cz: "uhlíková stopa", example: "Flying often increases your personal carbon footprint." },
+    ],
+  },
+  {
+    key: "family",
+    label: "Rodina a vztahy",
+    words: [
+      { en: "sibling", cz: "sourozenec", example: "I have two siblings, a brother and a sister." },
+      { en: "to get along with", cz: "vycházet s někým", example: "I get along with my parents very well." },
+      { en: "relationship", cz: "vztah", example: "They have a close relationship with their grandparents." },
+      { en: "to raise children", cz: "vychovávat děti", example: "It is not easy to raise children in a big city." },
+      { en: "single parent", cz: "samoživitel, samoživitelka", example: "She is a single parent raising two kids." },
+      { en: "relative", cz: "příbuzný", example: "We invited all our relatives to the wedding." },
+      { en: "to break up", cz: "rozejít se", example: "They broke up after three years together." },
+      { en: "trust", cz: "důvěra", example: "Trust is essential in every strong relationship." },
+      { en: "to get married", cz: "vzít se", example: "My cousin is getting married next spring." },
+      { en: "household chores", cz: "domácí práce", example: "Everyone in the family shares the household chores." },
+      { en: "upbringing", cz: "výchova", example: "His strict upbringing taught him a lot of discipline." },
+      { en: "extended family", cz: "širší rodina", example: "The extended family gathers every Christmas." },
+      { en: "generation gap", cz: "generační propast", example: "There is often a generation gap between teenagers and their grandparents." },
+      { en: "supportive", cz: "podporující", example: "My friends are very supportive when I have problems." },
+      { en: "to depend on someone", cz: "být na někom závislý", example: "Small children completely depend on their parents." },
+    ],
+  },
+  {
+    key: "health",
+    label: "Zdraví a tělo",
+    words: [
+      { en: "to catch a cold", cz: "nachladit se", example: "I caught a cold after walking in the rain." },
+      { en: "symptom", cz: "příznak", example: "A headache can be a symptom of stress." },
+      { en: "to recover", cz: "zotavit se", example: "It took her two weeks to recover from the flu." },
+      { en: "treatment", cz: "léčba", example: "The treatment includes rest and plenty of fluids." },
+      { en: "injury", cz: "zranění", example: "He suffered a serious injury during the match." },
+      { en: "painkiller", cz: "lék proti bolesti", example: "She took a painkiller for her headache." },
+      { en: "to be on a diet", cz: "držet dietu", example: "He has been on a diet since January." },
+      { en: "immune system", cz: "imunitní systém", example: "A healthy diet strengthens your immune system." },
+      { en: "to exercise regularly", cz: "pravidelně cvičit", example: "Doctors recommend exercising regularly to stay fit." },
+      { en: "prescription", cz: "lékařský předpis", example: "You need a prescription to buy this medicine." },
+      { en: "surgery", cz: "operace", example: "She had surgery on her knee last year." },
+      { en: "mental health", cz: "duševní zdraví", example: "Mental health is just as important as physical health." },
+      { en: "allergy", cz: "alergie", example: "He has an allergy to peanuts." },
+      { en: "to feel exhausted", cz: "cítit se vyčerpaný", example: "After the long shift, she felt completely exhausted." },
+      { en: "wound", cz: "rána, zranění", example: "The nurse cleaned the wound carefully." },
+    ],
+  },
+  {
+    key: "hobbies",
+    label: "Volný čas a záliby",
+    words: [
+      { en: "leisure time", cz: "volný čas", example: "I spend most of my leisure time reading books." },
+      { en: "to collect stamps", cz: "sbírat známky", example: "My grandfather has been collecting stamps for decades." },
+      { en: "board game", cz: "společenská hra", example: "We played a board game with our friends last night." },
+      { en: "to knit", cz: "plést", example: "She learned to knit from her grandmother." },
+      { en: "painting", cz: "malování", example: "Painting helps him relax after a stressful day." },
+      { en: "to go hiking", cz: "jít na turistiku", example: "We go hiking in the mountains every summer." },
+      { en: "photography", cz: "fotografování", example: "Photography has become his main hobby since he bought a new camera." },
+      { en: "to play a musical instrument", cz: "hrát na hudební nástroj", example: "She plays a musical instrument every day after school." },
+      { en: "gardening", cz: "zahradničení", example: "Gardening is a relaxing way to spend the weekend." },
+      { en: "to be into something", cz: "mít v oblibě, zajímat se o", example: "He is really into extreme sports." },
+      { en: "crafts", cz: "ruční práce", example: "She enjoys making crafts out of recycled materials." },
+      { en: "to solve a puzzle", cz: "luštit hádanku, skládat puzzle", example: "It took them an hour to solve the puzzle." },
+      { en: "to go fishing", cz: "jít na ryby", example: "My dad goes fishing every Saturday morning." },
+      { en: "subscription", cz: "předplatné", example: "He has a subscription to a streaming service." },
+      { en: "spare time activity", cz: "činnost ve volném čase", example: "Reading is my favorite spare time activity." },
+    ],
+  },
+];
+
+/** Maturita nanečisto - přehled 15 ústních témat (rozcvičovací otázky,
+ *  klíčová slovní zásoba, tipy na strukturu odpovědi a užitečné fráze).
+ *  Viz englishSpeakingTab ve setup() a buildMaturitaTopicHtml (tisk na A4,
+ *  stejný vzor jako buildBookAnalysisHtml výš). */
+const MATURITA_SPEAKING_TOPICS = [
+  {
+    key: "family",
+    topic: "Já a moje rodina",
+    warmupQuestions: [
+      "Can you describe your family?",
+      "Do you have any siblings, and what are they like?",
+      "What is your relationship with your parents like?",
+      "How has your family changed over the years?",
+    ],
+    vocabulary: [
+      { en: "sibling", cz: "sourozenec" },
+      { en: "only child", cz: "jedináček" },
+      { en: "to get along with someone", cz: "vycházet s někým" },
+      { en: "household chores", cz: "domácí práce" },
+      { en: "extended family", cz: "širší rodina" },
+      { en: "to raise children", cz: "vychovávat děti" },
+      { en: "single-parent family", cz: "neúplná rodina" },
+      { en: "to be close to someone", cz: "být si s někým blízký" },
+      { en: "generation gap", cz: "generační propast" },
+      { en: "relative", cz: "příbuzný" },
+    ],
+    structureTips: "Úvod: krátce představ, kolik je vás v rodině a kde bydlíte. Hlavní část rozveď na konkrétních lidech - popiš vztah s rodiči a sourozenci, uveď konkrétní situaci (společný výlet, tradice, hádka a usmíření), která vztah ilustruje. Zmiň i to, jak si role v rodině dělíte, kdo co dělá kolem domácnosti. Závěr: vyjádři vlastní názor na to, jak důležitá je pro tebe rodina a proč, případně srovnej svou rodinu s tím, jak vidíš rodiny kamarádů.",
+    usefulPhrases: [
+      "In my opinion, ...",
+      "As far as I am concerned, ...",
+      "For instance, ...",
+      "On the other hand, ...",
+      "All things considered, ...",
+      "I completely agree with the idea that ...",
+    ],
+  },
+  {
+    key: "housing",
+    topic: "Bydlení",
+    warmupQuestions: [
+      "What kind of house or flat do you live in?",
+      "What do you like most about your home?",
+      "Would you prefer to live in a house or a flat, and why?",
+      "How do you imagine your dream home in the future?",
+    ],
+    vocabulary: [
+      { en: "detached house", cz: "samostatně stojící dům" },
+      { en: "block of flats", cz: "bytový dům" },
+      { en: "cosy", cz: "útulný" },
+      { en: "suburb", cz: "předměstí" },
+      { en: "rent", cz: "nájem" },
+      { en: "mortgage", cz: "hypotéka" },
+      { en: "to move house", cz: "stěhovat se" },
+      { en: "neighbourhood", cz: "sousedství" },
+      { en: "furnished", cz: "zařízený" },
+      { en: "balcony", cz: "balkon" },
+    ],
+    structureTips: "Úvod: stručně popiš, kde a v jakém typu bydlení žiješ. Hlavní část rozveď popisem konkrétních místností a toho, co v domě děláš nejraději (např. tvůj pokoj, zahrada, kde trávíš čas s rodinou). Přidej konkrétní zážitek, třeba stěhování nebo úpravu pokoje. Porovnej výhody bydlení ve městě a na venkově. Závěr: řekni, jak by vypadalo tvoje vysněné bydlení v budoucnu a proč by ti takové vyhovovalo.",
+    usefulPhrases: [
+      "To be honest, ...",
+      "I would say that ...",
+      "A good example of this is ...",
+      "However, ...",
+      "In conclusion, ...",
+      "I partly agree, but ...",
+    ],
+  },
+  {
+    key: "school",
+    topic: "Škola a vzdělávání",
+    warmupQuestions: [
+      "What subjects do you enjoy the most at school and why?",
+      "Describe a typical school day for you.",
+      "What do you think about the education system in your country?",
+      "How do you prepare for exams?",
+    ],
+    vocabulary: [
+      { en: "compulsory subject", cz: "povinný předmět" },
+      { en: "timetable", cz: "rozvrh hodin" },
+      { en: "to sit an exam", cz: "psát/skládat zkoušku" },
+      { en: "grade/mark", cz: "známka" },
+      { en: "classmate", cz: "spolužák" },
+      { en: "extracurricular activity", cz: "mimoškolní aktivita" },
+      { en: "to fail/pass an exam", cz: "neudělat/udělat zkoušku" },
+      { en: "homework", cz: "domácí úkol" },
+      { en: "higher education", cz: "vysokoškolské vzdělání" },
+      { en: "to be strict", cz: "být přísný" },
+    ],
+    structureTips: "Úvod: řekni, na jaké škole studuješ a jaké je zaměření. Hlavní část rozveď na konkrétních předmětech, které tě baví nebo nebaví, popiš konkrétní zážitek se zkouškou nebo projektem, případně vztah s učiteli a spolužáky. Zmiň, jak se připravuješ na maturitu. Neboj se zhodnotit klady a zápory českého školství. Závěr: vyjádři svůj názor, zda tě škola připravuje na budoucnost a co bys na systému změnil.",
+    usefulPhrases: [
+      "In my experience, ...",
+      "I believe that ...",
+      "For example, ...",
+      "Nevertheless, ...",
+      "To sum up, ...",
+      "I do not think that ...",
+    ],
+  },
+  {
+    key: "career",
+    topic: "Budoucí povolání",
+    warmupQuestions: [
+      "What job would you like to do in the future?",
+      "What qualities do you need for your dream job?",
+      "Would you rather work for a company or run your own business?",
+      "How important is a high salary to you compared to job satisfaction?",
+    ],
+    vocabulary: [
+      { en: "career", cz: "kariéra" },
+      { en: "job interview", cz: "pracovní pohovor" },
+      { en: "qualification", cz: "kvalifikace" },
+      { en: "self-employed", cz: "OSVČ/samostatně výdělečně činný" },
+      { en: "salary", cz: "plat" },
+      { en: "promotion", cz: "povýšení" },
+      { en: "work experience", cz: "pracovní zkušenost" },
+      { en: "to apply for a job", cz: "ucházet se o práci" },
+      { en: "part-time job", cz: "brigáda/práce na částečný úvazek" },
+      { en: "skill", cz: "dovednost" },
+    ],
+    structureTips: "Úvod: krátce zmiň, co bys chtěl/a v budoucnu dělat a proč tě to láká. Hlavní část rozveď na konkrétních krocích - jaké studium nebo dovednosti k tomu potřebuješ, případně zmiň brigádu nebo stáž, kterou už máš za sebou. Popiš, jaké vlastnosti by měl mít ideální zaměstnavatel nebo pracovní prostředí. Závěr: zhodnoť, co je pro tebe u práce nejdůležitější - peníze, jistota, nebo smysluplnost - a proč.",
+    usefulPhrases: [
+      "As I see it, ...",
+      "What matters most to me is ...",
+      "Let me give you an example: ...",
+      "On the contrary, ...",
+      "Overall, ...",
+      "I am not sure I agree that ...",
+    ],
+  },
+  {
+    key: "hobbies",
+    topic: "Volný čas a záliby",
+    warmupQuestions: [
+      "What do you like doing in your free time?",
+      "How did you get interested in your hobby?",
+      "Do you prefer spending free time alone or with friends?",
+      "How has the way you spend your free time changed over the years?",
+    ],
+    vocabulary: [
+      { en: "leisure time", cz: "volný čas" },
+      { en: "to be keen on something", cz: "mít zálibu v něčem" },
+      { en: "to relax", cz: "odpočívat" },
+      { en: "collecting", cz: "sbírání" },
+      { en: "handicraft", cz: "ruční práce/řemeslo" },
+      { en: "to spend time doing something", cz: "trávit čas něčím" },
+      { en: "board game", cz: "desková hra" },
+      { en: "to take up a hobby", cz: "začít se věnovat koníčku" },
+      { en: "get-together", cz: "posezení/setkání" },
+      { en: "boredom", cz: "nuda" },
+    ],
+    structureTips: "Úvod: vyjmenuj své hlavní záliby a stručně řekni, která je ti nejbližší. Hlavní část rozveď na jedné konkrétní zálibě - kdy a jak jsi s ní začal/a, kolik času jí věnuješ a co ti přináší (relaxaci, přátele, dovednosti). Uveď konkrétní příhodu, například soutěž, akci nebo úspěch spojený s koníčkem. Závěr: zamysli se, jak se tvé záliby proměnily s věkem a co bys chtěl/a zkusit nového.",
+    usefulPhrases: [
+      "Personally, I think ...",
+      "In my free time, ...",
+      "To illustrate this, ...",
+      "In contrast, ...",
+      "In short, ...",
+      "I would agree up to a point, but ...",
+    ],
+  },
+  {
+    key: "sport",
+    topic: "Sport",
+    warmupQuestions: [
+      "What sports do you do or enjoy watching?",
+      "How important is sport in your life?",
+      "Do you prefer team sports or individual sports?",
+      "What do you think about sport as a career?",
+    ],
+    vocabulary: [
+      { en: "to work out", cz: "cvičit" },
+      { en: "team sport", cz: "kolektivní sport" },
+      { en: "to be fit", cz: "být fit" },
+      { en: "competition", cz: "soutěž/závod" },
+      { en: "coach", cz: "trenér" },
+      { en: "injury", cz: "zranění" },
+      { en: "to keep fit", cz: "udržovat se ve formě" },
+      { en: "stamina/endurance", cz: "vytrvalost" },
+      { en: "supporter/fan", cz: "fanoušek" },
+      { en: "championship", cz: "mistrovství" },
+    ],
+    structureTips: "Úvod: řekni, jaký máš vztah ke sportu - zda ho aktivně provozuješ, nebo spíš sleduješ. Hlavní část rozveď na konkrétním sportu, kterému se věnuješ - jak často, s kým, jaké má výhody pro zdraví i psychiku. Přidej konkrétní zážitek, například zápas nebo soutěž. Zmiň i sport, který rád sleduješ v televizi. Závěr: vyjádři názor na to, jak důležitý je sport pro mladé lidi dnes a zda by měl být více podporován ve školách.",
+    usefulPhrases: [
+      "From my point of view, ...",
+      "I strongly believe that ...",
+      "A typical example would be ...",
+      "Although, ...",
+      "To conclude, ...",
+      "I totally disagree with ...",
+    ],
+  },
+  {
+    key: "travel",
+    topic: "Cestování",
+    warmupQuestions: [
+      "Do you like travelling? Why or why not?",
+      "What was the most interesting place you have ever visited?",
+      "Do you prefer travelling alone, with friends, or with family?",
+      "What would be your dream destination and why?",
+    ],
+    vocabulary: [
+      { en: "destination", cz: "cílová destinace" },
+      { en: "accommodation", cz: "ubytování" },
+      { en: "sightseeing", cz: "prohlídka památek" },
+      { en: "to book a trip", cz: "rezervovat zájezd" },
+      { en: "abroad", cz: "v zahraničí" },
+      { en: "backpacking", cz: "cestování s batohem" },
+      { en: "souvenir", cz: "suvenýr" },
+      { en: "culture shock", cz: "kulturní šok" },
+      { en: "package holiday", cz: "zájezd s cestovní kanceláří" },
+      { en: "to broaden one's horizons", cz: "rozšířit si obzory" },
+    ],
+    structureTips: "Úvod: řekni, jak rád/a cestuješ a jaký způsob cestování preferuješ. Hlavní část rozveď na konkrétní zkušenosti - popiš jednu konkrétní cestu nebo zemi, co tě tam zaujalo, co jsi zažil/a za zajímavou příhodu, případně jazykovou bariéru. Porovnej cestování v Česku a v zahraničí. Závěr: popiš svou vysněnou destinaci a zdůvodni proč, případně dodej, co ti cestování dává (zkušenosti, jazyk, přátelství).",
+    usefulPhrases: [
+      "In my view, ...",
+      "What I really enjoy is ...",
+      "For example, when I visited ...",
+      "On the other hand, ...",
+      "All in all, ...",
+      "I could not agree more that ...",
+    ],
+  },
+  {
+    key: "food",
+    topic: "Jídlo a stravování",
+    warmupQuestions: [
+      "What kind of food do you like and dislike?",
+      "Do you prefer eating at home or eating out?",
+      "How healthy is your diet?",
+      "What is a typical Czech meal you would recommend to a foreigner?",
+    ],
+    vocabulary: [
+      { en: "diet", cz: "strava/dieta" },
+      { en: "to be on a diet", cz: "držet dietu" },
+      { en: "fast food", cz: "rychlé občerstvení" },
+      { en: "to cook a meal", cz: "uvařit jídlo" },
+      { en: "ingredient", cz: "přísada/ingredience" },
+      { en: "recipe", cz: "recept" },
+      { en: "nutritious", cz: "výživný" },
+      { en: "takeaway", cz: "jídlo s sebou" },
+      { en: "appetite", cz: "chuť k jídlu" },
+      { en: "vegetarian/vegan", cz: "vegetarián/vegan" },
+    ],
+    structureTips: "Úvod: stručně popiš, jaké jídlo máš rád/a a jak často vaříš. Hlavní část rozveď na konkrétních příkladech - popiš typický český pokrm, který bys doporučil/a cizinci, případně zážitek s exotickým jídlem při cestování. Zhodnoť, jak zdravě se stravuješ a zda dodržuješ nějaké zásady (méně cukru, více zeleniny). Závěr: vyjádři názor na fast food a moderní trendy ve stravování, například veganství.",
+    usefulPhrases: [
+      "Personally, I feel that ...",
+      "I tend to think that ...",
+      "To give an example, ...",
+      "Unlike me, ...",
+      "In a nutshell, ...",
+      "I am afraid I disagree because ...",
+    ],
+  },
+  {
+    key: "health",
+    topic: "Zdraví a nemoci",
+    warmupQuestions: [
+      "What do you do to stay healthy?",
+      "How often do you go to the doctor?",
+      "What was the last time you were ill, and what happened?",
+      "What do you think about healthy lifestyle trends today?",
+    ],
+    vocabulary: [
+      { en: "healthy lifestyle", cz: "zdravý životní styl" },
+      { en: "symptom", cz: "příznak" },
+      { en: "to catch a cold", cz: "nachladit se" },
+      { en: "prescription", cz: "recept na léky" },
+      { en: "to recover", cz: "zotavit se" },
+      { en: "stress", cz: "stres" },
+      { en: "painkiller", cz: "lék proti bolesti" },
+      { en: "to be on sick leave", cz: "být na nemocenské" },
+      { en: "vaccination", cz: "očkování" },
+      { en: "mental health", cz: "duševní zdraví" },
+    ],
+    structureTips: "Úvod: řekni pár slov o tom, jak se obecně staráš o své zdraví. Hlavní část rozveď na konkrétní zkušenosti - popiš třeba poslední nemoc nebo návštěvu u lékaře, co jsi cítil/a za příznaky a jak ses léčil/a. Zmiň, co děláš pro prevenci (spánek, pohyb, strava) a jak vnímáš stres spojený se školou. Závěr: vyjádři názor na duševní zdraví mladých lidí dnes a na to, zda se mu věnuje dost pozornosti.",
+    usefulPhrases: [
+      "As far as I know, ...",
+      "I honestly think that ...",
+      "For instance, last year ...",
+      "Whereas, ...",
+      "To wrap up, ...",
+      "I fully support the idea that ...",
+    ],
+  },
+  {
+    key: "shopping",
+    topic: "Nakupování a móda",
+    warmupQuestions: [
+      "Do you enjoy shopping? What do you usually buy?",
+      "Do you prefer shopping in stores or online?",
+      "How important is fashion to you?",
+      "Do you think people spend too much money on clothes?",
+    ],
+    vocabulary: [
+      { en: "bargain", cz: "výhodná koupě" },
+      { en: "to try something on", cz: "vyzkoušet si (oblečení)" },
+      { en: "shopping mall", cz: "obchodní centrum" },
+      { en: "trend", cz: "trend" },
+      { en: "second-hand", cz: "z bazaru/second hand" },
+      { en: "to be on sale", cz: "být ve slevě" },
+      { en: "outfit", cz: "oblečení/outfit" },
+      { en: "customer", cz: "zákazník" },
+      { en: "to overspend", cz: "utratit více, než bylo v plánu" },
+      { en: "online shopping", cz: "online nakupování" },
+    ],
+    structureTips: "Úvod: řekni, jak často nakupuješ a co nejraději kupuješ. Hlavní část rozveď na konkrétním příkladu - popiš, jak nakupuješ oblečení (obchod vs. internet), zda sleduješ módní trendy a proč. Uveď konkrétní zážitek, třeba výhodný nákup nebo naopak zklamání z objednávky online. Zmiň i téma second-handu a udržitelné módy. Závěr: vyjádři svůj názor na to, zda lidé utrácejí za oblečení příliš mnoho peněz.",
+    usefulPhrases: [
+      "In my opinion, ...",
+      "I must admit that ...",
+      "A good example is ...",
+      "By contrast, ...",
+      "To sum it up, ...",
+      "I do not really agree, since ...",
+    ],
+  },
+  {
+    key: "weather",
+    topic: "Počasí a roční období",
+    warmupQuestions: [
+      "What is your favourite season and why?",
+      "What is the weather usually like in your country?",
+      "How does the weather affect your mood or plans?",
+      "Have you noticed any effects of climate change on the weather?",
+    ],
+    vocabulary: [
+      { en: "season", cz: "roční období" },
+      { en: "forecast", cz: "předpověď počasí" },
+      { en: "humid", cz: "vlhký" },
+      { en: "chilly", cz: "chladno" },
+      { en: "boiling hot", cz: "vedro" },
+      { en: "thunderstorm", cz: "bouřka" },
+      { en: "frost", cz: "mráz" },
+      { en: "mild climate", cz: "mírné podnebí" },
+      { en: "to pour with rain", cz: "lít jako z konve" },
+      { en: "temperature", cz: "teplota" },
+    ],
+    structureTips: "Úvod: řekni, jaké je počasí v Česku typicky v jednotlivých ročních obdobích. Hlavní část rozveď na svém oblíbeném ročním období - proč ho máš rád/a, co v něm děláš (aktivity, svátky, oblečení). Uveď konkrétní vzpomínku spojenou s počasím, například bouřku nebo sníh o Vánocích. Zmiň, jak počasí ovlivňuje tvou náladu a plány. Závěr: zamysli se nad tím, zda si všímáš změn klimatu a co si o tom myslíš.",
+    usefulPhrases: [
+      "To be honest, ...",
+      "What I like most is ...",
+      "For example, ...",
+      "On the other hand, ...",
+      "All things considered, ...",
+      "I would say that is only partly true because ...",
+    ],
+  },
+  {
+    key: "holidays",
+    topic: "Svátky a tradice",
+    warmupQuestions: [
+      "What is your favourite holiday or celebration?",
+      "How does your family usually celebrate Christmas or Easter?",
+      "Are there any traditions you would like to keep for your own children?",
+      "Do you think traditions are still important nowadays?",
+    ],
+    vocabulary: [
+      { en: "tradition", cz: "tradice" },
+      { en: "custom", cz: "zvyk" },
+      { en: "to celebrate", cz: "slavit" },
+      { en: "public holiday", cz: "státní svátek" },
+      { en: "to decorate", cz: "zdobit" },
+      { en: "carol", cz: "koleda" },
+      { en: "Easter egg", cz: "kraslice/velikonoční vajíčko" },
+      { en: "fireworks", cz: "ohňostroj" },
+      { en: "gathering", cz: "setkání/sraz" },
+      { en: "superstition", cz: "pověra" },
+    ],
+    structureTips: "Úvod: krátce zmiň, jaké svátky ve své rodině slavíte. Hlavní část rozveď na konkrétním svátku, například Vánocích nebo Velikonocích - popiš přípravy, tradice (zdobení, jídlo, koledování) a to, s kým svátek trávíš. Přidej konkrétní vzpomínku z dětství. Zmiň i rozdíly mezi českými a zahraničními tradicemi, pokud je znáš. Závěr: vyjádři názor, zda jsou tradice pro tebe důležité a zda je chceš předávat dál.",
+    usefulPhrases: [
+      "In my family, ...",
+      "I really value the fact that ...",
+      "For instance, every year we ...",
+      "Unlike in the past, ...",
+      "To conclude, ...",
+      "I strongly believe that ...",
+    ],
+  },
+  {
+    key: "transport",
+    topic: "Města a doprava",
+    warmupQuestions: [
+      "What is your town or city like?",
+      "How do you usually get to school or work?",
+      "What are the advantages and disadvantages of public transport?",
+      "What could be improved in transport in your city?",
+    ],
+    vocabulary: [
+      { en: "public transport", cz: "veřejná doprava" },
+      { en: "traffic jam", cz: "dopravní zácpa" },
+      { en: "commute", cz: "dojíždění" },
+      { en: "pedestrian zone", cz: "pěší zóna" },
+      { en: "fare", cz: "jízdné" },
+      { en: "to be stuck in traffic", cz: "uvíznout v dopravní zácpě" },
+      { en: "bike lane", cz: "cyklostezka" },
+      { en: "pollution", cz: "znečištění" },
+      { en: "outskirts", cz: "okraj města" },
+      { en: "rush hour", cz: "dopravní špička" },
+    ],
+    structureTips: "Úvod: krátce popiš město nebo obec, kde bydlíš, a jak je velké. Hlavní část rozveď na tom, jak se běžně dopravuješ do školy nebo za kamarády - popiš konkrétní zkušenost s veřejnou dopravou nebo autem, případně zácpu, kterou jsi zažil/a. Porovnej výhody a nevýhody života ve městě oproti venkovu. Závěr: navrhni, co by se mělo v dopravě ve tvém městě zlepšit, a vyjádři svůj názor na ekologickou dopravu.",
+    usefulPhrases: [
+      "As I mentioned, ...",
+      "I would argue that ...",
+      "For example, in my city ...",
+      "Nevertheless, ...",
+      "In conclusion, ...",
+      "I am convinced that ...",
+    ],
+  },
+  {
+    key: "environment",
+    topic: "Příroda a životní prostředí",
+    warmupQuestions: [
+      "How do you personally try to protect the environment?",
+      "What environmental problems worry you the most?",
+      "How much time do you spend in nature?",
+      "What should be done to protect the environment better in the future?",
+    ],
+    vocabulary: [
+      { en: "environment", cz: "životní prostředí" },
+      { en: "pollution", cz: "znečištění" },
+      { en: "recycling", cz: "recyklace" },
+      { en: "global warming", cz: "globální oteplování" },
+      { en: "endangered species", cz: "ohrožený druh" },
+      { en: "renewable energy", cz: "obnovitelná energie" },
+      { en: "carbon footprint", cz: "uhlíková stopa" },
+      { en: "to protect nature", cz: "chránit přírodu" },
+      { en: "waste", cz: "odpad" },
+      { en: "sustainable", cz: "udržitelný" },
+    ],
+    structureTips: "Úvod: řekni, jaký máš vztah k přírodě a jak často do ní chodíš. Hlavní část rozveď na konkrétních krocích, které děláš pro životní prostředí - třídění odpadu, omezení plastů, doprava na kole. Uveď konkrétní příklad problému, který tě znepokojuje, například znečištění nebo úbytek zeleně ve tvém okolí. Zmiň, co dělá tvá škola nebo obec pro ekologii. Závěr: navrhni, co by mělo dělat více lidí nebo stát, aby se situace zlepšila.",
+    usefulPhrases: [
+      "Personally, I believe that ...",
+      "It seems to me that ...",
+      "A good example of this is ...",
+      "In spite of this, ...",
+      "To sum up, ...",
+      "I completely agree that we should ...",
+    ],
+  },
+  {
+    key: "media",
+    topic: "Média a technologie",
+    warmupQuestions: [
+      "How much time do you spend using your phone or computer every day?",
+      "Where do you usually get your news from?",
+      "What are the advantages and disadvantages of social media?",
+      "How do you think technology will change our lives in the future?",
+    ],
+    vocabulary: [
+      { en: "social media", cz: "sociální sítě" },
+      { en: "device", cz: "zařízení" },
+      { en: "to browse the internet", cz: "prohlížet internet" },
+      { en: "addiction", cz: "závislost" },
+      { en: "fake news", cz: "falešné zprávy" },
+      { en: "screen time", cz: "čas strávený u obrazovky" },
+      { en: "app/application", cz: "aplikace" },
+      { en: "privacy", cz: "soukromí" },
+      { en: "artificial intelligence", cz: "umělá inteligence" },
+      { en: "to stay in touch", cz: "být v kontaktu" },
+    ],
+    structureTips: "Úvod: krátce popiš, jaké technologie a sociální sítě běžně používáš. Hlavní část rozveď na konkrétním příkladu - kolik času denně trávíš na telefonu, k čemu ho nejvíce využíváš (komunikace, zábava, škola), a popiš konkrétní situaci, kdy ti technologie pomohla nebo naopak uškodila (např. rozptýlení od učení). Zmiň riziko závislosti a falešných zpráv. Závěr: vyjádři názor na to, jak se podle tebe technologie promění v budoucnu a zda je to spíše pozitivní, nebo negativní vývoj.",
+    usefulPhrases: [
+      "In my opinion, ...",
+      "I have to say that ...",
+      "For example, ...",
+      "On the contrary, ...",
+      "All in all, ...",
+      "I do not fully agree, because ...",
+    ],
+  },
+];
+
+/** Banka krátkých dialogů pro doplňovací cvičení (viz englishDialogueTab ve
+ *  setup()) - appka schová jednu repliku (___BLANK___) a nabídne 4 možnosti,
+ *  ze kterých má uživatel vybrat tu, která do dialogu smysluplně zapadá. */
+const DIALOGUE_BANK = [
+  {
+    difficulty: "easy",
+    topicCz: "Objednávka v restauraci",
+    lines: [
+      { speaker: "A", text: "Good evening! Are you ready to order?" },
+      { speaker: "B", text: "Yes, I'd like the grilled chicken with rice, please." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "No, thank you. Just water is fine." },
+      { speaker: "A", text: "Great, I'll bring that right away." },
+    ],
+    options: [
+      "How much does the chicken cost?",
+      "Do you have a table for two?",
+      "Would you like something to drink with that?",
+      "Can I pay by credit card?",
+    ],
+    correctIndex: 2,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Nákup v obchodě s potravinami",
+    lines: [
+      { speaker: "A", text: "Excuse me, where can I find the milk?" },
+      { speaker: "B", text: "It's in aisle five, next to the cheese." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Yes, the bakery section is right at the front of the store." },
+      { speaker: "A", text: "Perfect, I'll grab a loaf then." },
+    ],
+    options: [
+      "Do you also sell fresh bread here?",
+      "Can you tell me the store's opening hours?",
+      "Is there a discount on cheese today?",
+      "Could you carry these bags for me?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Plánování víkendu",
+    lines: [
+      { speaker: "A", text: "What are you doing this weekend?" },
+      { speaker: "B", text: "I'm not sure yet. Do you have any plans?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "That sounds like fun! What time should we meet?" },
+      { speaker: "A", text: "Let's say around ten in the morning." },
+    ],
+    options: [
+      "I already went hiking last weekend.",
+      "I have to work every weekend this month.",
+      "I don't like spending time outdoors.",
+      "I was thinking of going hiking in the mountains.",
+    ],
+    correctIndex: 3,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Telefonování s kamarádem",
+    lines: [
+      { speaker: "A", text: "Hi, it's me. Are you free to talk for a minute?" },
+      { speaker: "B", text: "Sure, what's up?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Yes, I wouldn't miss it for anything." },
+      { speaker: "A", text: "Great, I'll text you the address later." },
+    ],
+    options: [
+      "I wanted to ask if you finished your homework.",
+      "I wanted to ask if you're coming to the party on Saturday.",
+      "I wanted to know if you found my keys.",
+      "I wanted to tell you that I moved to a new house.",
+    ],
+    correctIndex: 1,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Návštěva u doktora",
+    lines: [
+      { speaker: "A", text: "Good morning. What seems to be the problem?" },
+      { speaker: "B", text: "I've had a headache and a sore throat since yesterday." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Yes, a little, especially in the evening." },
+      { speaker: "A", text: "It sounds like a cold. I'll prescribe some medicine." },
+    ],
+    options: [
+      "Do you exercise every morning?",
+      "Have you traveled abroad recently?",
+      "Do you also have a fever?",
+      "Is this your first visit to our clinic?",
+    ],
+    correctIndex: 2,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "V obchodě s oblečením",
+    lines: [
+      { speaker: "A", text: "Hi, I'm looking for a jacket for the winter." },
+      { speaker: "B", text: "We have a few new arrivals. What size do you wear?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "The fitting rooms are just over there, on the left." },
+      { speaker: "A", text: "Thanks, I'll go try it on now." },
+    ],
+    options: [
+      "I usually wear medium, but I'd like to try it on first.",
+      "I usually wear medium, but I already bought one online.",
+      "I don't really need a new jacket right now.",
+      "I prefer shopping for shoes instead of jackets.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Domácí úkol ve škole",
+    lines: [
+      { speaker: "A", text: "Did you finish the history essay for tomorrow?" },
+      { speaker: "B", text: "Not yet, I still need to write the conclusion." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Sure, that would help a lot. Thanks!" },
+      { speaker: "A", text: "No problem, let's meet in the library after class." },
+    ],
+    options: [
+      "The teacher already collected all the essays.",
+      "I forgot we even had an essay to write.",
+      "You should have started it a month ago.",
+      "Do you want me to help you with it after school?",
+    ],
+    correctIndex: 3,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Rezervace hotelu",
+    lines: [
+      { speaker: "A", text: "Hello, I'd like to book a room for next weekend." },
+      { speaker: "B", text: "Certainly. How many nights will you be staying?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "And what type of room would you like - single or double?" },
+      { speaker: "A", text: "A double room, please, with a nice view if possible." },
+    ],
+    options: [
+      "I'd like to cancel my reservation, please.",
+      "Two nights, from Friday to Sunday.",
+      "The room was too expensive last time.",
+      "I already checked out this morning.",
+    ],
+    correctIndex: 1,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Na letišti",
+    lines: [
+      { speaker: "A", text: "Excuse me, where do I check in for the flight to London?" },
+      { speaker: "B", text: "The check-in desks for that flight are over there, near gate twelve." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Actually, it's delayed by about thirty minutes." },
+      { speaker: "A", text: "Okay, thanks for letting me know. I'll grab a coffee while I wait." },
+    ],
+    options: [
+      "Do I need a visa for this trip?",
+      "Can I check in two suitcases?",
+      "Also, is the flight on time?",
+      "Where is the nearest restroom?",
+    ],
+    correctIndex: 2,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Ptaní se na cestu",
+    lines: [
+      { speaker: "A", text: "Excuse me, could you tell me how to get to the museum?" },
+      { speaker: "B", text: "Sure. Go straight ahead and turn left at the second traffic light." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "About ten minutes on foot, maybe less." },
+      { speaker: "A", text: "Great, thank you very much for your help." },
+    ],
+    options: [
+      "How long will it take to walk there?",
+      "Is the museum open on Mondays?",
+      "Where can I buy tickets for the museum?",
+      "Which bus goes to the museum?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Pracovní pohovor",
+    lines: [
+      { speaker: "A", text: "Thank you for coming in today. Can you tell me about your previous work experience?" },
+      { speaker: "B", text: "I worked as a marketing assistant for three years at a small company." },
+      { speaker: "A", text: "What would you say is your greatest strength?" },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "That's a valuable skill. When would you be able to start, if hired?" },
+      { speaker: "B", text: "I could start as early as next Monday." },
+    ],
+    options: [
+      "I usually take long breaks during the workday.",
+      "I haven't really thought about my strengths.",
+      "My previous manager was often difficult to work with.",
+      "I'm very good at managing multiple projects at once.",
+    ],
+    correctIndex: 3,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Založení účtu v bance",
+    lines: [
+      { speaker: "A", text: "Good afternoon. I'd like to open a savings account." },
+      { speaker: "B", text: "Of course. Do you already have a checking account with us?" },
+      { speaker: "A", text: "No, this would be my first account here." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "Yes, I have my ID and a proof of address with me." },
+      { speaker: "B", text: "Perfect, let's get started with the application then." },
+    ],
+    options: [
+      "Then you can withdraw money from any branch.",
+      "In that case, I'll need to see some identification and proof of address.",
+      "Unfortunately, we don't offer savings accounts anymore.",
+      "Your account will be closed after one year.",
+    ],
+    correctIndex: 1,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Pronájem bytu",
+    lines: [
+      { speaker: "A", text: "Hi, I'm calling about the two-bedroom apartment you advertised." },
+      { speaker: "B", text: "Yes, it's still available. Would you like to arrange a viewing?" },
+      { speaker: "A", text: "Yes, please. Is the rent negotiable?" },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "That's fine. Could we meet tomorrow afternoon around three?" },
+      { speaker: "B", text: "Sure, three o'clock works for me." },
+    ],
+    options: [
+      "The apartment was rented out last week.",
+      "I'm sorry, we don't allow viewings before signing.",
+      "The price is fixed, but utilities are included in the rent.",
+      "The building doesn't have an elevator.",
+    ],
+    correctIndex: 2,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Reklamace výrobku",
+    lines: [
+      { speaker: "A", text: "Hello, I bought this blender last week, but it stopped working after two days." },
+      { speaker: "B", text: "I'm sorry to hear that. Do you have the receipt with you?" },
+      { speaker: "A", text: "Yes, here it is." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "I'd prefer a full refund, if that's possible." },
+      { speaker: "B", text: "That's fine, I'll process the refund for you right away." },
+    ],
+    options: [
+      "Would you like a replacement, or would you prefer a refund?",
+      "You should have read the instructions more carefully.",
+      "We don't accept returns without the original box.",
+      "This blender is our best-selling product.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Půjčení auta",
+    lines: [
+      { speaker: "A", text: "I'd like to rent a car for five days, starting tomorrow." },
+      { speaker: "B", text: "Sure. What type of car are you looking for?" },
+      { speaker: "A", text: "Something small and fuel-efficient, if possible." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "Yes, I'd like full insurance too, please." },
+      { speaker: "B", text: "Great, I'll print out the contract for you to sign." },
+    ],
+    options: [
+      "All our cars come with unlimited mileage only in winter.",
+      "You'll need to return the car with an empty tank.",
+      "Our largest SUV is currently on sale this month.",
+      "We have a compact model available. Would you like full insurance with that?",
+    ],
+    correctIndex: 3,
+  },
+];
+
 /** Sestaví jednostránkové A4 HTML s rozborem jedné knihy - stejný vzor
  *  (nové okno + window.print(), viz printBookAnalysis ve setup()) jako
  *  buildCheatSheetHtml výš. */
@@ -5990,6 +7138,47 @@ function buildBookAnalysisHtml(book, note) {
  *  protože BOOK_ANALYSES samo o sobě žádná id nemá. */
 function bookKey(book) {
   return `${book.author}|||${book.title}`;
+}
+
+/** Sestaví jednostránkové A4 HTML s přehledem jednoho maturitního ústního
+ *  tématu (rozcvičovací otázky, slovní zásoba, tipy na strukturu, užitečné
+ *  fráze) - stejný vzor (nové okno + window.print()) jako buildBookAnalysisHtml
+ *  výš, viz printMaturitaTopic ve setup(). */
+function buildMaturitaTopicHtml(topic) {
+  if (!topic) return '<!DOCTYPE html><html><body><p>Téma nenalezeno.</p></body></html>';
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(topic.topic)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 900px; margin: 1.2rem auto; padding: 0 1.2rem; font-size: 0.78rem; line-height: 1.42; }
+  h1 { font-size: 1.25rem; margin: 0 0 0.8rem; }
+  .mt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.4rem; }
+  .mt-section { margin-bottom: 0.7rem; break-inside: avoid; page-break-inside: avoid; }
+  .mt-section.mt-span2 { grid-column: 1 / -1; }
+  .mt-section h2 { font-size: 0.82rem; margin: 0 0 0.25rem; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.12rem; color: #0f172a; }
+  .mt-section ul { margin: 0; padding-left: 1.1rem; color: #334155; }
+  .mt-section li { margin-bottom: 0.15rem; }
+  .mt-vocab { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 0.8rem; }
+  .mt-vocab span.en { font-weight: 600; }
+  .mt-vocab span.cz { color: #64748b; }
+  @media print { body { margin: 0; padding: 0.5rem; } }
+  @page { size: A4; margin: 12mm; }
+</style>
+</head>
+<body>
+  <h1>🎤 ${escapeHtml(topic.topic)}</h1>
+  <div class="mt-grid">
+    <div class="mt-section mt-span2"><h2>💬 Rozcvičovací otázky</h2><ul>${topic.warmupQuestions.map((q) => `<li>${escapeHtml(q)}</li>`).join('')}</ul></div>
+    <div class="mt-section mt-span2"><h2>📚 Klíčová slovní zásoba</h2><div class="mt-vocab">${topic.vocabulary.map((v) => `<span class="en">${escapeHtml(v.en)}</span><span class="cz">${escapeHtml(v.cz)}</span>`).join('')}</div></div>
+    <div class="mt-section mt-span2"><h2>🧩 Tipy na strukturu odpovědi</h2><p>${escapeHtml(topic.structureTips)}</p></div>
+    <div class="mt-section mt-span2"><h2>🔑 Užitečné fráze</h2><ul>${topic.usefulPhrases.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul></div>
+  </div>
+  <p style="color:#94a3b8;font-size:0.65rem;margin-top:1rem;">Vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu · Maturita nanečisto.</p>
+</body>
+</html>`;
 }
 
 /** Vybere `count` navzájem různých "vnadidel" z pole hodnot `pool`, která se
@@ -7619,6 +8808,88 @@ function srsWeightForSentence(srs, id) {
     srsWeight(srs, `sentence:${id}:predicate`),
     srsWeight(srs, `sentence:${id}:type`)
   );
+}
+
+/* =====================================================================
+   ANGLIČTINA NAVÍC - Poslech/diktát, Slovníček, Skládání vět, Dialogy.
+   Pomocné čisté funkce (bez DOM/window) pro vyhodnocování a výběr dalšího
+   slovíčka/věty - viz englishListeningTab/englishVocabTab/englishBuilderTab
+   ve setup() a datové konstanty ENGLISH_PRACTICE_SENTENCES/VOCAB_DECK/
+   MATURITA_SPEAKING_TOPICS/DIALOGUE_BANK výš.
+   ===================================================================== */
+
+/** Sjednotí text pro porovnání diktátu - malá písmena, bez interpunkce
+ *  (apostrofy v anglických zkratkách typu "don't" zůstávají zachované),
+ *  jedna mezera mezi slovy. */
+function normalizeForCompare(text) {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9'\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Vyhodnotí diktátové cvičení - appka nahlas přečte anglickou větu a
+ *  uživatel napíše, co slyšel. Porovnává se slovo po slově na stejné
+ *  pozici (jednoduché a předvídatelné - žádné "chytré" zarovnávání při
+ *  vynechaném/navíc slově), což appce stačí na smysluplnou zpětnou vazbu
+ *  ("tohle slovo sedí, tohle ne"), aniž by šlo o plnohodnotný diff. */
+function scoreDictationAttempt(original, attempt) {
+  const originalWords = normalizeForCompare(original).split(' ').filter(Boolean);
+  const attemptWords = normalizeForCompare(attempt).split(' ').filter(Boolean);
+  const results = originalWords.map((word, i) => ({ word, typed: attemptWords[i] || '', correct: attemptWords[i] === word }));
+  const correctCount = results.filter((r) => r.correct).length;
+  const totalCount = originalWords.length;
+  return {
+    results,
+    correctCount,
+    totalCount,
+    accuracy: totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100),
+    isPerfect: totalCount > 0 && correctCount === totalCount && attemptWords.length === totalCount,
+    extraWords: Math.max(0, attemptWords.length - totalCount),
+  };
+}
+
+/** Rozseká větu na slova a zamíchá jejich pořadí (pro "🔀 Skládání vět") -
+ *  u vět delších než jedno slovo se snaží zajistit, že zamíchané pořadí
+ *  není náhodou totožné s originálem (až 20 pokusů, pak už to appka nechá
+ *  být, ať se nezacyklí u opravdu krátkých vět s málo možnými pořadími). */
+function shuffleSentenceWords(sentence) {
+  const words = (sentence || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return words.slice();
+  let shuffled = words.slice();
+  let attempts = 0;
+  do {
+    const idxs = shuffledIndices(words.length);
+    shuffled = idxs.map((i) => words[i]);
+    attempts++;
+  } while (shuffled.join(' ') === words.join(' ') && attempts < 20);
+  return shuffled;
+}
+
+/** Klíč do stats.srs pro slovíčko ze slovníčku - vlastní prefix "vocab:"
+ *  (viz komentář u VOCAB_DECK výš, isSrsEligibleKey ho záměrně vynechává,
+ *  ať se slovíčka nepletou appce do kalendáře/slabých míst pro jiné typy
+ *  otázek). */
+function vocabWordKey(topicKey, word) {
+  return `vocab:${topicKey}:${word.en}`;
+}
+
+/** Vybere další slovíčko k procvičení v rámci jednoho tématu - vážený
+ *  náhodný výběr podle splatnosti v rozloženém opakování (stejná logika
+ *  jako srsWeight výš), takže appka přirozeně častěji nabízí slovíčka,
+ *  která "dluží" opakování, ale občas zamíchá i ostatní. */
+function pickNextVocabWord(words, topicKey, srs) {
+  if (!words || words.length === 0) return null;
+  const weights = words.map((w) => srsWeight(srs, vocabWordKey(topicKey, w)));
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return words[Math.floor(Math.random() * words.length)];
+  let r = Math.random() * total;
+  for (let i = 0; i < words.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return words[i];
+  }
+  return words[words.length - 1];
 }
 
 /** examOnly=true zapíná Zkouškový režim (viz toggleExamPracticeMode ve
@@ -9442,6 +10713,218 @@ const app = createApp({
       if (!stats.englishPracticeLog || !stats.englishPracticeLog[wk]) return;
       const current = stats.englishPracticeLog[wk][activityKey] || 0;
       if (current > 0) stats.englishPracticeLog[wk][activityKey] = current - 1;
+    }
+
+    /* ---------- Angličtina navíc - záložky Poslech/Slovníček/Maturita
+       nanečisto/Skládání vět (viz ENGLISH_PRACTICE_SENTENCES/VOCAB_DECK/
+       MATURITA_SPEAKING_TOPICS/DIALOGUE_BANK a pomocné funkce výš). Panel
+       "🌍 Angličtina navíc" je od teď přepínaný na záložky - Plán a Zdroje
+       jsou ty původní. ---------- */
+    const englishExtraTab = ref('plan'); // 'plan' | 'resources' | 'listening' | 'vocab' | 'speaking' | 'builder'
+    function selectEnglishExtraTab(tab) {
+      englishExtraTab.value = tab;
+      if (tab === 'listening' && !englishListeningSentence.value) nextEnglishListeningSentence();
+      if (tab === 'builder' && englishBuilderExercise.value === 'sentence' && !englishBuilderSentence.value) nextEnglishBuilderSentence();
+      if (tab === 'builder' && englishBuilderExercise.value === 'dialogue' && !englishDialogueItem.value) nextEnglishDialogue();
+    }
+
+    /** Hlasové přehrání anglického textu nahlas (Web Speech API, hlas en-US,
+     *  o něco pomalejší tempo kvůli srozumitelnosti) - používá se u
+     *  poslechového cvičení, slovníčku i "Přehrát" u vzorových vět. `key`
+     *  jen odlišuje, KTERÉ tlačítko/prvek zrovna "mluví" (pro ikonu
+     *  🔊 -> ⏹️ v šabloně), samotné přehrávání běží jen jedno naráz. */
+    const englishSpeakingKey = ref(null);
+    function stopSpeakingEnglish() {
+      if (speechSupported) window.speechSynthesis.cancel();
+      englishSpeakingKey.value = null;
+    }
+    function speakEnglish(text, key) {
+      if (!speechSupported) {
+        alert('Tvůj prohlížeč bohužel nepodporuje hlasové čtení nahlas.');
+        return;
+      }
+      if (!text) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      englishSpeakingKey.value = key !== undefined ? key : text;
+      utterance.onend = () => { englishSpeakingKey.value = null; };
+      utterance.onerror = () => { englishSpeakingKey.value = null; };
+      window.speechSynthesis.speak(utterance);
+    }
+
+    /* ---- 🎧 Poslech / diktát (ENGLISH_PRACTICE_SENTENCES) ---- */
+    const englishListeningDifficulty = ref('easy'); // 'easy' | 'medium' | 'hard' | 'all'
+    const englishListeningSentence = ref(null);
+    const englishListeningInput = ref('');
+    const englishListeningResult = ref(null);
+    const englishListeningRevealed = ref(false);
+    const englishListeningPool = computed(() => (
+      englishListeningDifficulty.value === 'all'
+        ? ENGLISH_PRACTICE_SENTENCES
+        : ENGLISH_PRACTICE_SENTENCES.filter((s) => s.difficulty === englishListeningDifficulty.value)
+    ));
+    function nextEnglishListeningSentence() {
+      const pool = englishListeningPool.value.length ? englishListeningPool.value : ENGLISH_PRACTICE_SENTENCES;
+      englishListeningSentence.value = choice(pool);
+      englishListeningInput.value = '';
+      englishListeningResult.value = null;
+      englishListeningRevealed.value = false;
+    }
+    function setEnglishListeningDifficulty(d) {
+      englishListeningDifficulty.value = d;
+      nextEnglishListeningSentence();
+    }
+    function playEnglishListeningSentence() {
+      if (!englishListeningSentence.value) return;
+      speakEnglish(englishListeningSentence.value.en, 'listening');
+    }
+    function checkEnglishDictation() {
+      if (!englishListeningSentence.value) return;
+      englishListeningResult.value = scoreDictationAttempt(englishListeningSentence.value.en, englishListeningInput.value);
+    }
+    function revealEnglishListeningAnswer() {
+      englishListeningRevealed.value = true;
+    }
+
+    /* ---- 📇 Slovníček/kartičky (VOCAB_DECK, rozložené opakování přes
+       stats.srs pod klíčem "vocab:<téma>:<slovo>", viz vocabWordKey) ---- */
+    const englishVocabTopicKey = ref(null);
+    const englishVocabCurrentWord = ref(null);
+    const englishVocabFlipped = ref(false);
+    const activeVocabTopic = computed(() => VOCAB_DECK.find((t) => t.key === englishVocabTopicKey.value) || null);
+    function vocabTopicMasteredCount(topic) {
+      return topic.words.filter((w) => {
+        const rec = stats.srs && stats.srs[vocabWordKey(topic.key, w)];
+        return !!(rec && rec.reps >= 2);
+      }).length;
+    }
+    const vocabTopicsOverview = computed(() => VOCAB_DECK.map((t) => ({
+      key: t.key,
+      label: t.label,
+      total: t.words.length,
+      mastered: vocabTopicMasteredCount(t),
+    })));
+    function selectVocabTopic(key) {
+      englishVocabTopicKey.value = key;
+      englishVocabFlipped.value = false;
+      const topic = VOCAB_DECK.find((t) => t.key === key);
+      englishVocabCurrentWord.value = topic ? pickNextVocabWord(topic.words, topic.key, stats.srs) : null;
+    }
+    function closeVocabTopic() {
+      englishVocabTopicKey.value = null;
+      englishVocabCurrentWord.value = null;
+      englishVocabFlipped.value = false;
+    }
+    function nextVocabWord() {
+      const topic = activeVocabTopic.value;
+      if (!topic) return;
+      englishVocabFlipped.value = false;
+      englishVocabCurrentWord.value = pickNextVocabWord(topic.words, topic.key, stats.srs);
+    }
+    function flipVocabCard() {
+      englishVocabFlipped.value = true;
+    }
+    /** Sebehodnocení slovíčka - stejný princip a stejné 4 úrovně jistoty jako
+     *  gradeFlashcardQuality u appčiných otázek, ale zapisuje se pod vlastní
+     *  "vocab:" klíč (viz komentář u VOCAB_DECK), takže se appčino
+     *  hodnocení otázek k předmětům a slovníček angličtiny nijak nepletou -
+     *  přesto sdílí stejný algoritmus rozloženého opakování (srsGradeQuality). */
+    function gradeVocabCard(quality) {
+      const topic = activeVocabTopic.value;
+      const word = englishVocabCurrentWord.value;
+      if (!topic || !word) return;
+      const key = vocabWordKey(topic.key, word);
+      if (!stats.srs) stats.srs = {};
+      stats.srs[key] = srsGradeQuality(stats.srs[key], quality);
+      nextVocabWord();
+    }
+    function speakVocabWord() {
+      if (englishVocabCurrentWord.value) speakEnglish(englishVocabCurrentWord.value.en, 'vocab');
+    }
+
+    /* ---- 🎤 Maturita nanečisto (MATURITA_SPEAKING_TOPICS) ---- */
+    const englishSpeakingTopicKey = ref(null);
+    const activeMaturitaTopic = computed(() => MATURITA_SPEAKING_TOPICS.find((t) => t.key === englishSpeakingTopicKey.value) || null);
+    function selectMaturitaTopic(key) {
+      englishSpeakingTopicKey.value = key;
+    }
+    function printMaturitaTopic(topic) {
+      if (!topic) return;
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Prohlížeč zablokoval vyskakovací okno potřebné pro tisk. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildMaturitaTopicHtml(topic));
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); }, 350);
+    }
+
+    /* ---- 🔀 Skládání vět (ENGLISH_PRACTICE_SENTENCES) a doplňovací dialogy
+       (DIALOGUE_BANK) - dvě varianty jednoho cvičení, přepínané tlačítky. ---- */
+    const englishBuilderExercise = ref('sentence'); // 'sentence' | 'dialogue'
+    const englishBuilderSentence = ref(null);
+    const englishBuilderWords = ref([]);
+    const englishBuilderPlaced = ref([]);
+    const englishBuilderResult = ref(null); // null | true | false
+    function nextEnglishBuilderSentence() {
+      const s = choice(ENGLISH_PRACTICE_SENTENCES);
+      englishBuilderSentence.value = s;
+      englishBuilderWords.value = shuffleSentenceWords(s.en);
+      englishBuilderPlaced.value = [];
+      englishBuilderResult.value = null;
+    }
+    function pickBuilderWord(index) {
+      if (englishBuilderResult.value !== null) return;
+      const words = englishBuilderWords.value.slice();
+      const [word] = words.splice(index, 1);
+      englishBuilderWords.value = words;
+      englishBuilderPlaced.value = [...englishBuilderPlaced.value, word];
+    }
+    function undoBuilderWord() {
+      if (englishBuilderResult.value !== null) return;
+      if (englishBuilderPlaced.value.length === 0) return;
+      const placed = englishBuilderPlaced.value.slice();
+      const word = placed.pop();
+      englishBuilderPlaced.value = placed;
+      englishBuilderWords.value = [...englishBuilderWords.value, word];
+    }
+    function checkEnglishBuilder() {
+      if (!englishBuilderSentence.value || englishBuilderWords.value.length > 0) return;
+      const attempt = englishBuilderPlaced.value.join(' ').trim().toLowerCase();
+      const original = englishBuilderSentence.value.en.trim().toLowerCase();
+      englishBuilderResult.value = attempt === original;
+    }
+
+    const englishDialogueDifficulty = ref('easy'); // 'easy' | 'medium' | 'hard' | 'all'
+    const englishDialogueItem = ref(null);
+    const englishDialogueSelected = ref(null);
+    const englishDialoguePool = computed(() => (
+      englishDialogueDifficulty.value === 'all'
+        ? DIALOGUE_BANK
+        : DIALOGUE_BANK.filter((d) => d.difficulty === englishDialogueDifficulty.value)
+    ));
+    function nextEnglishDialogue() {
+      const pool = englishDialoguePool.value.length ? englishDialoguePool.value : DIALOGUE_BANK;
+      englishDialogueItem.value = choice(pool);
+      englishDialogueSelected.value = null;
+    }
+    function setEnglishDialogueDifficulty(d) {
+      englishDialogueDifficulty.value = d;
+      nextEnglishDialogue();
+    }
+    function answerEnglishDialogue(idx) {
+      if (englishDialogueSelected.value !== null) return;
+      englishDialogueSelected.value = idx;
+    }
+    function selectEnglishBuilderExercise(mode) {
+      englishBuilderExercise.value = mode;
+      if (mode === 'sentence' && !englishBuilderSentence.value) nextEnglishBuilderSentence();
+      if (mode === 'dialogue' && !englishDialogueItem.value) nextEnglishDialogue();
     }
 
     /* ---------- Sledování času u studia ----------
@@ -11810,6 +13293,15 @@ const app = createApp({
       readBooksCount, isBookRead, toggleBookRead, activeBookNote,
       bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
       showEnglishExtra, ENGLISH_RESOURCE_CATEGORIES, englishPlanProgress, englishPlanAllDone, logEnglishPractice, unlogEnglishPractice,
+      englishExtraTab, selectEnglishExtraTab, englishSpeakingKey, stopSpeakingEnglish, speakEnglish,
+      englishListeningDifficulty, englishListeningSentence, englishListeningInput, englishListeningResult, englishListeningRevealed,
+      nextEnglishListeningSentence, setEnglishListeningDifficulty, playEnglishListeningSentence, checkEnglishDictation, revealEnglishListeningAnswer,
+      VOCAB_DECK, englishVocabTopicKey, englishVocabCurrentWord, englishVocabFlipped, activeVocabTopic, vocabTopicsOverview,
+      selectVocabTopic, closeVocabTopic, nextVocabWord, flipVocabCard, gradeVocabCard, speakVocabWord,
+      MATURITA_SPEAKING_TOPICS, englishSpeakingTopicKey, activeMaturitaTopic, selectMaturitaTopic, printMaturitaTopic,
+      englishBuilderExercise, englishBuilderSentence, englishBuilderWords, englishBuilderPlaced, englishBuilderResult,
+      nextEnglishBuilderSentence, pickBuilderWord, undoBuilderWord, checkEnglishBuilder, selectEnglishBuilderExercise,
+      englishDialogueDifficulty, englishDialogueItem, englishDialogueSelected, nextEnglishDialogue, setEnglishDialogueDifficulty, answerEnglishDialogue,
       todayStudyMinutes, weekStudyMinutes, addStudySeconds,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
