@@ -1335,6 +1335,9 @@
           <button @click="showBookAnalysis = !showBookAnalysis" class="btn-ghost !text-fuchsia-300">
             📚 {{ showBookAnalysis ? 'Skrýt rozbor knih' : 'Rozbor knih (povinná četba)' }}
           </button>
+          <button @click="showEnglishExtra = !showEnglishExtra" class="btn-ghost !text-sky-300">
+            🌍 {{ showEnglishExtra ? 'Skrýt angličtinu navíc' : 'Angličtina navíc' }}
+          </button>
           <button @click="showPomodoro = !showPomodoro" class="btn-ghost !text-amber-300" :class="{ 'quiz-mode-active': pomodoro.active }">
             ⏱️ {{ pomodoro.active ? (pomodoro.phase === 'work' ? 'Práce' : 'Přestávka') + ' ' + pomodoroTimeLabel : 'Časovač' }}
           </button>
@@ -1835,6 +1838,46 @@
                 <button v-if="bookQuizSelected !== null" @click="nextBookQuizQuestion" class="btn-primary !py-1.5 !px-4 text-sm mt-3">Další otázka ➡️</button>
               </div>
             </template>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showEnglishExtra" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🌍 Angličtina navíc (mimo appku)</p>
+            <p class="text-xs text-slate-500 mb-4">Appka sama tě naučí gramatiku a slovní zásobu, ale mluvení a poslech reálné angličtiny nenahradí. Tady je týdenní plán a pár konkrétních zdrojů, ať se z toho stane pravidelný rituál.</p>
+
+            <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">📅 Týdenní plán {{ englishPlanAllDone ? '🎉' : '' }}</p>
+            <div class="flex flex-col gap-2 mb-5">
+              <div v-for="a in englishPlanProgress" :key="a.key" class="rounded-lg bg-slate-800/40 p-2.5">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                  <span class="text-sm font-medium">{{ a.label }}</span>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-xs" :class="a.done ? 'text-emerald-400' : 'text-slate-400'">{{ a.count }} / {{ a.weeklyTarget }}{{ a.done ? ' ✅' : '' }}</span>
+                    <button @click="unlogEnglishPractice(a.key)" :disabled="a.count === 0" class="btn-ghost !text-xs !p-1 disabled:opacity-30" title="Odebrat jeden záznam (překlep)">➖</button>
+                    <button @click="logEnglishPractice(a.key)" class="btn-secondary !text-xs !py-1 !px-2 !bg-black/25 !border-white/20 hover:!bg-black/40">➕ Splněno</button>
+                  </div>
+                </div>
+                <div class="h-2 rounded-full bg-slate-900 overflow-hidden">
+                  <div class="h-full rounded-full" :class="a.done ? 'bg-emerald-500' : 'bg-sky-500'" :style="{ width: a.percent + '%' }"></div>
+                </div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-600 mb-4">Plán se počítá vždy za aktuální kalendářní týden (pondělí až neděle), stejně jako appčiny vlastní cíle - appka nic nevynucuje, jen ti pomáhá vidět, co jsi tenhle týden stihl/a.</p>
+
+            <p class="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">🔗 Doporučené zdroje</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div v-for="cat in ENGLISH_RESOURCE_CATEGORIES" :key="cat.key" class="rounded-lg bg-slate-800/40 p-3">
+                <p class="text-sm font-semibold mb-0.5">{{ cat.label }}</p>
+                <p class="text-xs text-slate-500 mb-2 italic">{{ cat.tip }}</p>
+                <ul class="flex flex-col gap-1.5">
+                  <li v-for="item in cat.items" :key="item.name" class="text-sm">
+                    <a v-if="item.url" :href="item.url" target="_blank" rel="noopener noreferrer" class="text-cyan-300 hover:underline font-medium">{{ item.name }} ↗</a>
+                    <span v-else class="font-medium">{{ item.name }}</span>
+                    <p class="text-xs text-slate-400">{{ item.description }}</p>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </Transition>
 
@@ -5825,6 +5868,70 @@ const BOOK_ANALYSES = [
   },
 ];
 
+/* =====================================================================
+   ANGLIČTINA NAVÍC (mimo appku) - viz showEnglishExtra ve setup().
+   Appka sama o sobě naučí gramatiku a slovní zásobu, ale mluvení a
+   poslech reálné angličtiny appka nenahradí - tahle sekce proto jen
+   doporučuje konkrétní zdroje (poslech, filmy, konverzace, čtení) a
+   nabízí jednoduchý týdenní tracker, aby se z toho stal pravidelný
+   rituál, ne nárazovka. Odkazy míří na stabilní domovské stránky
+   (u YouTube kanálů raději na vyhledávání, ať se nezlomí, když si
+   kanál časem změní přesnou adresu/handle).
+   ===================================================================== */
+const ENGLISH_RESOURCE_CATEGORIES = [
+  {
+    key: 'listening',
+    label: '🎧 Poslech',
+    tip: 'Nejrychlejší cesta ke zlepšení - poslouchej i pasivně, klidně cestou do školy.',
+    items: [
+      { name: 'BBC Learning English - 6 Minute English', description: 'Krátké epizody s přepisem a jasnou výslovností - dobrý start.', url: 'https://www.bbc.co.uk/learningenglish' },
+      { name: 'Easy English (YouTube)', description: 'Rozhovory s lidmi na ulici v různých úrovních obtížnosti.', url: 'https://www.youtube.com/results?search_query=Easy+English+YouTube+channel' },
+      { name: 'English with Lucy (YouTube)', description: 'Výslovnost, idiomy a praktická slovní zásoba.', url: 'https://www.youtube.com/results?search_query=English+with+Lucy' },
+      { name: 'Voice of America Learning English', description: 'Pomalejší tempo, dobré pro pravidelný poslech na začátek.', url: 'https://learningenglish.voanews.com/' },
+    ],
+  },
+  {
+    key: 'watching',
+    label: '🎬 Filmy a seriály',
+    tip: 'Nejdřív anglické titulky (ne české!), po pár dílech zkus bez nich.',
+    items: [
+      { name: 'Friends / The Office / Modern Family', description: 'Sitcomy s jednoduššími dialogy a běžnou mluvenou angličtinou - lepší start než náročné drama.', url: '' },
+      { name: 'Metoda "dvojího sledování"', description: 'Stejný díl sleduj 2x - podruhé chytneš věci, co ti poprvé utekly.', url: '' },
+    ],
+  },
+  {
+    key: 'speaking',
+    label: '🗣️ Mluvení a konverzace',
+    tip: 'Nejtěžší si zajistit samostatně, ale jde to i zdarma.',
+    items: [
+      { name: 'Tandem', description: 'Výměna jazyků s rodilými mluvčími zdarma (ty pomůžeš s češtinou, oni s angličtinou).', url: 'https://www.tandem.net/' },
+      { name: 'HelloTalk', description: 'Obdoba Tandemu - chat i hlasové/video hovory s rodilými mluvčími.', url: 'https://www.hellotalk.com/' },
+      { name: 'italki', description: 'Placení tutoři/rodilí mluvčí na doučování - cena podle výběru lektora.', url: 'https://www.italki.com/' },
+    ],
+  },
+  {
+    key: 'reading',
+    label: '📖 Čtení',
+    tip: 'Čti něco, co už znáš v češtině - neztratíš se v ději a soustředíš se na jazyk.',
+    items: [
+      { name: 'Oxford Bookworms Library', description: 'Zjednodušené knihy podle úrovně (A1-C1) - klasika i moderní příběhy.', url: 'https://elt.oup.com/catalogue/items/global/graded_readers/oxford_bookworms_library' },
+      { name: 'Oblíbená kniha v angličtině', description: 'Něco, co jsi už četl/a v překladu - vedle sebe klidně se slovníkem.', url: '' },
+    ],
+  },
+];
+
+/** Aktivity týdenního plánu procvičování angličtiny mimo appku - viz
+ *  englishPlanProgress/logEnglishPractice ve setup(). weeklyTarget je jen
+ *  doporučení (appka nic nevynucuje), key musí sedět s klíči používanými
+ *  ve stats.englishPracticeLog[weekKey]. */
+const ENGLISH_PLAN_ACTIVITIES = [
+  { key: 'listening', label: '🎧 Poslech (podcast/video)', weeklyTarget: 3 },
+  { key: 'watching', label: '🎬 Film/seriál s titulky', weeklyTarget: 2 },
+  { key: 'speaking', label: '🗣️ Konverzace', weeklyTarget: 1 },
+  { key: 'reading', label: '📖 Čtení', weeklyTarget: 2 },
+  { key: 'app', label: '📱 Kvízy v appce (Angličtina)', weeklyTarget: 3 },
+];
+
 /** Sestaví jednostránkové A4 HTML s rozborem jedné knihy - stejný vzor
  *  (nové okno + window.print(), viz printBookAnalysis ve setup()) jako
  *  buildCheatSheetHtml výš. */
@@ -6278,6 +6385,9 @@ function parseStatsJson(raw) {
     // (objekt klíč -> text, viz updateBookNote).
     readBooks: [],
     bookNotes: {},
+    // Angličtina navíc (mimo appku) - odškrtávání týdenního plánu procvičování
+    // (objekt "týden -> aktivita -> počet", viz logEnglishPractice).
+    englishPracticeLog: {},
   };
   try {
     if (raw) {
@@ -6309,6 +6419,7 @@ function parseStatsJson(raw) {
         studyTimeByDay: (parsed && typeof parsed.studyTimeByDay === 'object' && parsed.studyTimeByDay) || {},
         readBooks: Array.isArray(parsed && parsed.readBooks) ? parsed.readBooks : [],
         bookNotes: (parsed && typeof parsed.bookNotes === 'object' && parsed.bookNotes) || {},
+        englishPracticeLog: (parsed && typeof parsed.englishPracticeLog === 'object' && parsed.englishPracticeLog) || {},
       };
     }
   } catch (e) {
@@ -7807,7 +7918,7 @@ const app = createApp({
       streakFreezeCredits: 0, streakFreezeCreditWeekKey: null, streakFreezeUsedDates: [],
       practiceLog: [],
       timetable: {}, goals: [], studyTimeByDay: {},
-      readBooks: [], bookNotes: {},
+      readBooks: [], bookNotes: {}, englishPracticeLog: {},
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -7954,6 +8065,7 @@ const app = createApp({
               studyTimeByDay: (remote.stats.studyTimeByDay && typeof remote.stats.studyTimeByDay === 'object') ? remote.stats.studyTimeByDay : {},
               readBooks: Array.isArray(remote.stats.readBooks) ? remote.stats.readBooks : [],
               bookNotes: (remote.stats.bookNotes && typeof remote.stats.bookNotes === 'object') ? remote.stats.bookNotes : {},
+              englishPracticeLog: (remote.stats.englishPracticeLog && typeof remote.stats.englishPracticeLog === 'object') ? remote.stats.englishPracticeLog : {},
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
@@ -9292,6 +9404,44 @@ const app = createApp({
       bookQuizActive.value = false;
       bookQuizQuestion.value = null;
       bookQuizSelected.value = null;
+    }
+
+    /* ---------- Angličtina navíc (mimo appku) - viz ENGLISH_RESOURCE_CATEGORIES
+       a ENGLISH_PLAN_ACTIVITIES výš. Appka sama naučí gramatiku/slovní zásobu,
+       ale poslech/mluvení/čtení reálné angličtiny appka nenahradí - tahle
+       sekce jen doporučuje zdroje a nabízí lehký týdenní tracker (bez vazby
+       na SRS/slabá místa ostatních předmětů). ---------- */
+    const showEnglishExtra = ref(false);
+    function englishPlanWeekKey() {
+      return dateKey(mondayOfWeek(new Date()));
+    }
+    const englishPracticeWeek = computed(() => {
+      const wk = englishPlanWeekKey();
+      return (stats.englishPracticeLog && stats.englishPracticeLog[wk]) || {};
+    });
+    const englishPlanProgress = computed(() => ENGLISH_PLAN_ACTIVITIES.map((a) => {
+      const count = englishPracticeWeek.value[a.key] || 0;
+      const percent = a.weeklyTarget > 0 ? Math.min(100, Math.round((count / a.weeklyTarget) * 100)) : 0;
+      return { ...a, count, percent, done: count >= a.weeklyTarget };
+    }));
+    const englishPlanAllDone = computed(() => englishPlanProgress.value.length > 0 && englishPlanProgress.value.every((a) => a.done));
+    function logEnglishPractice(activityKey) {
+      const wk = englishPlanWeekKey();
+      if (!stats.englishPracticeLog || typeof stats.englishPracticeLog !== 'object') stats.englishPracticeLog = {};
+      if (!stats.englishPracticeLog[wk]) stats.englishPracticeLog[wk] = {};
+      stats.englishPracticeLog[wk][activityKey] = (stats.englishPracticeLog[wk][activityKey] || 0) + 1;
+      // Appka si pamatuje jen posledních pár týdnů (starší nikoho nezajímají,
+      // ať objekt neroste donekonečna po celou dobu používání appky).
+      const weekKeys = Object.keys(stats.englishPracticeLog).sort();
+      while (weekKeys.length > 12) {
+        delete stats.englishPracticeLog[weekKeys.shift()];
+      }
+    }
+    function unlogEnglishPractice(activityKey) {
+      const wk = englishPlanWeekKey();
+      if (!stats.englishPracticeLog || !stats.englishPracticeLog[wk]) return;
+      const current = stats.englishPracticeLog[wk][activityKey] || 0;
+      if (current > 0) stats.englishPracticeLog[wk][activityKey] = current - 1;
     }
 
     /* ---------- Sledování času u studia ----------
@@ -10710,6 +10860,7 @@ const app = createApp({
               studyTimeByDay: (importedStats.studyTimeByDay && typeof importedStats.studyTimeByDay === 'object') ? importedStats.studyTimeByDay : {},
               readBooks: Array.isArray(importedStats.readBooks) ? importedStats.readBooks : [],
               bookNotes: (importedStats.bookNotes && typeof importedStats.bookNotes === 'object') ? importedStats.bookNotes : {},
+              englishPracticeLog: (importedStats.englishPracticeLog && typeof importedStats.englishPracticeLog === 'object') ? importedStats.englishPracticeLog : {},
             });
           }
           activeSubjectId.value = null;
@@ -11658,6 +11809,7 @@ const app = createApp({
       showBookAnalysis, bookAnalysisAuthor, bookAnalysisTitle, bookAnalysisAuthors, bookAnalysisTitlesForAuthor, selectBookAnalysisAuthor, activeBookAnalysis, printBookAnalysis,
       readBooksCount, isBookRead, toggleBookRead, activeBookNote,
       bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
+      showEnglishExtra, ENGLISH_RESOURCE_CATEGORIES, englishPlanProgress, englishPlanAllDone, logEnglishPractice, unlogEnglishPractice,
       todayStudyMinutes, weekStudyMinutes, addStudySeconds,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
