@@ -1846,6 +1846,12 @@
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🌍 Angličtina navíc (mimo appku)</p>
             <p class="text-xs text-slate-500 mb-3">Appka sama tě naučí gramatiku a slovní zásobu, ale mluvení a poslech reálné angličtiny nenahradí. Tady je týdenní plán, zdroje a čtyři procvičovací cvičení navíc.</p>
 
+            <div class="flex flex-wrap gap-2 mb-4 text-xs">
+              <span class="px-2.5 py-1 rounded-lg bg-slate-800/50 text-slate-300">📇 Umím {{ vocabMasteredTotal }} / {{ vocabWordsTotal }} slovíček</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-800/50 text-slate-300">✅ Dokončeno {{ stats.englishExtraExercisesCount || 0 }} {{ pluralize(stats.englishExtraExercisesCount || 0, 'cvičení', 'cvičení', 'cvičení') }}</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-800/50 text-slate-300">🔥 Série {{ englishExtraStreakInfo.count }} {{ pluralize(englishExtraStreakInfo.count, 'den', 'dny', 'dní') }} (nejlepší {{ englishExtraStreakInfo.best }})</span>
+            </div>
+
             <div class="flex flex-wrap gap-1.5 mb-4">
               <button @click="selectEnglishExtraTab('plan')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'plan' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">📅 Plán</button>
               <button @click="selectEnglishExtraTab('resources')" class="!text-xs px-3 py-1.5 rounded-lg border transition" :class="englishExtraTab === 'resources' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🔗 Zdroje</button>
@@ -1897,13 +1903,19 @@
             <!-- Poslech / diktát -->
             <div v-if="englishExtraTab === 'listening'">
               <p class="text-xs text-slate-500 mb-3">Appka větu přečte nahlas anglicky - napiš, co jsi slyšel/a, a appka to vyhodnotí slovo po slově.</p>
-              <div class="flex flex-wrap items-center gap-1.5 mb-3">
+              <div class="flex flex-wrap items-center gap-1.5 mb-2">
                 <span class="text-xs text-slate-500 mr-1">Obtížnost:</span>
                 <button v-for="d in ['easy','medium','hard','all']" :key="d" @click="setEnglishListeningDifficulty(d)" class="!text-xs px-2.5 py-1 rounded-lg border transition" :class="englishListeningDifficulty === d ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">{{ d === 'all' ? 'Vše' : DIFFICULTY_LABELS[d] }}</button>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 mb-3">
+                <span class="text-xs text-slate-500 mr-1">Rychlost:</span>
+                <button @click="setEnglishListeningRate('normal')" class="!text-xs px-2.5 py-1 rounded-lg border transition" :class="englishListeningRate === 'normal' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">Normální</button>
+                <button @click="setEnglishListeningRate('slow')" class="!text-xs px-2.5 py-1 rounded-lg border transition" :class="englishListeningRate === 'slow' ? 'bg-sky-600/30 border-sky-500 text-sky-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'">🐢 Pomalu</button>
               </div>
               <div v-if="englishListeningSentence" class="rounded-lg bg-slate-800/40 p-4">
                 <div class="flex flex-wrap items-center gap-2 mb-3">
                   <button @click="englishSpeakingKey === 'listening' ? stopSpeakingEnglish() : playEnglishListeningSentence()" class="btn-primary !py-1.5 !px-4">{{ englishSpeakingKey === 'listening' ? '⏹️ Zastavit' : '🔊 Přehrát větu' }}</button>
+                  <button @click="englishSpeakingKey === 'listening-words' ? stopSpeakingEnglish() : playEnglishListeningWordByWord()" class="btn-secondary !py-1.5 !px-4">{{ englishSpeakingKey === 'listening-words' ? '⏹️ Zastavit' : '🔤 Po slovech' }}</button>
                   <button @click="nextEnglishListeningSentence" class="btn-ghost !text-xs">↻ Jiná věta</button>
                 </div>
                 <input v-model="englishListeningInput" @keyup.enter="checkEnglishDictation" type="text" placeholder="Napiš, co jsi slyšel/a..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-3 text-slate-200">
@@ -6147,6 +6159,36 @@ const ENGLISH_PRACTICE_SENTENCES = [
   { en: "Our society has become extremely dependent on smartphones and computers.", cz: "Naše společnost se stala extrémně závislou na chytrých telefonech a počítačích.", difficulty: "hard" },
   { en: "This ancient building was destroyed when a huge earthquake struck the city.", cz: "Tato starobylá budova byla zničena, když město zasáhlo obrovské zemětřesení.", difficulty: "hard" },
   { en: "Fewer animals would disappear if humans protected the environment more carefully.", cz: "Méně zvířat by mizelo, kdyby lidé pečlivěji chránili životní prostředí.", difficulty: "hard" },
+  { en: "My brother plays football every weekend.", cz: "Můj bratr hraje každý víkend fotbal.", difficulty: "easy" },
+  { en: "She works at a small bakery downtown.", cz: "Pracuje v malém pekařství v centru města.", difficulty: "easy" },
+  { en: "We visited our grandparents last summer.", cz: "Minulé léto jsme navštívili naše prarodiče.", difficulty: "easy" },
+  { en: "The weather is very cold today.", cz: "Dnes je velmi chladné počasí.", difficulty: "easy" },
+  { en: "He usually walks to school in the morning.", cz: "Ráno obvykle chodí do školy pěšky.", difficulty: "easy" },
+  { en: "They watched a funny movie last night.", cz: "Včera večer sledovali vtipný film.", difficulty: "easy" },
+  { en: "I need to buy some fresh vegetables.", cz: "Potřebuji koupit trochu čerstvé zeleniny.", difficulty: "easy" },
+  { en: "Our teacher explains the lessons very clearly.", cz: "Náš učitel vysvětluje látku velmi jasně.", difficulty: "easy" },
+  { en: "The children are playing in the garden.", cz: "Děti si hrají na zahradě.", difficulty: "easy" },
+  { en: "She likes to read books before bed.", cz: "Ráda čte knihy před spaním.", difficulty: "easy" },
+  { en: "If it rains tomorrow we will stay at home.", cz: "Pokud zítra bude pršet, zůstaneme doma.", difficulty: "medium" },
+  { en: "The new bridge has been built by local workers.", cz: "Nový most byl postaven místními dělníky.", difficulty: "medium" },
+  { en: "She has already finished all of her homework.", cz: "Už dokončila všechny své domácí úkoly.", difficulty: "medium" },
+  { en: "If I had more time I would travel more often.", cz: "Kdybych měl více času, cestoval bych častěji.", difficulty: "medium" },
+  { en: "This report was written by one of the students.", cz: "Tuto zprávu napsal jeden ze studentů.", difficulty: "medium" },
+  { en: "He has been working at that company for five years.", cz: "V té firmě pracuje už pět let.", difficulty: "medium" },
+  { en: "The cake was baked by my grandmother this morning.", cz: "Dort dnes ráno upekla moje babička.", difficulty: "medium" },
+  { en: "If you study hard you will pass the exam.", cz: "Pokud budeš pilně studovat, uspěješ u zkoušky.", difficulty: "medium" },
+  { en: "They have never visited a foreign country before.", cz: "Nikdy předtím nenavštívili cizí zemi.", difficulty: "medium" },
+  { en: "Our house is being painted by a local company.", cz: "Náš dům maluje místní firma.", difficulty: "medium" },
+  { en: "She said that she would call me later that evening.", cz: "Řekla, že mi ten večer později zavolá.", difficulty: "hard" },
+  { en: "The man who lives next door works as an engineer.", cz: "Muž, který bydlí vedle, pracuje jako inženýr.", difficulty: "hard" },
+  { en: "If she had studied harder she would have passed the test easily.", cz: "Kdyby se učila víc, snadno by test udělala.", difficulty: "hard" },
+  { en: "He told me that he had already finished the project.", cz: "Řekl mi, že už projekt dokončil.", difficulty: "hard" },
+  { en: "The book that I borrowed from the library was extremely interesting.", cz: "Kniha, kterou jsem si půjčil z knihovny, byla nesmírně zajímavá.", difficulty: "hard" },
+  { en: "If we had left earlier we would not be stuck in traffic now.", cz: "Kdybychom vyrazili dřív, teď bychom nestáli v dopravní zácpě.", difficulty: "hard" },
+  { en: "The students who arrived late missed the beginning of the lecture.", cz: "Studenti, kteří přišli pozdě, zmeškali začátek přednášky.", difficulty: "hard" },
+  { en: "She explained that the meeting had been postponed until next week.", cz: "Vysvětlila, že schůzka byla odložena na příští týden.", difficulty: "hard" },
+  { en: "The company that developed this software is based in another country.", cz: "Firma, která vyvinula tento software, sídlí v jiné zemi.", difficulty: "hard" },
+  { en: "If he wins the competition he will receive a scholarship to study abroad.", cz: "Pokud vyhraje soutěž, získá stipendium na studium v zahraničí.", difficulty: "hard" },
 ];
 
 /** Slovníček/kartičky slovní zásoby po tématech (viz englishVocabTab ve
@@ -6323,6 +6365,48 @@ const VOCAB_DECK = [
       { en: "to go fishing", cz: "jít na ryby", example: "My dad goes fishing every Saturday morning." },
       { en: "subscription", cz: "předplatné", example: "He has a subscription to a streaming service." },
       { en: "spare time activity", cz: "činnost ve volném čase", example: "Reading is my favorite spare time activity." },
+    ],
+  },
+  {
+    key: "shopping",
+    label: "Nakupování",
+    words: [
+      { en: "receipt", cz: "účtenka", example: "Please keep your receipt in case you need to return the item." },
+      { en: "refund", cz: "vrácení peněz", example: "The store refused to give me a refund without the receipt." },
+      { en: "price tag", cz: "cenovka", example: "I never buy anything without checking the price tag first." },
+      { en: "discount", cz: "sleva", example: "Students can get a ten percent discount on this laptop." },
+      { en: "exchange", cz: "vyměnit zboží", example: "I would like to exchange this shirt for a smaller size." },
+      { en: "checkout", cz: "pokladna", example: "There was a long queue at the checkout on Saturday morning." },
+      { en: "cashier", cz: "pokladní", example: "The cashier scanned my items and told me the total price." },
+      { en: "customer service", cz: "zákaznický servis", example: "I contacted customer service about the broken headphones I bought." },
+      { en: "warranty", cz: "záruka", example: "This washing machine comes with a two-year warranty." },
+      { en: "fitting room", cz: "zkušební kabinka", example: "She tried on three dresses in the fitting room." },
+      { en: "sold out", cz: "vyprodáno", example: "The new sneakers were sold out within a few hours." },
+      { en: "bargain", cz: "výhodná koupě", example: "These shoes were a real bargain at half price." },
+      { en: "loyalty card", cz: "věrnostní karta", example: "Swipe your loyalty card to earn points on every purchase." },
+      { en: "installment plan", cz: "splátkový plán", example: "We bought the sofa on an installment plan over twelve months." },
+      { en: "overpriced", cz: "předražený", example: "Tourists often think souvenirs near the castle are overpriced." },
+    ],
+  },
+  {
+    key: "education",
+    label: "Škola a vzdělávání",
+    words: [
+      { en: "assignment", cz: "úkol", example: "Our teacher gave us a challenging assignment due next Friday." },
+      { en: "exam", cz: "zkouška", example: "She stayed up late studying for tomorrow's chemistry exam." },
+      { en: "grade", cz: "známka", example: "He got the highest grade in the whole class." },
+      { en: "scholarship", cz: "stipendium", example: "She won a scholarship to study abroad for a year." },
+      { en: "lecture", cz: "přednáška", example: "The professor's lecture on economics lasted almost two hours." },
+      { en: "curriculum", cz: "učební plán", example: "The new curriculum includes more practical science lessons." },
+      { en: "coursework", cz: "školní práce/úkoly", example: "Coursework makes up a large part of the final grade." },
+      { en: "essay", cz: "esej", example: "Write a five-hundred-word essay about your favorite book." },
+      { en: "plagiarism", cz: "plagiátorství", example: "Copying text from the internet without credit counts as plagiarism." },
+      { en: "semester", cz: "semestr", example: "Grades are calculated at the end of each semester." },
+      { en: "tuition fees", cz: "školné", example: "Tuition fees at that university are quite expensive." },
+      { en: "degree", cz: "vysokoškolský titul", example: "She earned a degree in biology from Charles University." },
+      { en: "revise", cz: "opakovat si učivo", example: "I need to revise all my notes before the final exam." },
+      { en: "classmate", cz: "spolužák", example: "My classmate helped me understand the difficult math homework." },
+      { en: "graduate", cz: "absolvovat školu", example: "Most students graduate from high school at the age of nineteen." },
     ],
   },
 ];
@@ -7078,6 +7162,277 @@ const DIALOGUE_BANK = [
     ],
     correctIndex: 3,
   },
+  {
+    difficulty: "easy",
+    topicCz: "Odbavení na letišti",
+    lines: [
+      { speaker: "A", text: "Good morning. Can I see your passport and ticket, please?" },
+      { speaker: "B", text: "Sure, here you are." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Yes, just this one suitcase." },
+      { speaker: "A", text: "Okay, please put it on the scale." },
+    ],
+    options: [
+      "Do you have any bags to check in?",
+      "Would you like a window or aisle seat?",
+      "Is this your first time flying with us?",
+      "Do you need help finding your gate?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Objednání na kadeřnictví",
+    lines: [
+      { speaker: "A", text: "Hi, I'd like to book a haircut for this week." },
+      { speaker: "B", text: "Sure, what day works for you?" },
+      { speaker: "A", text: "Is Thursday afternoon possible?" },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "That's perfect, thank you." },
+    ],
+    options: [
+      "Yes, we have an opening at 3 PM.",
+      "Sorry, we're closed on Thursdays.",
+      "We only do haircuts in the morning.",
+      "Can you come back next week instead?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Objednání taxíku",
+    lines: [
+      { speaker: "A", text: "Hello. I would like to book a taxi for tomorrow morning." },
+      { speaker: "B", text: "Sure. What time would you like to be picked up?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "No problem. Where should the driver take you?" },
+      { speaker: "A", text: "To the central train station please." },
+    ],
+    options: [
+      "Around eight o'clock if that's possible.",
+      "I don't have any luggage with me.",
+      "The weather is quite nice today.",
+      "I already paid for my ticket online.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Půjčení knihy v knihovně",
+    lines: [
+      { speaker: "A", text: "Hi, I'd like to borrow this book." },
+      { speaker: "B", text: "Do you have a library card?" },
+      { speaker: "A", text: "Yes, here it is." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "Two weeks sounds fine." },
+    ],
+    options: [
+      "You can keep it for two weeks.",
+      "This book is currently out of stock.",
+      "You need to pay a late fee first.",
+      "This book can only be read here.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "easy",
+    topicCz: "Dotaz na členství v posilovně",
+    lines: [
+      { speaker: "A", text: "Hello, I'm interested in joining the gym." },
+      { speaker: "B", text: "Great! Would you like a monthly or yearly plan?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "The monthly plan is thirty dollars." },
+      { speaker: "A", text: "Okay, I'll take that one." },
+    ],
+    options: [
+      "How much is the monthly plan?",
+      "Do you have a swimming pool?",
+      "What time do you open on Sundays?",
+      "Can I bring a friend for free?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Stížnost na hlučné sousedy",
+    lines: [
+      { speaker: "A", text: "Hi. I wanted to talk to you about the noise from the apartment upstairs." },
+      { speaker: "B", text: "Oh I'm sorry to hear that. What exactly has been happening?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "I understand. I'll speak to them about it this week." },
+      { speaker: "A", text: "Thank you. I really appreciate it." },
+    ],
+    options: [
+      "There's loud music almost every night after eleven.",
+      "The rent went up again this month.",
+      "My internet connection keeps disconnecting.",
+      "The parking space next to mine is often taken.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Reklamace vadného výrobku",
+    lines: [
+      { speaker: "A", text: "I'd like to return this blender. It stopped working after two days." },
+      { speaker: "B", text: "I'm sorry to hear that. Do you have the receipt?" },
+      { speaker: "A", text: "Yes, here it is." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "I'd prefer a refund, if that's possible." },
+    ],
+    options: [
+      "Would you like a replacement or a refund?",
+      "Unfortunately, we can't accept opened items.",
+      "This model has been discontinued.",
+      "You'll need to contact the manufacturer directly.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Rozhovor s realitním makléřem o prodeji domu",
+    lines: [
+      { speaker: "A", text: "Thanks for meeting with me. I'm thinking about selling my house." },
+      { speaker: "B", text: "Great. I'd be happy to help. Can you tell me a bit about the property?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "That sounds like a good size. Do you have any idea about the price range?" },
+      { speaker: "A", text: "Not really. That's actually why I need your advice." },
+    ],
+    options: [
+      "It has three bedrooms and a fairly large garden.",
+      "I've lived in the neighborhood my whole life.",
+      "My brother recommended your agency to me.",
+      "I'm hoping to move within the next six months.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Volání technické podpoře kvůli internetu",
+    lines: [
+      { speaker: "A", text: "Hello, my internet connection has been down since this morning." },
+      { speaker: "B", text: "I'm sorry about that. Have you tried restarting your router?" },
+      { speaker: "A", text: "Yes, I did that twice already." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "Okay, I'll wait for the technician then." },
+    ],
+    options: [
+      "In that case, I'll schedule a technician to visit you.",
+      "In that case, your bill will be higher this month.",
+      "In that case, please turn off your phone.",
+      "In that case, we recommend switching providers.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "medium",
+    topicCz: "Plánování výletu s kamarádem",
+    lines: [
+      { speaker: "A", text: "So, where should we go for our trip next month?" },
+      { speaker: "B", text: "I was thinking about the mountains. What about you?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "That sounds fun too. Let's check the prices for both." },
+      { speaker: "A", text: "Good idea, I'll look online tonight." },
+    ],
+    options: [
+      "Actually, I'd love to visit the coast instead.",
+      "Actually, I think we should cancel the trip.",
+      "Actually, I already booked a hotel in the mountains.",
+      "Actually, I don't have any vacation days left.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Jednání o pojistné události po nehodě",
+    lines: [
+      { speaker: "A", text: "I'm calling to report a car accident and start a claim." },
+      { speaker: "B", text: "I'm sorry to hear that. Could you describe what happened?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Thank you. Was anyone injured in the accident?" },
+      { speaker: "A", text: "No thankfully everyone was fine just some damage to the car." },
+    ],
+    options: [
+      "Another driver ran a red light and hit the side of my car.",
+      "I've had this insurance policy for about five years.",
+      "My car is due for its annual service next month.",
+      "I usually drive to work every day around eight.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "V autoservisu",
+    lines: [
+      { speaker: "A", text: "My car's been making a strange noise whenever I brake." },
+      { speaker: "B", text: "I see. Let's take a look under the hood first." },
+      { speaker: "A", text: "Sure, go ahead." },
+      { speaker: "B", text: "___BLANK___" },
+      { speaker: "A", text: "That's not too bad. How long will the repair take?" },
+      { speaker: "B", text: "We should have it ready by tomorrow afternoon." },
+    ],
+    options: [
+      "It looks like your brake pads are worn out, and replacing them will cost around eighty dollars.",
+      "It looks like your engine needs a full replacement, which will cost several thousand dollars.",
+      "It looks like everything is fine; there's no charge.",
+      "It looks like you need new tires all around.",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Volání instalatéra kvůli úniku vody",
+    lines: [
+      { speaker: "A", text: "Thanks for coming so quickly. There's water leaking under the sink." },
+      { speaker: "B", text: "Let me take a look. Ah, I see the problem — the pipe joint is loose." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "No, don't worry, it's a quick fix. I can tighten it right now." },
+      { speaker: "A", text: "That's a relief, thank you." },
+    ],
+    options: [
+      "Will we need to replace the whole pipe?",
+      "Is the leak going to damage the ceiling downstairs?",
+      "Can you also fix my leaking faucet in the bathroom?",
+      "How much will a full renovation cost?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Videohovor s kolegou o zpoždění projektu",
+    lines: [
+      { speaker: "A", text: "Hi, thanks for joining. I wanted to check in about the deadline." },
+      { speaker: "B", text: "Yeah, about that — we've run into a few unexpected issues." },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "The client changed the requirements twice last week, so we had to redo part of the design." },
+      { speaker: "A", text: "I see. Let's push the deadline back by a few days then." },
+    ],
+    options: [
+      "What kind of issues are we talking about?",
+      "Can you send me the invoice by Friday?",
+      "Did you already talk to HR about this?",
+      "Are you planning to take a vacation soon?",
+    ],
+    correctIndex: 0,
+  },
+  {
+    difficulty: "hard",
+    topicCz: "Rozhovor s učitelem o známce",
+    lines: [
+      { speaker: "A", text: "Excuse me, could I talk to you about my test grade?" },
+      { speaker: "B", text: "Of course, what's on your mind?" },
+      { speaker: "A", text: "___BLANK___" },
+      { speaker: "B", text: "Let's go through it together — I think there might have been a misunderstanding in question three." },
+      { speaker: "A", text: "That would really help, thank you." },
+    ],
+    options: [
+      "I was surprised by the score, and I was hoping you could explain where I lost points.",
+      "I was wondering if I could skip the final exam this year.",
+      "I was hoping you could give me extra homework.",
+      "I was thinking about switching to a different class.",
+    ],
+    correctIndex: 0,
+  },
 ];
 
 /** Sestaví jednostránkové A4 HTML s rozborem jedné knihy - stejný vzor
@@ -7577,6 +7932,11 @@ function parseStatsJson(raw) {
     // Angličtina navíc (mimo appku) - odškrtávání týdenního plánu procvičování
     // (objekt "týden -> aktivita -> počet", viz logEnglishPractice).
     englishPracticeLog: {},
+    // Angličtina navíc - celkový počet dokončených cvičení (poslech, slovníček,
+    // skládání vět, dialogy dohromady) a série dní procvičování, viz
+    // markEnglishExtraActivity/bumpEnglishExtraStreak.
+    englishExtraExercisesCount: 0,
+    englishExtraStreak: { count: 0, best: 0, lastDate: null },
   };
   try {
     if (raw) {
@@ -7609,6 +7969,8 @@ function parseStatsJson(raw) {
         readBooks: Array.isArray(parsed && parsed.readBooks) ? parsed.readBooks : [],
         bookNotes: (parsed && typeof parsed.bookNotes === 'object' && parsed.bookNotes) || {},
         englishPracticeLog: (parsed && typeof parsed.englishPracticeLog === 'object' && parsed.englishPracticeLog) || {},
+        englishExtraExercisesCount: (parsed && typeof parsed.englishExtraExercisesCount === 'number') ? parsed.englishExtraExercisesCount : 0,
+        englishExtraStreak: (parsed && typeof parsed.englishExtraStreak === 'object' && parsed.englishExtraStreak) || { count: 0, best: 0, lastDate: null },
       };
     }
   } catch (e) {
@@ -9190,6 +9552,7 @@ const app = createApp({
       practiceLog: [],
       timetable: {}, goals: [], studyTimeByDay: {},
       readBooks: [], bookNotes: {}, englishPracticeLog: {},
+      englishExtraExercisesCount: 0, englishExtraStreak: { count: 0, best: 0, lastDate: null },
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -9337,6 +9700,8 @@ const app = createApp({
               readBooks: Array.isArray(remote.stats.readBooks) ? remote.stats.readBooks : [],
               bookNotes: (remote.stats.bookNotes && typeof remote.stats.bookNotes === 'object') ? remote.stats.bookNotes : {},
               englishPracticeLog: (remote.stats.englishPracticeLog && typeof remote.stats.englishPracticeLog === 'object') ? remote.stats.englishPracticeLog : {},
+              englishExtraExercisesCount: (typeof remote.stats.englishExtraExercisesCount === 'number') ? remote.stats.englishExtraExercisesCount : 0,
+              englishExtraStreak: (remote.stats.englishExtraStreak && typeof remote.stats.englishExtraStreak === 'object') ? remote.stats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
             });
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
@@ -10738,7 +11103,7 @@ const app = createApp({
       if (speechSupported) window.speechSynthesis.cancel();
       englishSpeakingKey.value = null;
     }
-    function speakEnglish(text, key) {
+    function speakEnglish(text, key, rate) {
       if (!speechSupported) {
         alert('Tvůj prohlížeč bohužel nepodporuje hlasové čtení nahlas.');
         return;
@@ -10747,19 +11112,49 @@ const app = createApp({
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 0.9;
+      utterance.rate = typeof rate === 'number' ? rate : 0.9;
       englishSpeakingKey.value = key !== undefined ? key : text;
       utterance.onend = () => { englishSpeakingKey.value = null; };
       utterance.onerror = () => { englishSpeakingKey.value = null; };
       window.speechSynthesis.speak(utterance);
     }
 
+    /* ---- Angličtina navíc: přehled pokroku a série dní (viz
+       markEnglishExtraActivity - volá se ze všech 4 nových cvičení níž,
+       pokaždé, když appka vyhodnotí dokončený pokus). Stejný princip jako
+       appčina hlavní "série dní", ale samostatný, jen pro tuhle sekci. ---- */
+    function bumpEnglishExtraStreak() {
+      if (!stats.englishExtraStreak || typeof stats.englishExtraStreak !== 'object') {
+        stats.englishExtraStreak = { count: 0, best: 0, lastDate: null };
+      }
+      const st = stats.englishExtraStreak;
+      const today = dateKey(new Date());
+      if (st.lastDate === today) return; // dnešek už se počítá
+      const yesterday = dateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      st.count = st.lastDate === yesterday ? (st.count || 0) + 1 : 1;
+      st.best = Math.max(st.best || 0, st.count);
+      st.lastDate = today;
+    }
+    /** Zavolá appka po KAŽDÉM dokončeném pokusu ve čtyřech nových cvičeních
+     *  (diktát, kartička slovníčku, sestavená věta, zodpovězený dialog) -
+     *  jednak si appka připočte "dokončeno cvičení" do celkového počtu a
+     *  série dní, jednak se to rovnou promítne do týdenního plánu (viz
+     *  logEnglishPractice výš), takže se u téhle čtveřice cvičení už
+     *  nemusí nic odklikávat ručně přes ➕ Splněno. */
+    function markEnglishExtraActivity(activityKey) {
+      logEnglishPractice(activityKey);
+      stats.englishExtraExercisesCount = (stats.englishExtraExercisesCount || 0) + 1;
+      bumpEnglishExtraStreak();
+    }
+
     /* ---- 🎧 Poslech / diktát (ENGLISH_PRACTICE_SENTENCES) ---- */
     const englishListeningDifficulty = ref('easy'); // 'easy' | 'medium' | 'hard' | 'all'
+    const englishListeningRate = ref('normal'); // 'normal' | 'slow'
     const englishListeningSentence = ref(null);
     const englishListeningInput = ref('');
     const englishListeningResult = ref(null);
     const englishListeningRevealed = ref(false);
+    const englishListeningLogged = ref(false);
     const englishListeningPool = computed(() => (
       englishListeningDifficulty.value === 'all'
         ? ENGLISH_PRACTICE_SENTENCES
@@ -10771,18 +11166,57 @@ const app = createApp({
       englishListeningInput.value = '';
       englishListeningResult.value = null;
       englishListeningRevealed.value = false;
+      englishListeningLogged.value = false;
     }
     function setEnglishListeningDifficulty(d) {
       englishListeningDifficulty.value = d;
       nextEnglishListeningSentence();
     }
+    function setEnglishListeningRate(rate) {
+      englishListeningRate.value = rate;
+    }
     function playEnglishListeningSentence() {
       if (!englishListeningSentence.value) return;
-      speakEnglish(englishListeningSentence.value.en, 'listening');
+      const rate = englishListeningRate.value === 'slow' ? 0.55 : 0.9;
+      speakEnglish(englishListeningSentence.value.en, 'listening', rate);
+    }
+    /** Přehraje větu po jednotlivých slovech s krátkou pauzou mezi nimi -
+     *  pomůže rozeznat hranice slov, když je věta v normálním tempu moc
+     *  rychlá na to, aby šlo jednotlivá slova rozeznat. Řetězí jednotlivé
+     *  SpeechSynthesisUtterance přes onend/onerror (ne setInterval), a
+     *  kontrolou englishSpeakingKey se dá kdykoliv přerušit (stopSpeakingEnglish
+     *  nastaví englishSpeakingKey na null, čímž řetězec při dalším slově sám skončí). */
+    function playEnglishListeningWordByWord() {
+      if (!speechSupported) {
+        alert('Tvůj prohlížeč bohužel nepodporuje hlasové čtení nahlas.');
+        return;
+      }
+      if (!englishListeningSentence.value) return;
+      window.speechSynthesis.cancel();
+      const words = englishListeningSentence.value.en.trim().split(/\s+/);
+      const playKey = 'listening-words';
+      englishSpeakingKey.value = playKey;
+      let i = 0;
+      function speakNextWord() {
+        if (englishSpeakingKey.value !== playKey) return; // mezitím appka přehrávání zastavila
+        if (i >= words.length) { englishSpeakingKey.value = null; return; }
+        const utterance = new SpeechSynthesisUtterance(words[i]);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.75;
+        i += 1;
+        utterance.onend = () => { setTimeout(speakNextWord, 220); };
+        utterance.onerror = () => { setTimeout(speakNextWord, 220); };
+        window.speechSynthesis.speak(utterance);
+      }
+      speakNextWord();
     }
     function checkEnglishDictation() {
       if (!englishListeningSentence.value) return;
       englishListeningResult.value = scoreDictationAttempt(englishListeningSentence.value.en, englishListeningInput.value);
+      if (!englishListeningLogged.value) {
+        englishListeningLogged.value = true;
+        markEnglishExtraActivity('listening');
+      }
     }
     function revealEnglishListeningAnswer() {
       englishListeningRevealed.value = true;
@@ -10806,6 +11240,11 @@ const app = createApp({
       total: t.words.length,
       mastered: vocabTopicMasteredCount(t),
     })));
+    /* ---- Přehled pokroku "Angličtina navíc" (zobrazuje se nahoře v celé
+       sekci, nezávisle na tom, jaká záložka je zrovna otevřená). ---- */
+    const vocabMasteredTotal = computed(() => VOCAB_DECK.reduce((sum, t) => sum + vocabTopicMasteredCount(t), 0));
+    const vocabWordsTotal = computed(() => VOCAB_DECK.reduce((sum, t) => sum + t.words.length, 0));
+    const englishExtraStreakInfo = computed(() => stats.englishExtraStreak || { count: 0, best: 0, lastDate: null });
     function selectVocabTopic(key) {
       englishVocabTopicKey.value = key;
       englishVocabFlipped.value = false;
@@ -10838,6 +11277,7 @@ const app = createApp({
       const key = vocabWordKey(topic.key, word);
       if (!stats.srs) stats.srs = {};
       stats.srs[key] = srsGradeQuality(stats.srs[key], quality);
+      markEnglishExtraActivity('app');
       nextVocabWord();
     }
     function speakVocabWord() {
@@ -10894,10 +11334,11 @@ const app = createApp({
       englishBuilderWords.value = [...englishBuilderWords.value, word];
     }
     function checkEnglishBuilder() {
-      if (!englishBuilderSentence.value || englishBuilderWords.value.length > 0) return;
+      if (!englishBuilderSentence.value || englishBuilderWords.value.length > 0 || englishBuilderResult.value !== null) return;
       const attempt = englishBuilderPlaced.value.join(' ').trim().toLowerCase();
       const original = englishBuilderSentence.value.en.trim().toLowerCase();
       englishBuilderResult.value = attempt === original;
+      markEnglishExtraActivity('app');
     }
 
     const englishDialogueDifficulty = ref('easy'); // 'easy' | 'medium' | 'hard' | 'all'
@@ -10920,6 +11361,7 @@ const app = createApp({
     function answerEnglishDialogue(idx) {
       if (englishDialogueSelected.value !== null) return;
       englishDialogueSelected.value = idx;
+      markEnglishExtraActivity('app');
     }
     function selectEnglishBuilderExercise(mode) {
       englishBuilderExercise.value = mode;
@@ -12344,6 +12786,8 @@ const app = createApp({
               readBooks: Array.isArray(importedStats.readBooks) ? importedStats.readBooks : [],
               bookNotes: (importedStats.bookNotes && typeof importedStats.bookNotes === 'object') ? importedStats.bookNotes : {},
               englishPracticeLog: (importedStats.englishPracticeLog && typeof importedStats.englishPracticeLog === 'object') ? importedStats.englishPracticeLog : {},
+              englishExtraExercisesCount: (typeof importedStats.englishExtraExercisesCount === 'number') ? importedStats.englishExtraExercisesCount : 0,
+              englishExtraStreak: (importedStats.englishExtraStreak && typeof importedStats.englishExtraStreak === 'object') ? importedStats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
             });
           }
           activeSubjectId.value = null;
@@ -13294,8 +13738,9 @@ const app = createApp({
       bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
       showEnglishExtra, ENGLISH_RESOURCE_CATEGORIES, englishPlanProgress, englishPlanAllDone, logEnglishPractice, unlogEnglishPractice,
       englishExtraTab, selectEnglishExtraTab, englishSpeakingKey, stopSpeakingEnglish, speakEnglish,
-      englishListeningDifficulty, englishListeningSentence, englishListeningInput, englishListeningResult, englishListeningRevealed,
-      nextEnglishListeningSentence, setEnglishListeningDifficulty, playEnglishListeningSentence, checkEnglishDictation, revealEnglishListeningAnswer,
+      vocabMasteredTotal, vocabWordsTotal, englishExtraStreakInfo,
+      englishListeningDifficulty, englishListeningRate, setEnglishListeningRate, englishListeningSentence, englishListeningInput, englishListeningResult, englishListeningRevealed,
+      nextEnglishListeningSentence, setEnglishListeningDifficulty, playEnglishListeningSentence, playEnglishListeningWordByWord, checkEnglishDictation, revealEnglishListeningAnswer,
       VOCAB_DECK, englishVocabTopicKey, englishVocabCurrentWord, englishVocabFlipped, activeVocabTopic, vocabTopicsOverview,
       selectVocabTopic, closeVocabTopic, nextVocabWord, flipVocabCard, gradeVocabCard, speakVocabWord,
       MATURITA_SPEAKING_TOPICS, englishSpeakingTopicKey, activeMaturitaTopic, selectMaturitaTopic, printMaturitaTopic,
