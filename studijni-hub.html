@@ -1323,6 +1323,15 @@
       <div class="mb-8 rounded-xl bg-slate-900/40 border border-slate-800 text-sm overflow-hidden entrance entrance-delay-6">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
           <div class="flex items-center gap-1.5"><span class="text-lg">✅</span> <b class="text-slate-100">{{ stats.totalSolved }}</b> <span class="text-slate-400">vyřešeno</span></div>
+          <div
+            class="flex items-center gap-1.5"
+            :title="`${xpIntoCurrentLevel} / ${xpNeededForNextLevel} XP do další úrovně (${totalXp} XP celkem) - počítá se z vyřešených příkladů, dokonalých sérií bez chyby, odznaků a nejdelší série dní`"
+          >
+            <span class="text-lg">⭐</span> <b class="text-slate-100">Level {{ currentLevel }}</b>
+            <span class="w-16 h-1.5 rounded-full bg-slate-700 overflow-hidden hidden sm:inline-block">
+              <span class="block h-full bg-amber-400 rounded-full" :style="{ width: levelProgressPercent + '%' }"></span>
+            </span>
+          </div>
           <div class="flex items-center gap-1.5"><span class="text-lg">🔥</span> série <b class="text-slate-100">{{ stats.currentStreak }}</b> <span class="text-slate-400">(nejlepší {{ stats.bestStreak }})</span></div>
           <div class="flex items-center gap-1.5"><span class="text-lg">🎯</span> úspěšnost <b class="text-slate-100">{{ successRate }} %</b></div>
           <div v-if="reviewCount > 0" class="flex items-center gap-1.5" title="Otázky, které ti nedávno nešly a appka je bude častěji nabízet k opakování">
@@ -1339,6 +1348,9 @@
           </button>
           <button @click="showBadges = !showBadges" class="btn-ghost !text-amber-300">
             🏅 {{ showBadges ? 'Skrýt odznaky' : `Odznaky (${unlockedBadgeCount}/${badgeStatus.length})` }}
+          </button>
+          <button @click="toggleStudyGroup" class="btn-ghost !text-fuchsia-300">
+            🏆 {{ showStudyGroup ? 'Skrýt žebříček' : 'Žebříček se spolužáky' }}
           </button>
           <button v-if="weakestSpotsOverview.length > 0" @click="showWeakSpots = !showWeakSpots" class="btn-ghost !text-rose-300">
             🎯 {{ showWeakSpots ? 'Skrýt slabá místa' : `Slabá místa (${weakestSpotsOverview.length})` }}
@@ -1369,6 +1381,9 @@
           </button>
           <button @click="showBookAnalysis = !showBookAnalysis" class="btn-ghost !text-fuchsia-300">
             📚 {{ showBookAnalysis ? 'Skrýt rozbor knih' : 'Rozbor knih (povinná četba)' }}
+          </button>
+          <button @click="showMathExtra = !showMathExtra" class="btn-ghost !text-emerald-300">
+            🔢 {{ showMathExtra ? 'Skrýt matematiku navíc' : 'Matematika navíc' }}
           </button>
           <button @click="showEnglishExtra = !showEnglishExtra" class="btn-ghost !text-sky-300">
             🌍 {{ showEnglishExtra ? 'Skrýt angličtinu navíc' : 'Angličtina navíc' }}
@@ -1564,6 +1579,52 @@
                 <p class="text-xs font-semibold leading-tight">{{ b.label }}</p>
               </div>
             </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showStudyGroup" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Žebříček se spolužáky</p>
+
+            <div v-if="!stats.studyGroup.id" class="grid sm:grid-cols-2 gap-4">
+              <div class="p-3 rounded-xl bg-slate-800/50">
+                <p class="text-sm font-semibold mb-2">➕ Založit novou skupinu</p>
+                <input v-model="studyGroupCreateName" type="text" placeholder="Tvoje jméno/přezdívka" class="input !text-sm mb-2" @keydown.enter="createStudyGroup(studyGroupCreateName)" />
+                <button @click="createStudyGroup(studyGroupCreateName)" :disabled="studyGroupBusy" class="btn-primary w-full !text-sm">Založit skupinu</button>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-800/50">
+                <p class="text-sm font-semibold mb-2">🔑 Přidat se ke skupině</p>
+                <input v-model="studyGroupJoinCode" type="text" placeholder="Kód skupiny od spolužáka" class="input !text-sm mb-2" />
+                <input v-model="studyGroupJoinName" type="text" placeholder="Tvoje jméno/přezdívka" class="input !text-sm mb-2" @keydown.enter="joinStudyGroup(studyGroupJoinCode, studyGroupJoinName)" />
+                <button @click="joinStudyGroup(studyGroupJoinCode, studyGroupJoinName)" :disabled="studyGroupBusy" class="btn-secondary w-full !text-sm">Přidat se</button>
+              </div>
+            </div>
+
+            <div v-else>
+              <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                <span class="text-slate-400">Kód skupiny (pošli spolužákům):</span>
+                <input type="text" readonly :value="stats.studyGroup.id" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25" @click="$event.target.select()" />
+                <button @click="copyStudyGroupCode" class="btn-ghost !text-xs !py-1">{{ studyGroupCodeCopied ? '✅ Zkopírováno' : '📋 Kopírovat' }}</button>
+                <button @click="fetchGroupLeaderboard" :disabled="groupLeaderboardLoading" class="btn-ghost !text-xs !py-1">🔄 Obnovit</button>
+                <button @click="leaveStudyGroup" class="btn-ghost danger !text-xs !py-1 ml-auto">Opustit skupinu</button>
+              </div>
+              <div v-if="groupLeaderboardLoading" class="text-slate-500 text-sm py-4 text-center">Načítám žebříček…</div>
+              <div v-else-if="groupLeaderboard.length === 0" class="text-slate-500 text-sm py-4 text-center">Zatím jsi ve skupině sám/sama - pošli kód spolužákům, ať se přidají.</div>
+              <div v-else class="flex flex-col gap-1.5">
+                <div
+                  v-for="(m, idx) in groupLeaderboard" :key="m.id"
+                  class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                  :class="m.id === stats.studyGroup.memberId ? 'bg-cyan-950/40 border border-cyan-800/50' : 'bg-slate-800/50'"
+                >
+                  <span class="w-6 text-center font-bold text-slate-500 shrink-0">{{ idx + 1 }}.</span>
+                  <span class="flex-1 min-w-0 truncate font-medium">{{ m.name }}<span v-if="m.id === stats.studyGroup.memberId" class="text-cyan-400"> (ty)</span></span>
+                  <span class="text-xs text-slate-400 shrink-0">⭐ Level {{ m.level }}</span>
+                  <span class="text-xs font-bold text-emerald-300 shrink-0">{{ m.solvedThisWeek || 0 }} tento týden</span>
+                </div>
+              </div>
+            </div>
+
+            <p v-if="studyGroupError" class="text-rose-300 text-xs mt-3">{{ studyGroupError }}</p>
           </div>
         </Transition>
 
@@ -1876,6 +1937,48 @@
                 <button v-if="bookQuizSelected !== null" @click="nextBookQuizQuestion" class="btn-primary !py-1.5 !px-4 text-sm mt-3">Další otázka ➡️</button>
               </div>
             </template>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showMathExtra" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🔢 Matematika navíc - vzorečník a postupy</p>
+            <p class="text-xs text-slate-500 mb-3">Vzorce a postup "jak na to" ke každému typu příkladu, který appka i sama generuje k procvičování - hodí se dohledat si vzorec, i když zrovna žádný konkrétní příklad neřešíš.</p>
+
+            <div v-if="!activeMathFormulaTopic" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                v-for="t in MATH_FORMULA_TOPICS" :key="t.key"
+                @click="selectMathExtraTopic(t.key)"
+                class="text-left rounded-lg bg-slate-800/50 hover:bg-slate-800 transition px-4 py-3"
+              >
+                <span class="text-sm font-semibold text-slate-100">{{ t.label }}</span>
+                <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ t.intro }}</p>
+              </button>
+            </div>
+
+            <div v-else>
+              <button @click="selectMathExtraTopic(null)" class="hint-toggle !mt-0 mb-3">← Zpět na seznam témat</button>
+              <h4 class="text-base font-bold mb-1">{{ activeMathFormulaTopic.label }}</h4>
+              <p class="text-sm text-slate-400 mb-4">{{ activeMathFormulaTopic.intro }}</p>
+
+              <div class="space-y-3 mb-4">
+                <div v-for="(f, i) in activeMathFormulaTopic.formulas" :key="i" class="rounded-lg bg-slate-800/40 p-3">
+                  <p class="text-xs text-slate-500 mb-1.5">{{ f.name }}</p>
+                  <div v-html="mathFormulaHtml(f.tex)"></div>
+                </div>
+              </div>
+
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Jak na to - krok za krokem</p>
+              <ol class="space-y-1.5 mb-4 text-sm list-decimal list-inside text-slate-300">
+                <li v-for="(step, i) in activeMathFormulaTopic.steps" :key="i">{{ step }}</li>
+              </ol>
+
+              <div class="rounded-lg bg-emerald-950/20 border border-emerald-800/40 p-3">
+                <p class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-1.5">Vyřešený příklad</p>
+                <p class="text-sm font-medium text-slate-100 mb-2">{{ activeMathFormulaTopic.example.problem }}</p>
+                <p v-for="(line, i) in activeMathFormulaTopic.example.solution" :key="i" class="text-sm text-slate-400 font-mono">{{ line }}</p>
+              </div>
+            </div>
           </div>
         </Transition>
 
@@ -2297,9 +2400,34 @@
                 <button @click="addExtraExamDate(activeSubject)" class="btn-ghost !text-xs !p-1 opacity-80" title="Přidá další termín u tohohle předmětu (např. zápočet, dílčí test) - nezávisle na hlavní zkoušce výš">➕ Přidat termín</button>
               </div>
             </div>
-            <p v-if="activeSubjectStudyPlan" class="text-xs opacity-80 mt-2" title="Appka spočítala z počtu zápisů, vlastních otázek a rozborů vět u tohoto předmětu a dní zbývajících do nejbližšího termínu">
-              📐 Studijní plán: {{ activeSubjectStudyPlan.itemCount }} {{ pluralize(activeSubjectStudyPlan.itemCount, 'položka', 'položky', 'položek') }} (zápisy/otázky) za {{ activeSubjectStudyPlan.daysLeft }} {{ pluralize(activeSubjectStudyPlan.daysLeft, 'den', 'dny', 'dní') }} → cca <b>{{ activeSubjectStudyPlan.perDay }}</b> / den, abys vše aspoň jednou prošel/prošla.
-            </p>
+            <div v-if="activeSubjectReviewPlan" class="mt-2">
+              <button
+                @click="showReviewPlan = !showReviewPlan"
+                class="text-xs opacity-80 hover:opacity-100 underline decoration-dotted text-left"
+                title="Appka spočítala z počtu zápisů, vlastních otázek a rozborů vět u tohoto předmětu a dní zbývajících do nejbližšího termínu"
+              >
+                📋 Revizní plán: {{ activeSubjectReviewPlan.itemCount }} {{ pluralize(activeSubjectReviewPlan.itemCount, 'položka', 'položky', 'položek') }} (zápisy/otázky) za {{ activeSubjectReviewPlan.daysLeft }} {{ pluralize(activeSubjectReviewPlan.daysLeft, 'den', 'dny', 'dní') }} → cca <b>{{ activeSubjectReviewPlan.perDay }}</b> / den{{ showReviewPlan ? ' (skrýt rozpis)' : ' (zobrazit rozpis dní)' }}
+              </button>
+              <Transition name="fade">
+                <div v-if="showReviewPlan" class="mt-2 p-3 rounded-xl bg-black/25 border border-white/10">
+                  <p class="text-xs opacity-70 mb-2">Odškrtni dny, kdy ses tomuhle předmětu věnoval/a - appka tempo spočítala tak, aby se do zkoušky stihlo projít úplně všechno aspoň jednou.</p>
+                  <div class="flex flex-col gap-1 max-h-56 overflow-y-auto pr-1">
+                    <label v-for="d in activeSubjectReviewPlan.days" :key="d.key" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg hover:bg-white/5 cursor-pointer">
+                      <input type="checkbox" :checked="d.done" @change="toggleReviewPlanDay(activeSubject, d.key)" class="accent-emerald-500" />
+                      <span :class="d.done ? 'line-through opacity-50' : ''">{{ d.label }}</span>
+                      <span class="text-xs opacity-60 ml-auto">~{{ activeSubjectReviewPlan.perDay }} {{ pluralize(activeSubjectReviewPlan.perDay, 'položka', 'položky', 'položek') }}</span>
+                    </label>
+                  </div>
+                  <p v-if="activeSubjectReviewPlan.truncated" class="text-xs opacity-60 mt-2">…a dál až do termínu ({{ activeSubjectReviewPlan.daysLeft }} dní celkem) - appka rozpis zobrazuje jen na nejbližších {{ activeSubjectReviewPlan.days.length }} dní.</p>
+                  <p class="text-xs opacity-70 mt-2"><b>{{ activeSubjectReviewPlan.doneCount }}</b> z {{ activeSubjectReviewPlan.days.length }} zobrazených dní odškrtnuto.</p>
+                  <div class="flex flex-wrap gap-2 mt-3">
+                    <button @click="toggleExamPracticeMode" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 !text-xs !py-1.5">🎓 Zkouškový režim</button>
+                    <button @click="exportSubjectCheatSheet(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 !text-xs !py-1.5">🗒️ Tahák ke zkoušce</button>
+                    <button @click="exportSubjectFlashcardsToPrint(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 !text-xs !py-1.5">🃏 Tisknutelné kartičky</button>
+                  </div>
+                </div>
+              </Transition>
+            </div>
             <div class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">📁</span>
               <input
@@ -3518,6 +3646,27 @@ function buildChallengeUrl(challengeId) {
   url.hash = '';
   url.search = '?challenge=' + challengeId;
   return url.toString();
+}
+
+// Žebříček se spolužáky - na rozdíl od výzvy výš (jednorázová, mezi dvěma
+// lidmi) jde o TRVALOU, víceosobní skupinu - vlastní uzel v databázi
+// (/publicGroups/, opět NEZÁVISLÝ na SYNC_PATH i na ostatních veřejných
+// uzlech), do kterého appka posílá jen pár čísel (jméno, XP, úroveň, kolik
+// vyřešeno tenhle týden) - nikdy obsah zápisků. Skupina se identifikuje
+// neuhodnutelným kódem (stejný princip jako u sdílení/reportu/výzvy) -
+// appka nabídne kód rovnou ke zkopírování a odeslání spolužákům, appka o
+// chybějícím Firebase pravidle pro "publicGroups" informuje přímo v UI.
+const GROUP_PATH_PREFIX = '/publicGroups/';
+/** Sjednotí uloženou/importovanou hodnotu stats.studyGroup na bezpečný tvar -
+ *  používá se na všech místech, kde appka stats.studyGroup načítá (uložená
+ *  data, sloučení z cloudu, import zálohy), ať je to jen na jednom místě. */
+function normalizeStudyGroup(raw) {
+  if (!raw || typeof raw !== 'object') return { id: null, memberId: null, name: '' };
+  return {
+    id: (typeof raw.id === 'string' && raw.id) ? raw.id : null,
+    memberId: (typeof raw.memberId === 'string' && raw.memberId) ? raw.memberId : null,
+    name: (typeof raw.name === 'string') ? raw.name : '',
+  };
 }
 
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -7753,9 +7902,9 @@ function sampleSentenceAnalyses(baseId) {
 
 function defaultSubjects() {
   return [
-    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [] },
-    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: sampleSentenceAnalyses(2) },
-    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [] },
+    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {} },
+    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: sampleSentenceAnalyses(2), reviewPlanChecks: {} },
+    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {} },
   ];
 }
 
@@ -7795,6 +7944,9 @@ function normalizeSubject(raw, fallbackId) {
         label: (typeof e.label === 'string' && e.label.trim()) ? e.label.trim() : 'Termín',
         date: (typeof e.date === 'string' && e.date) ? e.date : null,
       })),
+    // Ručně odškrtnuté dny v "Revizním plánu před zkouškou" (viz
+    // reviewPlanForSubject) - klíč je datum YYYY-MM-DD, hodnota true.
+    reviewPlanChecks: (raw && raw.reviewPlanChecks && typeof raw.reviewPlanChecks === 'object') ? { ...raw.reviewPlanChecks } : {},
     difficulty: (raw && DIFFICULTY_LEVELS.includes(raw.difficulty)) ? raw.difficulty : 'medium',
     notes: notesArr.map((n, i) => ({
       id: (n && (n.id || n.id === 0)) ? n.id : fallbackId + i + 1,
@@ -8026,6 +8178,14 @@ function parseStatsJson(raw) {
     // a série dní, kdy ji uživatel zvládl (viz bumpDailyQuestionStreak).
     dailyQuestion: null,
     dailyQuestionStreak: { count: 0, best: 0, lastDate: null },
+    // Gamifikace (XP/úrovně) - samotné XP se NIKAM neukládá, počítá se vždy
+    // znovu z existujících dat (viz totalXp níž ve setup()). Jediné, co se
+    // persistuje, je nejvyšší úroveň, která už byla "oslavena" konfetami,
+    // ať appka neoslavuje pořád dokola stejný postup - viz celebratedBadges.
+    celebratedLevel: 1,
+    // Žebříček se spolužáky - jen identita v (případné) skupině, samotný
+    // žebříček appka vždy načítá čerstvě z /publicGroups/ (viz fetchGroupLeaderboard).
+    studyGroup: { id: null, memberId: null, name: '' },
   };
   try {
     if (raw) {
@@ -8041,6 +8201,7 @@ function parseStatsJson(raw) {
         dailyAttempts: (parsed && typeof parsed.dailyAttempts === 'object' && parsed.dailyAttempts) || {},
         mistakeCounts: (parsed && typeof parsed.mistakeCounts === 'object' && parsed.mistakeCounts) || {},
         celebratedBadges: Array.isArray(parsed && parsed.celebratedBadges) ? parsed.celebratedBadges : [],
+        studyGroup: normalizeStudyGroup(parsed && parsed.studyGroup),
         // srs = záznamy rozloženého opakování (viz srsGrade) - u appek
         // aktualizovaných ze starší verze prostě chybí a začnou se plnit
         // od nuly, nic se tím nerozbije.
@@ -8326,6 +8487,137 @@ function svgWordIcon(enWord) {
   if (!inner) return '';
   return svgWrap('0 0 120 120', inner, 130);
 }
+
+/** Vzorečník a krokové postupy pro "Matematika navíc" (viz showMathExtra ve
+ *  setup()) - na rozdíl od generateMath výš (automaticky generované příklady)
+ *  jde o STATICKOU referenci k prolistování/naučení, se 7 tématy přesně
+ *  odpovídajícími subtypům generátoru (viz MATH_SUBTYPE_LABELS výš). Vzorce
+ *  jsou v LaTeXu a vykreslují se přes renderMath() (stejný KaTeX, jaký appka
+ *  používá pro $$vzorce$$ v zápiscích). */
+const MATH_FORMULA_TOPICS = [
+  {
+    key: 'linear',
+    label: 'Lineární rovnice',
+    intro: 'Rovnice, kde neznámá x vystupuje jen v první mocnině (žádné x², žádná odmocnina z x).',
+    formulas: [
+      { name: 'Obecný tvar a řešení', tex: 'ax + b = c \\quad\\Rightarrow\\quad x = \\dfrac{c-b}{a}' },
+    ],
+    steps: [
+      'Roznásob závorky, pokud ve výrazu jsou.',
+      'Převeď všechny členy s x na jednu stranu rovnice a čísla na druhou (co "přejde" přes rovnítko, změní znaménko).',
+      'Sečti/odečti stejné členy na obou stranách.',
+      'Vyděl obě strany koeficientem u x - dostaneš výsledek.',
+      'Zkoušku uděláš tak, že výsledek dosadíš zpátky do PŮVODNÍ rovnice.',
+    ],
+    example: { problem: '3x + 5 = 20', solution: ['3x = 20 − 5', '3x = 15', 'x = 15 ÷ 3 = 5'] },
+  },
+  {
+    key: 'fraction',
+    label: 'Zlomky',
+    intro: 'Sčítání, odčítání, násobení a dělení zlomků.',
+    formulas: [
+      { name: 'Sčítání/odčítání (společný jmenovatel)', tex: '\\dfrac{a}{b} \\pm \\dfrac{c}{d} = \\dfrac{a \\cdot d \\pm c \\cdot b}{b \\cdot d}' },
+      { name: 'Násobení', tex: '\\dfrac{a}{b} \\cdot \\dfrac{c}{d} = \\dfrac{a \\cdot c}{b \\cdot d}' },
+      { name: 'Dělení (vynásob převrácenou hodnotou)', tex: '\\dfrac{a}{b} \\div \\dfrac{c}{d} = \\dfrac{a}{b} \\cdot \\dfrac{d}{c}' },
+    ],
+    steps: [
+      'U sčítání/odčítání nejdřív najdi společný jmenovatel (ideálně nejmenší společný násobek obou jmenovatelů).',
+      'Rozšiř oba zlomky na tenhle společný jmenovatel a sečti/odečti čitatele.',
+      'U násobení stačí vynásobit čitatele mezi sebou a jmenovatele mezi sebou.',
+      'U dělení první zlomek vynásob PŘEVRÁCENOU hodnotou druhého zlomku.',
+      'Výsledek na konci zkrať, pokud to jde (vyděl čitatele i jmenovatele jejich největším společným dělitelem).',
+    ],
+    example: { problem: '1/2 + 1/3', solution: ['1/2 = 3/6, 1/3 = 2/6 (společný jmenovatel 6)', '3/6 + 2/6 = 5/6'] },
+  },
+  {
+    key: 'percentage',
+    label: 'Procenta',
+    intro: 'Výpočet části ze základu, kolik procent je jedno číslo z druhého, a výpočet základu ze zadané části.',
+    formulas: [
+      { name: 'Kolik je p % ze základu Z', tex: '\\text{část} = \\dfrac{Z \\cdot p}{100}' },
+      { name: 'Kolik % je číslo X ze základu Z', tex: 'p = \\dfrac{X}{Z} \\cdot 100' },
+      { name: 'Základ Z, když známe část a p %', tex: 'Z = \\dfrac{\\text{část} \\cdot 100}{p}' },
+    ],
+    steps: [
+      'Nejdřív si urči, co je v úloze "základ" (100 %) - obvykle celek, ze kterého se počítá.',
+      'Podle toho, co je zadané a co se hledá (část/%/základ), vyber odpovídající vzorec výš.',
+      'Dosaď čísla a spočítej.',
+      'Zkontroluj si výsledek selským rozumem - třeba 50 % musí vždycky vyjít přesně polovina základu.',
+    ],
+    example: { problem: 'Kolik je 20 % z 250?', solution: ['část = (250 × 20) ÷ 100', 'část = 5000 ÷ 100 = 50'] },
+  },
+  {
+    key: 'quadratic',
+    label: 'Kvadratická rovnice',
+    intro: 'Rovnice s x², řeší se přes diskriminant.',
+    formulas: [
+      { name: 'Obecný tvar', tex: 'ax^2 + bx + c = 0' },
+      { name: 'Diskriminant', tex: 'D = b^2 - 4ac' },
+      { name: 'Kořeny (pokud D ≥ 0)', tex: 'x_{1,2} = \\dfrac{-b \\pm \\sqrt{D}}{2a}' },
+    ],
+    steps: [
+      'Uprav rovnici na obecný tvar ax² + bx + c = 0 (vše na jedné straně, na druhé 0).',
+      'Spočítej diskriminant D = b² − 4ac.',
+      'Je-li D > 0, rovnice má DVA různé kořeny (dosaď do vzorce jednou s +, podruhé s −).',
+      'Je-li D = 0, rovnice má JEDEN (dvojnásobný) kořen x = −b ÷ 2a.',
+      'Je-li D < 0, rovnice nemá žádné reálné řešení (odmocnina ze záporného čísla).',
+    ],
+    example: { problem: 'x² − 5x + 6 = 0', solution: ['D = (−5)² − 4×1×6 = 25 − 24 = 1', 'x = (5 ± 1) ÷ 2', 'x₁ = 3, x₂ = 2'] },
+  },
+  {
+    key: 'geometry',
+    label: 'Pythagorova věta a obsahy',
+    intro: 'Pythagorova věta pro pravoúhlý trojúhelník a nejběžnější vzorce pro obvod/obsah.',
+    formulas: [
+      { name: 'Pythagorova věta (c = přepona)', tex: 'a^2 + b^2 = c^2' },
+      { name: 'Obsah obdélníku / čtverce', tex: 'S = a \\cdot b \\qquad (S = a^2 \\text{ pro čtverec})' },
+      { name: 'Obsah trojúhelníku', tex: 'S = \\dfrac{a \\cdot v}{2}' },
+      { name: 'Obvod a obsah kruhu', tex: 'o = 2\\pi r \\qquad S = \\pi r^2' },
+    ],
+    steps: [
+      'U Pythagorovy věty nejdřív najdi PŘEPONU (strana naproti pravému úhlu) - ta je vždycky sama na jedné straně vzorce.',
+      'Dosaď známé strany a spočítej tu neznámou (u přepony sčítáš čtverce, u odvěsny je odečítáš).',
+      'Na konci stranu odmocni - pozor, výsledek musí vyjít kladné číslo (délka nemůže být záporná).',
+      'U obsahů/obvodů si nejdřív nakresli obrázek a označ si, které rozměry znáš.',
+    ],
+    example: { problem: 'Pravoúhlý trojúhelník má odvěsny a = 3, b = 4. Jak dlouhá je přepona c?', solution: ['c² = 3² + 4² = 9 + 16 = 25', 'c = √25 = 5'] },
+  },
+  {
+    key: 'sequence',
+    label: 'Posloupnosti a řady',
+    intro: 'Aritmetická posloupnost (konstantní rozdíl) a geometrická posloupnost (konstantní podíl).',
+    formulas: [
+      { name: 'Aritmetická posloupnost - n-tý člen', tex: 'a_n = a_1 + (n-1)d' },
+      { name: 'Součet prvních n členů (aritmetická)', tex: 'S_n = \\dfrac{n(a_1 + a_n)}{2}' },
+      { name: 'Geometrická posloupnost - n-tý člen', tex: 'a_n = a_1 \\cdot q^{\\,n-1}' },
+      { name: 'Součet prvních n členů (geometrická, q≠1)', tex: 'S_n = a_1 \\cdot \\dfrac{q^n - 1}{q - 1}' },
+    ],
+    steps: [
+      'Nejdřív pozn, jestli je posloupnost aritmetická (členy se liší o STEJNÉ ČÍSLO d, sčítá se) nebo geometrická (členy se liší STEJNÝM PODÍLEM q, násobí se).',
+      'Ze zadání zjisti první člen a₁ a diferenci d (nebo kvocient q).',
+      'Dosaď do vzorce pro n-tý člen nebo pro součet, podle toho, co úloha chce.',
+    ],
+    example: { problem: 'Aritmetická posloupnost: a₁ = 2, d = 3. Urči a₅.', solution: ['a₅ = a₁ + (5−1)×d', 'a₅ = 2 + 4×3 = 2 + 12 = 14'] },
+  },
+  {
+    key: 'combinatorics',
+    label: 'Kombinatorika',
+    intro: 'Kolika způsoby lze uspořádat nebo vybrat prvky - permutace, variace, kombinace.',
+    formulas: [
+      { name: 'Faktoriál', tex: 'n! = n \\cdot (n-1) \\cdot (n-2) \\cdots 2 \\cdot 1' },
+      { name: 'Permutace (uspořádání všech n prvků)', tex: 'P(n) = n!' },
+      { name: 'Variace (záleží na pořadí, k z n)', tex: 'V(n,k) = \\dfrac{n!}{(n-k)!}' },
+      { name: 'Kombinace (nezáleží na pořadí, k z n)', tex: 'C(n,k) = \\dfrac{n!}{k!\\,(n-k)!}' },
+    ],
+    steps: [
+      'Nejdřív se rozhodni, jestli na POŘADÍ výběru záleží (variace) nebo ne (kombinace).',
+      'Vypiš si z úlohy n (celkový počet prvků) a k (kolik jich vybíráš).',
+      'Vyber správný vzorec podle rozhodnutí výš a dosaď.',
+      'Faktoriály počítej postupně (5! = 5×4×3×2×1 = 120) - u větších čísel se hodně krátí.',
+    ],
+    example: { problem: 'Kolika způsoby lze vybrat 2 žáky ze 7, pokud nezáleží na pořadí?', solution: ['C(7,2) = 7! ÷ (2! × 5!)', '= (7×6) ÷ (2×1) = 42 ÷ 2 = 21'] },
+  },
+];
 
 function generateMath(mistakeCounts, difficulty) {
   const mc = mistakeCounts || {};
@@ -10214,6 +10506,8 @@ const app = createApp({
       readBooks: [], bookNotes: {}, englishPracticeLog: {},
       englishExtraExercisesCount: 0, englishExtraStreak: { count: 0, best: 0, lastDate: null },
       dailyQuestion: null, dailyQuestionStreak: { count: 0, best: 0, lastDate: null },
+      celebratedLevel: 1,
+      studyGroup: { id: null, memberId: null, name: '' },
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -10365,6 +10659,13 @@ const app = createApp({
               englishExtraStreak: (remote.stats.englishExtraStreak && typeof remote.stats.englishExtraStreak === 'object') ? remote.stats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
               dailyQuestion: (remote.stats.dailyQuestion && typeof remote.stats.dailyQuestion === 'object') ? remote.stats.dailyQuestion : null,
               dailyQuestionStreak: (remote.stats.dailyQuestionStreak && typeof remote.stats.dailyQuestionStreak === 'object') ? remote.stats.dailyQuestionStreak : { count: 0, best: 0, lastDate: null },
+              // Vyšší z lokální/cloudové hodnoty - ať sloučení z jiného zařízení
+              // omylem "nevrátí zpátky" konfety za úroveň, která už byla oslavena.
+              celebratedLevel: Math.max(stats.celebratedLevel || 1, (typeof remote.stats.celebratedLevel === 'number') ? remote.stats.celebratedLevel : 1),
+              // Přednost dostává lokální členství, pokud appka zrovna teď v nějaké
+              // skupině je (jinak by sloučení z jiného, staršího zařízení mohlo
+              // appku "vyhodit" ze skupiny, do které se mezitím přidala odsud).
+              studyGroup: (stats.studyGroup && stats.studyGroup.id) ? stats.studyGroup : normalizeStudyGroup(remote.stats.studyGroup),
             });
             // Merge mohl přinést otázku dne z jiného zařízení/dne (nebo žádnou) -
             // znovu ověřit/doplnit podle DNEŠNÍHO data a AKTUÁLNÍHO seznamu předmětů.
@@ -10657,6 +10958,166 @@ const app = createApp({
     }
     const challengeViewCurrentQuestion = computed(() => (challengeView.data && !challengeView.done) ? challengeView.data.questions[challengeView.index] : null);
 
+    /* ---------- Žebříček se spolužáky ---------- (viz GROUP_PATH_PREFIX/
+       normalizeStudyGroup výš) - appka pošle jen pár čísel za sebe do
+       společného uzlu v databázi a stáhne si zpátky ostatní členy. Nic se
+       neděje automaticky na pozadí pořád - appka se aktualizuje při otevření
+       panelu (toggleStudyGroup) a při startu appky, pokud už uživatel ve
+       skupině je. */
+    const showStudyGroup = ref(false);
+    const studyGroupCreateName = ref('');
+    const studyGroupJoinCode = ref('');
+    const studyGroupJoinName = ref('');
+    const studyGroupBusy = ref(false);
+    const studyGroupError = ref('');
+    const studyGroupCodeCopied = ref(false);
+    const groupLeaderboard = ref([]);
+    const groupLeaderboardLoading = ref(false);
+    /** Kolik příkladů appka zaznamenala tenhle týden (od pondělí) - stejný
+     *  princip jako goalWeekProgress níž, jen bez vazby na konkrétní cíl.
+     *  Hlavní řadicí kritérium žebříčku - na rozdíl od celkového XP dává i
+     *  nováčkovi šanci být zrovna tenhle týden nahoře. */
+    const solvedThisWeek = computed(() => {
+      const monday = mondayOfWeek(new Date());
+      let sum = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(d.getDate() + i);
+        sum += (stats.dailyHistory[dateKey(d)] || 0);
+      }
+      return sum;
+    });
+    function myGroupStatsPayload(name) {
+      return {
+        name: ((name || stats.studyGroup.name || 'Bez jména').trim() || 'Bez jména').slice(0, 30),
+        xp: totalXp.value,
+        level: currentLevel.value,
+        solvedThisWeek: solvedThisWeek.value,
+        totalSolved: stats.totalSolved || 0,
+        currentStreak: stats.currentStreak || 0,
+        updatedAt: Date.now(),
+      };
+    }
+    async function createStudyGroup(name) {
+      const trimmed = (name || '').trim();
+      if (!trimmed) { studyGroupError.value = 'Napiš nejdřív svoje jméno/přezdívku, ať tě spolužáci v žebříčku poznají.'; return; }
+      studyGroupBusy.value = true;
+      studyGroupError.value = '';
+      try {
+        const groupId = generateShareId();
+        const memberId = generateShareId();
+        const payload = { createdAt: Date.now(), members: { [memberId]: myGroupStatsPayload(trimmed) } };
+        const res = await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + groupId + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        stats.studyGroup = { id: groupId, memberId, name: trimmed };
+        studyGroupCreateName.value = '';
+        await fetchGroupLeaderboard();
+      } catch (e) {
+        console.warn('Skupinu se nepodařilo založit.', e);
+        studyGroupError.value = 'Skupinu se teď nepodařilo založit. Zkontroluj připojení k internetu, případně jestli má appka ve Firebase konzoli povolený i uzel "publicGroups" (stejně jako u sdílení předmětu/reportu/výzvy).';
+      } finally {
+        studyGroupBusy.value = false;
+      }
+    }
+    async function joinStudyGroup(groupId, name) {
+      const trimmedId = (groupId || '').trim();
+      const trimmedName = (name || '').trim();
+      if (!trimmedId) { studyGroupError.value = 'Vlož kód skupiny od spolužáka.'; return; }
+      if (!trimmedName) { studyGroupError.value = 'Napiš nejdřív svoje jméno/přezdívku, ať tě spolužáci v žebříčku poznají.'; return; }
+      studyGroupBusy.value = true;
+      studyGroupError.value = '';
+      try {
+        const checkRes = await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + trimmedId + '.json', { cache: 'no-store' });
+        if (!checkRes.ok) throw new Error('HTTP ' + checkRes.status);
+        const existing = await checkRes.json();
+        if (!existing) {
+          studyGroupError.value = 'Skupina s tímhle kódem neexistuje - zkontroluj, jestli je kód opsaný správně.';
+          return;
+        }
+        const memberId = generateShareId();
+        const res = await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + trimmedId + '/members/' + memberId + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(myGroupStatsPayload(trimmedName)),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        stats.studyGroup = { id: trimmedId, memberId, name: trimmedName };
+        studyGroupJoinCode.value = '';
+        studyGroupJoinName.value = '';
+        await fetchGroupLeaderboard();
+      } catch (e) {
+        console.warn('Do skupiny se nepodařilo přidat.', e);
+        studyGroupError.value = 'Do skupiny se teď nepodařilo přidat. Zkontroluj připojení k internetu i kód skupiny.';
+      } finally {
+        studyGroupBusy.value = false;
+      }
+    }
+    async function leaveStudyGroup() {
+      const g = stats.studyGroup;
+      if (!g || !g.id || !g.memberId) return;
+      if (!confirm('Opravdu chceš skupinu opustit? Tvoje jméno zmizí z žebříčku ostatních.')) return;
+      try {
+        await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + g.id + '/members/' + g.memberId + '.json', { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Odchod ze skupiny na serveru se nepodařilo zaznamenat, appka skupinu aspoň lokálně opustí.', e);
+      }
+      stats.studyGroup = { id: null, memberId: null, name: '' };
+      groupLeaderboard.value = [];
+    }
+    /** Pošle aktuální čísla za sebe do skupiny - appka to volá při otevření
+     *  panelu žebříčku a při startu appky (pokud už je uživatel ve skupině),
+     *  ne po každé vyřešené otázce, ať appka zbytečně nezahlcuje síť. */
+    async function pushMyGroupStats() {
+      const g = stats.studyGroup;
+      if (!g || !g.id || !g.memberId) return;
+      try {
+        const res = await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + g.id + '/members/' + g.memberId + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(myGroupStatsPayload(g.name)),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      } catch (e) {
+        console.warn('Aktualizaci žebříčku se nepodařilo odeslat.', e);
+      }
+    }
+    async function fetchGroupLeaderboard() {
+      const g = stats.studyGroup;
+      if (!g || !g.id) return;
+      groupLeaderboardLoading.value = true;
+      studyGroupError.value = '';
+      try {
+        const res = await fetch(FIREBASE_DB_URL + GROUP_PATH_PREFIX + g.id + '/members.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const list = Object.entries(data || {}).map(([id, m]) => ({ id, ...m }));
+        // Řadí primárně podle tohotýdenního tempa (viz solvedThisWeek výš) - i
+        // nováček tak má šanci být zrovna tenhle týden nahoře - a teprve
+        // druhotně podle celkového XP jako rozstřel při shodě.
+        list.sort((a, b) => (b.solvedThisWeek || 0) - (a.solvedThisWeek || 0) || (b.xp || 0) - (a.xp || 0));
+        groupLeaderboard.value = list;
+      } catch (e) {
+        console.warn('Žebříček se nepodařilo načíst.', e);
+        studyGroupError.value = 'Žebříček se teď nepodařilo načíst. Zkontroluj připojení k internetu.';
+      } finally {
+        groupLeaderboardLoading.value = false;
+      }
+    }
+    function toggleStudyGroup() {
+      showStudyGroup.value = !showStudyGroup.value;
+      studyGroupError.value = '';
+      if (showStudyGroup.value && stats.studyGroup && stats.studyGroup.id) {
+        pushMyGroupStats();
+        fetchGroupLeaderboard();
+      }
+    }
+    async function copyStudyGroupCode() {
+      if (!stats.studyGroup || !stats.studyGroup.id) return;
+      try {
+        await navigator.clipboard.writeText(stats.studyGroup.id);
+        studyGroupCodeCopied.value = true;
+        setTimeout(() => { studyGroupCodeCopied.value = false; }, 2500);
+      } catch (e) { /* kód je i vypsaný v textovém poli, jde opsat ručně */ }
+    }
+
     /* Prohlížení reportu (?report=<id> v adrese appky) - viz šablona "v-else"
        pod <div id="app"> (třetí, poslední větev vedle appky/sdíleného
        předmětu). Detekce a načtení běží v onMounted níž, stejně jako u
@@ -10925,6 +11386,50 @@ const app = createApp({
         }
       });
     }, { deep: true });
+
+    /* ---------- Gamifikace: XP a úrovně ----------
+       Žádná nová "syrová" data navíc k ukládání - XP appka POKAŽDÉ spočítá
+       znovu z toho, co už tak jako tak sleduje (vyřešené příklady, dokonalé
+       session bez jediné chyby, odemčené odznaky, nejdelší série dní), stejně
+       jako Kalkulačka studijního plánu výš. Jediné persistované pole je
+       stats.celebratedLevel (kvůli konfetám při postupu na vyšší úroveň, ať
+       appka neoslavuje pořád dokola stejný postup po každém načtení) - mirror
+       stats.celebratedBadges. */
+    function xpForLevel(level) {
+      // Kumulativní XP potřebné k DOSAŽENÍ dané úrovně (úroveň 1 = 0 XP) -
+      // mezera mezi sousedními úrovněmi lineárně roste (2. úroveň: 100 XP,
+      // 3.: +200, 4.: +300, ...), ať postup zpočátku odsýpá rychle a později
+      // se přirozeně zpomalí.
+      if (level <= 1) return 0;
+      return 50 * (level - 1) * level;
+    }
+    function levelForXp(xp) {
+      let level = 1;
+      while (xpForLevel(level + 1) <= xp) level++;
+      return level;
+    }
+    const totalXp = computed(() =>
+      (stats.totalSolved || 0) * 10
+      + (stats.perfectSessions || 0) * 30
+      + unlockedBadgeCount.value * 50
+      + (bestDailyStreak.value || 0) * 5
+    );
+    const currentLevel = computed(() => levelForXp(totalXp.value));
+    const xpIntoCurrentLevel = computed(() => totalXp.value - xpForLevel(currentLevel.value));
+    const xpNeededForNextLevel = computed(() => xpForLevel(currentLevel.value + 1) - xpForLevel(currentLevel.value));
+    const levelProgressPercent = computed(() => {
+      const need = xpNeededForNextLevel.value;
+      return need > 0 ? Math.min(100, Math.round((xpIntoCurrentLevel.value / need) * 100)) : 100;
+    });
+    // Konfety při NOVÉM postupu na vyšší úroveň - baseline pro úroveň dosaženou
+    // ještě před touto aktualizací appky se doplní v onMounted (viz komentář
+    // tam), ať appka retroaktivně neoslavuje starý pokrok.
+    watch(currentLevel, (level) => {
+      if (level > (stats.celebratedLevel || 1)) {
+        stats.celebratedLevel = level;
+        fireConfetti(100);
+      }
+    });
 
     /* ---------- Ukazatel využitého úložiště ----------
        Appka od migrace na IndexedDB (viz "Perzistentní data" výš) nemá jeden
@@ -11713,6 +12218,20 @@ const app = createApp({
        ale poslech/mluvení/čtení reálné angličtiny appka nenahradí - tahle
        sekce jen doporučuje zdroje a nabízí lehký týdenní tracker (bez vazby
        na SRS/slabá místa ostatních předmětů). ---------- */
+    /* ---------- 🔢 Matematika navíc (vzorečník + krokové postupy) ----------
+       Na rozdíl od Angličtiny navíc výš (aktivity mimo appku) jde o STATICKOU
+       referenci přímo k tématům, která appka i sama generuje (viz
+       MATH_FORMULA_TOPICS/generateMath výš) - žák si tak může vzorec/postup
+       dohledat i BEZ konkrétní vygenerované otázky před sebou. */
+    const showMathExtra = ref(false);
+    const mathExtraTopicKey = ref(null);
+    function selectMathExtraTopic(key) { mathExtraTopicKey.value = key; }
+    const activeMathFormulaTopic = computed(() => MATH_FORMULA_TOPICS.find((t) => t.key === mathExtraTopicKey.value) || null);
+    /** Vykreslí LaTeX vzorec přes KaTeX (viz renderMath výš) - v-html je tu
+     *  bezpečné, protože obsah je appce PEVNĚ ZADANÝ (MATH_FORMULA_TOPICS),
+     *  ne uživatelský vstup. */
+    function mathFormulaHtml(tex) { return renderMath(tex, true); }
+
     const showEnglishExtra = ref(false);
     function englishPlanWeekKey() {
       return dateKey(mondayOfWeek(new Date()));
@@ -12308,6 +12827,44 @@ const app = createApp({
       return { itemCount, daysLeft, perDay };
     }
     const activeSubjectStudyPlan = computed(() => studyPlanForSubject(activeSubject.value));
+    /* ---------- Revizní plán před zkouškou ----------
+       Navazuje na Kalkulačku studijního plánu výš (ta počítá jen CELKOVÉ
+       denní tempo) a rozpracovává ji do odškrtávacího seznamu konkrétních
+       dnů od DNEŠKA do nejbližšího termínu. Odškrtávání je záměrně RUČNÍ
+       (subject.reviewPlanChecks, klíč = datum YYYY-MM-DD) - appka eviduje
+       "kolik příkladů vyřešeno" jen souhrnně za den napříč VŠEMI předměty
+       (stats.dailyHistory), takže by nešlo spolehlivě poznat, že se ten den
+       procvičoval zrovna TENHLE předmět, a automatické odškrtnutí by tak
+       mohlo klamat. Seznam dnů appka schválně omezí na REVIEW_PLAN_MAX_DAYS,
+       ať u zkoušky za půl roku nevznikl seznam na stovky řádků - pořád ale
+       vrátí celkové denní tempo (perDay/daysLeft), i když je horizont delší. */
+    const REVIEW_PLAN_MAX_DAYS = 14;
+    function reviewPlanForSubject(subject) {
+      const plan = studyPlanForSubject(subject);
+      if (!plan) return null;
+      const checks = (subject.reviewPlanChecks && typeof subject.reviewPlanChecks === 'object') ? subject.reviewPlanChecks : {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const span = Math.min(plan.daysLeft, REVIEW_PLAN_MAX_DAYS);
+      const days = [];
+      for (let i = 0; i < span; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const key = dateKey(d);
+        days.push({ key, label: i === 0 ? 'Dnes' : (i === 1 ? 'Zítra' : formatDateShortCs(key)), done: !!checks[key] });
+      }
+      const doneCount = days.filter((d) => d.done).length;
+      return { ...plan, days, doneCount, truncated: plan.daysLeft > REVIEW_PLAN_MAX_DAYS };
+    }
+    const activeSubjectReviewPlan = computed(() => reviewPlanForSubject(activeSubject.value));
+    const showReviewPlan = ref(false);
+    /** Ručně odškrtne/oddškrtne jeden den v revizním plánu daného předmětu. */
+    function toggleReviewPlanDay(subject, key) {
+      if (!subject) return;
+      if (!subject.reviewPlanChecks || typeof subject.reviewPlanChecks !== 'object') subject.reviewPlanChecks = {};
+      if (subject.reviewPlanChecks[key]) delete subject.reviewPlanChecks[key];
+      else subject.reviewPlanChecks[key] = true;
+    }
     /* ---------- Doplňkové termíny u předmětu (zápočet, dílčí test...) ----
        Na rozdíl od subject.examDate výš (jedna hlavní zkouška) jde tohle
        nastavit vícekrát u stejného předmětu - appka je se stejnou vahou
@@ -12384,6 +12941,7 @@ const app = createApp({
         folder: null,
         examDate: null,
         extraExamDates: [],
+        reviewPlanChecks: {},
         difficulty: 'medium',
         customQuestions: [],
         sentenceAnalyses: [],
@@ -13580,6 +14138,12 @@ const app = createApp({
               englishExtraStreak: (importedStats.englishExtraStreak && typeof importedStats.englishExtraStreak === 'object') ? importedStats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
               dailyQuestion: (importedStats.dailyQuestion && typeof importedStats.dailyQuestion === 'object') ? importedStats.dailyQuestion : null,
               dailyQuestionStreak: (importedStats.dailyQuestionStreak && typeof importedStats.dailyQuestionStreak === 'object') ? importedStats.dailyQuestionStreak : { count: 0, best: 0, lastDate: null },
+              celebratedLevel: (typeof importedStats.celebratedLevel === 'number' && importedStats.celebratedLevel >= 1) ? importedStats.celebratedLevel : 1,
+              // Členství ve skupině se ze zálohy záměrně NEPŘEBÍRÁ - import zálohy
+              // typicky slouží k obnově na jiném/novém zařízení a appka by tak mohla
+              // omylem převzít cizí memberId. Ať appka zůstane bez skupiny, uživatel
+              // se případně znovu přidá kódem od spolužáků.
+              studyGroup: { id: null, memberId: null, name: '' },
             });
           }
           activeSubjectId.value = null;
@@ -14489,6 +15053,14 @@ const app = createApp({
       badgeStatus.value.forEach((b) => {
         if (b.unlocked && !stats.celebratedBadges.includes(b.id)) stats.celebratedBadges.push(b.id);
       });
+      // Stejná baseline pro úroveň dosaženou ještě před touto aktualizací appky.
+      if (!stats.celebratedLevel || stats.celebratedLevel < currentLevel.value) stats.celebratedLevel = currentLevel.value;
+      // Pokud je appka už ve skupině (viz Žebříček se spolužáky výš), rovnou
+      // při startu pošle čerstvá čísla za sebe a stáhne aktuální žebříček.
+      if (stats.studyGroup && stats.studyGroup.id) {
+        pushMyGroupStats();
+        fetchGroupLeaderboard();
+      }
       // Pojistka navíc k :autoplay vazbě v šabloně - u "omezit pohyb" video
       // rovnou zastavit, kdyby ho prohlížeč přesto začal přehrávat. Šablona
       // s :autoplay/:loop se navíc vyhodnocuje znovu při každém návratu na
@@ -14512,10 +15084,15 @@ const app = createApp({
       totalDueReviewCount, soonExamsForOverview, todayOverviewVisible,
       recentSubjects, recentSubjectIds,
       showBadges, badgeStatus, unlockedBadgeCount,
+      xpForLevel, levelForXp, totalXp, currentLevel, xpIntoCurrentLevel, xpNeededForNextLevel, levelProgressPercent,
+      showStudyGroup, studyGroupCreateName, studyGroupJoinCode, studyGroupJoinName, studyGroupBusy, studyGroupError,
+      studyGroupCodeCopied, groupLeaderboard, groupLeaderboardLoading, solvedThisWeek,
+      createStudyGroup, joinStudyGroup, leaveStudyGroup, pushMyGroupStats, fetchGroupLeaderboard, toggleStudyGroup, copyStudyGroupCode,
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
       showArchived, visibleSubjects, archivedCount,
       folderFilter, subjectFolders, setSubjectFolder, studyPlanForSubject, activeSubjectStudyPlan,
+      reviewPlanForSubject, activeSubjectReviewPlan, showReviewPlan, toggleReviewPlanDay,
       showAddModal, newSubject,
       confirmState,
       trash, showTrashModal, TRASH_RETENTION_DAYS,
@@ -14581,6 +15158,7 @@ const app = createApp({
       showBookAnalysis, bookAnalysisAuthor, bookAnalysisTitle, bookAnalysisAuthors, bookAnalysisTitlesForAuthor, selectBookAnalysisAuthor, activeBookAnalysis, printBookAnalysis,
       readBooksCount, isBookRead, toggleBookRead, activeBookNote,
       bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
+      showMathExtra, MATH_FORMULA_TOPICS, mathExtraTopicKey, selectMathExtraTopic, activeMathFormulaTopic, mathFormulaHtml,
       showEnglishExtra, ENGLISH_RESOURCE_CATEGORIES, englishPlanProgress, englishPlanAllDone, logEnglishPractice, unlogEnglishPractice,
       englishExtraTab, selectEnglishExtraTab, englishSpeakingKey, stopSpeakingEnglish, speakEnglish,
       vocabMasteredTotal, vocabWordsTotal, englishExtraStreakInfo,
