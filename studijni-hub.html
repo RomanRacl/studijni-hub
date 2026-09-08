@@ -1246,6 +1246,41 @@
         <span class="text-cyan-300 font-semibold shrink-0 hidden sm:inline">Začít →</span>
       </button>
 
+      <!-- Otázka dne - jedna otázka napříč předměty na daný den, viz ensureDailyQuestion -->
+      <div v-if="stats.dailyQuestion" class="mb-6 rounded-xl border border-violet-800/50 bg-gradient-to-r from-violet-950/30 to-slate-900/40 px-5 py-4 entrance entrance-delay-5">
+        <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+          <p class="text-xs uppercase tracking-wider text-violet-400 font-semibold">❓ Otázka dne · {{ stats.dailyQuestion.subjectEmoji }} {{ stats.dailyQuestion.subjectName }}</p>
+          <span v-if="dailyQuestionStreakInfo.count > 0" class="text-xs text-violet-300 shrink-0">🔥 {{ dailyQuestionStreakInfo.count }} {{ pluralize(dailyQuestionStreakInfo.count, 'den', 'dny', 'dní') }} v řadě</span>
+        </div>
+        <p class="text-slate-100 font-medium mb-3" style="white-space: pre-line;">{{ stats.dailyQuestion.prompt }}</p>
+
+        <template v-if="!stats.dailyQuestion.answered">
+          <div class="flex flex-col sm:flex-row gap-2" :class="{ 'anim-shake': stats.dailyQuestion.wrongAttempt }">
+            <input
+              v-model="stats.dailyQuestion.userInput"
+              @keyup.enter="checkDailyQuestion"
+              type="text"
+              placeholder="Tvoje odpověď…"
+              class="input flex-1"
+              :class="{ '!border-rose-500': stats.dailyQuestion.wrongAttempt }"
+            />
+            <button @click="checkDailyQuestion" class="btn-primary shrink-0">✅ Ověřit</button>
+          </div>
+          <p v-if="stats.dailyQuestion.wrongAttempt" class="text-rose-400 text-sm mt-2 font-medium">✕ Zatím to není správně. Zkus to znovu, nebo se podívej na nápovědu.</p>
+          <button @click="toggleDailyQuestionHint" class="hint-toggle !mt-2">
+            💡 Nápověda <span>{{ stats.dailyQuestion.showHint ? '▲' : '▼' }}</span>
+          </button>
+          <Transition name="fade">
+            <div v-if="stats.dailyQuestion.showHint" class="hint-box">
+              <h4>{{ stats.dailyQuestion.hintTitle }}</h4>
+              <div v-if="stats.dailyQuestion.hintImage" class="hint-image" v-html="stats.dailyQuestion.hintImage"></div>
+              <p v-for="(line, i) in stats.dailyQuestion.hintBody" :key="i">{{ line }}</p>
+            </div>
+          </Transition>
+        </template>
+        <p v-else class="text-emerald-300 text-sm font-medium">🎉 Dnešní otázku máš zvládnutou! Zítra tě čeká další.</p>
+      </div>
+
       <!-- Dnešní plán - kombinuje zkoušky, SRS opakování a slabá místa napříč předměty -->
       <div v-if="dailyPlanItems.length > 0" class="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden entrance entrance-delay-5">
         <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold px-5 pt-4 pb-2">🎯 Dnešní plán</p>
@@ -1337,6 +1372,9 @@
           </button>
           <button @click="showEnglishExtra = !showEnglishExtra" class="btn-ghost !text-sky-300">
             🌍 {{ showEnglishExtra ? 'Skrýt angličtinu navíc' : 'Angličtina navíc' }}
+          </button>
+          <button @click="toggleMaturitaMockSetup" class="btn-ghost !text-rose-300">
+            🎓 {{ showMaturitaMock ? 'Skrýt Maturitu nanečisto' : 'Maturita nanečisto' }}
           </button>
           <button @click="showPomodoro = !showPomodoro" class="btn-ghost !text-amber-300" :class="{ 'quiz-mode-active': pomodoro.active }">
             ⏱️ {{ pomodoro.active ? (pomodoro.phase === 'work' ? 'Práce' : 'Přestávka') + ' ' + pomodoroTimeLabel : 'Časovač' }}
@@ -2059,6 +2097,35 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showMaturitaMock" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🎓 Maturita nanečisto</p>
+            <p class="text-xs text-slate-500 mb-3">Časovaný zkušební test, který míchá otázky napříč vybranými předměty - podobně jako u ostrého zkoušení. Vyber si předměty a délku, appka pak spustí časovaný test (jako u ⏱️ tlačítka) jen z těchto předmětů.</p>
+            <div v-if="subjects.filter(s => !s.archived).length === 0" class="text-sm text-slate-500 italic">Nejdřív si založ aspoň jeden předmět.</div>
+            <template v-else>
+              <p class="text-xs text-slate-500 mb-2">Předměty ke zkoušení:</p>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button
+                  v-for="s in subjects.filter(s => !s.archived)" :key="s.id"
+                  @click="toggleMaturitaMockSubject(s.id)"
+                  class="!text-xs px-3 py-1.5 rounded-lg border transition"
+                  :class="maturitaMockSubjectIds.includes(s.id) ? 'bg-rose-600/30 border-rose-500 text-rose-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'"
+                >{{ s.name }}</button>
+              </div>
+              <p class="text-xs text-slate-500 mb-2">Délka testu:</p>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button
+                  v-for="mins in [15, 30, 45, 60]" :key="mins"
+                  @click="maturitaMockMinutes = mins"
+                  class="!text-xs px-3 py-1.5 rounded-lg border transition"
+                  :class="maturitaMockMinutes === mins ? 'bg-rose-600/30 border-rose-500 text-rose-200' : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800/70'"
+                >{{ mins }} min</button>
+              </div>
+              <button @click="startMaturitaMock" class="btn-primary !bg-rose-600 hover:!bg-rose-500">▶️ Spustit Maturitu nanečisto</button>
+            </template>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showPomodoro" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">⏱️ Časovač na soustředěné učení</p>
             <p class="text-xs text-slate-500 mb-3">Střídej bloky soustředěné práce a krátké přestávky - nezávisle na kvízu, klidně u čtení zápisků.</p>
@@ -2186,6 +2253,7 @@
 
       <div
         v-if="activeSubject"
+        id="active-subject-header"
         class="relative overflow-hidden rounded-2xl p-6 md:p-8 mb-8 flex items-center justify-between flex-wrap gap-4"
         :class="[activeSubject.gradient, { 'has-image': activeSubject.image }]"
         :style="activeSubject.image ? { backgroundImage: 'url(' + activeSubject.image + ')' } : {}"
@@ -2245,7 +2313,7 @@
                 <option v-for="f in subjectFolders" :key="f" :value="f"></option>
               </datalist>
             </div>
-            <div v-if="activeSubjectIsMath || activeSubjectIsEnglish" class="flex items-center flex-wrap gap-1.5 mt-2">
+            <div v-if="activeSubjectIsMath || activeSubjectIsEnglish || activeSubjectIsCzech" class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">🎚️ Obtížnost:</span>
               <button
                 v-for="lvl in DIFFICULTY_LEVELS" :key="lvl"
@@ -2375,7 +2443,7 @@
 
           <!-- Souhrn výsledků dokončeného časovaného testu -->
           <div v-else-if="timedSession.showSummary" class="bg-slate-950/50 border border-slate-800 rounded-xl p-5">
-            <h4 class="text-lg font-bold mb-1">⏱️ Výsledky časového testu</h4>
+            <h4 class="text-lg font-bold mb-1">{{ isMaturitaMockSession ? '🎓 Výsledky Maturity nanečisto' : '⏱️ Výsledky časového testu' }}</h4>
             <p class="text-slate-300 mb-4">
               Vyřešeno: <b class="text-cyan-300">{{ timedSession.correctCount }}</b> {{ pluralize(timedSession.correctCount, 'příklad', 'příklady', 'příkladů') }}
               za {{ timedSession.totalSeconds }} s
@@ -2390,7 +2458,7 @@
           <!-- Aktuální příklad -->
           <div v-else class="bg-slate-950/50 border border-slate-800 rounded-xl p-5">
             <p v-if="quizSession.active" class="text-xs uppercase tracking-wider text-cyan-400 font-semibold mb-2">Otázka {{ quizSession.index + 1 }} / {{ quizSession.total }}</p>
-            <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">⏱️ Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
+            <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">{{ isMaturitaMockSession ? '🎓 Maturita nanečisto' : '⏱️' }} Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
             <p v-if="quiz.wasReview" class="review-badge">🔁 Opakování — tohle ti nedávno nešlo</p>
             <p v-if="mixedQuizMode && quizSourceSubject" class="text-xs uppercase tracking-wider text-fuchsia-400 font-semibold mb-2">🔀 {{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }}</p>
             <p v-if="examPracticeMode && quiz.type !== 'exam-empty'" class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">
@@ -2508,6 +2576,7 @@
                   <input v-model="newCustomQuestion.question" class="input" placeholder="Otázka (např. Kdy začala třicetiletá válka?)" />
                   <input v-model="newCustomQuestion.answer" @keyup.enter="addCustomQuestion" class="input" placeholder="Odpověď (více variant odděl čárkou)" />
                   <button @click="addCustomQuestion" :disabled="!newCustomQuestion.question.trim() || !newCustomQuestion.answer.trim()" class="btn-primary w-full">➕ Přidat vlastní otázku</button>
+                  <button type="button" @click="openOcrPicker(null, 'card')" class="btn-secondary w-full text-sm" title="Vyfotí zápisník/učebnici a appka zkusí z fotky rovnou udělat vlastní otázku (rozdělí text na otázku a odpověď)">📷 Vytvořit kartičku z fotky (OCR)</button>
                 </div>
               </div>
             </Transition>
@@ -3166,13 +3235,29 @@
         </div>
         <div v-else-if="ocrModal.status === 'error'" class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-2">{{ ocrModal.error }}</div>
         <template v-else-if="ocrModal.status === 'done'">
-          <p class="text-slate-400 text-sm mb-2">Appka rozpoznala tenhle text (zkontroluj ho, rozpoznávání není vždy 100% přesné):</p>
-          <textarea v-model="ocrModal.text" rows="8" class="input text-sm mb-2"></textarea>
+          <div v-if="ocrModal.targetState && activeSubject" class="flex gap-1.5 mb-3 rounded-lg border border-slate-700 p-1 text-xs">
+            <button type="button" @click="ocrModal.mode = 'note'" class="flex-1 py-1.5 rounded-md transition" :class="ocrModal.mode === 'note' ? 'bg-cyan-600/30 text-cyan-200' : 'text-slate-400 hover:text-slate-200'">📝 Do zápisu</button>
+            <button type="button" @click="ocrModal.mode = 'card'" class="flex-1 py-1.5 rounded-md transition" :class="ocrModal.mode === 'card' ? 'bg-cyan-600/30 text-cyan-200' : 'text-slate-400 hover:text-slate-200'">🗂️ Jako kartička</button>
+          </div>
+
+          <template v-if="ocrModal.mode === 'card'">
+            <p class="text-slate-400 text-sm mb-2">Appka zkusila rozpoznaný text rozdělit na otázku a odpověď - obojí uprav podle potřeby:</p>
+            <label class="block text-xs text-slate-500 mb-1">Otázka / pojem</label>
+            <textarea v-model="ocrModal.cardFront" rows="2" class="input text-sm mb-2"></textarea>
+            <label class="block text-xs text-slate-500 mb-1">Odpověď / vysvětlení</label>
+            <textarea v-model="ocrModal.cardBack" rows="4" class="input text-sm mb-1"></textarea>
+            <p class="text-xs text-slate-500">Tip: v režimu 🃏 Kartičky se u vlastních otázek jen sám/sama ohodnotíš, takže odpověď nemusí být doslovná.</p>
+          </template>
+          <template v-else>
+            <p class="text-slate-400 text-sm mb-2">Appka rozpoznala tenhle text (zkontroluj ho, rozpoznávání není vždy 100% přesné):</p>
+            <textarea v-model="ocrModal.text" rows="8" class="input text-sm mb-2"></textarea>
+          </template>
         </template>
 
         <div class="flex justify-end gap-2 mt-4">
           <button @click="closeOcrModal" class="btn-secondary text-sm" :disabled="ocrModal.status === 'loading' || ocrModal.status === 'recognizing'">Zavřít</button>
-          <button v-if="ocrModal.status === 'done'" @click="insertOcrTextIntoNote" class="btn-primary text-sm" :disabled="!ocrModal.text.trim()">➕ Vložit do zápisu</button>
+          <button v-if="ocrModal.status === 'done' && ocrModal.mode === 'note'" @click="insertOcrTextIntoNote" class="btn-primary text-sm" :disabled="!ocrModal.text.trim()">➕ Vložit do zápisu</button>
+          <button v-if="ocrModal.status === 'done' && ocrModal.mode === 'card'" @click="insertOcrTextAsCard" class="btn-primary text-sm" :disabled="!ocrModal.cardFront.trim() || !ocrModal.cardBack.trim()">➕ Přidat jako vlastní otázku</button>
         </div>
       </div>
     </div>
@@ -7937,6 +8022,10 @@ function parseStatsJson(raw) {
     // markEnglishExtraActivity/bumpEnglishExtraStreak.
     englishExtraExercisesCount: 0,
     englishExtraStreak: { count: 0, best: 0, lastDate: null },
+    // Otázka dne - jedna napříč-předmětová otázka na den (viz ensureDailyQuestion)
+    // a série dní, kdy ji uživatel zvládl (viz bumpDailyQuestionStreak).
+    dailyQuestion: null,
+    dailyQuestionStreak: { count: 0, best: 0, lastDate: null },
   };
   try {
     if (raw) {
@@ -7971,6 +8060,8 @@ function parseStatsJson(raw) {
         englishPracticeLog: (parsed && typeof parsed.englishPracticeLog === 'object' && parsed.englishPracticeLog) || {},
         englishExtraExercisesCount: (parsed && typeof parsed.englishExtraExercisesCount === 'number') ? parsed.englishExtraExercisesCount : 0,
         englishExtraStreak: (parsed && typeof parsed.englishExtraStreak === 'object' && parsed.englishExtraStreak) || { count: 0, best: 0, lastDate: null },
+        dailyQuestion: (parsed && typeof parsed.dailyQuestion === 'object' && parsed.dailyQuestion) || null,
+        dailyQuestionStreak: (parsed && typeof parsed.dailyQuestionStreak === 'object' && parsed.dailyQuestionStreak) || { count: 0, best: 0, lastDate: null },
       };
     }
   } catch (e) {
@@ -8490,9 +8581,21 @@ function generateMath(mistakeCounts, difficulty) {
   };
 }
 
-function generateCzech(mistakeCounts) {
+/** Obtížnost u češtiny (stejný přepínač easy/medium/hard jako u matematiky a
+ *  angličtiny) reguluje, jaké typy cvičení se objeví - "easy" jen základní
+ *  mluvnici, "medium" k tomu přidá čárky ve větě a větné členy, "hard" i
+ *  literární směry, pojmy a básnické prostředky (na to už je matematika/
+ *  angličtina/čeština obtížnostně sladěná napříč předměty). */
+const CZECH_DIFFICULTY_SETTINGS = {
+  easy: { subtypes: ['iy', 'preposition', 'slovni_druh'] },
+  medium: { subtypes: ['iy', 'preposition', 'slovni_druh', 'carky', 'vetny_clen'] },
+  hard: { subtypes: ['iy', 'preposition', 'slovni_druh', 'carky', 'vetny_clen', 'literarni_smer', 'literarni_pojem', 'basnicky_prostredek'] },
+};
+
+function generateCzech(mistakeCounts, difficulty) {
   const mc = mistakeCounts || {};
-  const subtype = choice(['iy', 'preposition']);
+  const settings = CZECH_DIFFICULTY_SETTINGS[difficulty] || CZECH_DIFFICULTY_SETTINGS.medium;
+  const subtype = choice(settings.subtypes);
 
   if (subtype === 'iy') {
     const items = [
@@ -8524,26 +8627,579 @@ function generateCzech(mistakeCounts) {
     };
   }
 
-  const items = [
-    { text: 'Kniha leží ___ stole.', answer: ['na'] },
-    { text: 'Jdu ___ školy.', answer: ['do'] },
-    { text: 'Bydlím ___ Praze.', answer: ['v'] },
-    { text: 'Auto stojí ___ domem.', answer: ['před'] },
-    { text: 'Ten dárek je ___ tebe.', answer: ['pro'] },
-    { text: 'Vrátil se ___ dovolené.', answer: ['z'] },
-    { text: 'Sejdeme se ___ knihovny.', answer: ['u'] },
-    { text: 'Obrázek visí ___ zdi.', answer: ['na'] },
-  ];
+  if (subtype === 'preposition') {
+    const items = [
+      { text: 'Kniha leží ___ stole.', answer: ['na'] },
+      { text: 'Jdu ___ školy.', answer: ['do'] },
+      { text: 'Bydlím ___ Praze.', answer: ['v'] },
+      { text: 'Auto stojí ___ domem.', answer: ['před'] },
+      { text: 'Ten dárek je ___ tebe.', answer: ['pro'] },
+      { text: 'Vrátil se ___ dovolené.', answer: ['z'] },
+      { text: 'Sejdeme se ___ knihovny.', answer: ['u'] },
+      { text: 'Obrázek visí ___ zdi.', answer: ['na'] },
+    ];
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: `Doplň do věty správnou předložku:\n\n${item.text}`,
+      hintTitle: 'Jak správně vybrat předložku',
+      hintBody: [
+        'Volba předložky v češtině závisí na ustálené vazbě konkrétního slovesa nebo výrazu, ne na doslovném překladu.',
+        'Nejlepší je učit se celé spojení najednou (např. "bydlet v", "jít do", "vrátit se z"), nikoli předložku samostatně.',
+        'Zkus si větu přečíst nahlas s různými předložkami — správná varianta zpravidla zní přirozeně a odpovídá běžnému úzu.',
+      ],
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  if (subtype === 'slovni_druh') {
+    const items =
+      [
+        {
+          "text": "Petr čte zajímavou »knihu«.",
+          "answer": "podstatné jméno"
+        },
+        {
+          "text": "Marie má »červený« kabát.",
+          "answer": "přídavné jméno"
+        },
+        {
+          "text": "»Ona« přijde zítra.",
+          "answer": "zájmeno"
+        },
+        {
+          "text": "Koupili jsme »tři« jablka.",
+          "answer": "číslovka"
+        },
+        {
+          "text": "Chlapec rychle »běží« do školy.",
+          "answer": "sloveso"
+        },
+        {
+          "text": "Auto jelo »rychle« po silnici.",
+          "answer": "příslovce"
+        },
+        {
+          "text": "Kniha leží »na« stole.",
+          "answer": "předložka"
+        },
+        {
+          "text": "Přijdu, »a« ty taky.",
+          "answer": "spojka"
+        },
+        {
+          "text": "»Snad« přijde včas.",
+          "answer": "částice"
+        },
+        {
+          "text": "»Au«, to bolelo!",
+          "answer": "citoslovce"
+        },
+        {
+          "text": "Toto je »moje« oblíbená kniha.",
+          "answer": "zájmeno"
+        },
+        {
+          "text": "Přišel »pátý« člověk v pořadí.",
+          "answer": "číslovka"
+        }
+      ]
+    ;
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: item.answer,
+      prompt: `Urči slovní druh slova označeného uvozovkami »...«:\n\n${item.text}`,
+      hintTitle: 'Deset slovních druhů',
+      hintBody: [
+        'Ohebné slovní druhy: podstatná jména, přídavná jména, zájmena, číslovky, slovesa.',
+        'Neohebné slovní druhy: příslovce, předložky, spojky, částice, citoslovce.',
+        'Postup: nejdřív zjisti, jestli se slovo ve větě dá skloňovat/časovat (ohebné), nebo je neměnné (neohebné), a podle jeho role ve větě urči konkrétní slovní druh.',
+      ],
+      check: (input) => normalizeAnswer(input) === normalizeAnswer(item.answer),
+    };
+  }
+
+  if (subtype === 'vetny_clen') {
+    const items =
+      [
+        {
+          "text": "»Petr« čte knihu.",
+          "answer": "podmět"
+        },
+        {
+          "text": "Petr »čte« knihu.",
+          "answer": "přísudek"
+        },
+        {
+          "text": "Petr čte »knihu«.",
+          "answer": "předmět"
+        },
+        {
+          "text": "Čteme »zajímavou« knihu.",
+          "answer": "přívlastek"
+        },
+        {
+          "text": "Sejdeme se »zítra« ve škole.",
+          "answer": "příslovečné určení"
+        },
+        {
+          "text": "Kniha »byla zajímavá«.",
+          "answer": "přísudek"
+        },
+        {
+          "text": "Ivana napsala dopis »kamarádce«.",
+          "answer": "předmět"
+        },
+        {
+          "text": "»Nový soused« se právě přistěhoval.",
+          "answer": "podmět"
+        },
+        {
+          "text": "Do školy chodí »pěšky«.",
+          "answer": "příslovečné určení"
+        },
+        {
+          "text": "Máme doma »černého« psa.",
+          "answer": "přívlastek"
+        }
+      ]
+    ;
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: item.answer,
+      prompt: `Urči větný člen slova/slovního spojení označeného uvozovkami »...«:\n\n${item.text}`,
+      hintTitle: 'Základní a rozvíjející větné členy',
+      hintBody: [
+        'Podmět (kdo/co) a přísudek (co dělá/co se o podmětu říká) tvoří základní skladební dvojici věty.',
+        'Předmět (pád po slovese, koho/co, komu/čemu apod.) rozvíjí sloveso.',
+        'Přívlastek rozvíjí podstatné jméno (jaký, který, čí) a příslovečné určení rozvíjí sloveso místem, časem, způsobem nebo příčinou (kde, kdy, jak, proč).',
+        'Postup: nejdřív najdi podmět a přísudek, u zbylých výrazů se zeptej vhodnou otázkou, na kterou označené slovo odpovídá.',
+      ],
+      check: (input) => normalizeAnswer(input) === normalizeAnswer(item.answer),
+    };
+  }
+
+  if (subtype === 'carky') {
+    const items =
+      [
+        {
+          "text": "Když skončí škola pojedeme na chatu.",
+          "count": 1,
+          "correct": "Když skončí škola, pojedeme na chatu."
+        },
+        {
+          "text": "Pojedeme na chatu až skončí škola.",
+          "count": 1,
+          "correct": "Pojedeme na chatu, až skončí škola."
+        },
+        {
+          "text": "Kniha kterou jsem si koupil je velmi zajímavá.",
+          "count": 2,
+          "correct": "Kniha, kterou jsem si koupil, je velmi zajímavá."
+        },
+        {
+          "text": "Nevím kdy přijde.",
+          "count": 1,
+          "correct": "Nevím, kdy přijde."
+        },
+        {
+          "text": "Řekl mi že už to udělal.",
+          "count": 1,
+          "correct": "Řekl mi, že už to udělal."
+        },
+        {
+          "text": "Je mi líto že jsi nemohl přijít.",
+          "count": 1,
+          "correct": "Je mi líto, že jsi nemohl přijít."
+        },
+        {
+          "text": "Petře pojď už domů!",
+          "count": 1,
+          "correct": "Petře, pojď už domů!"
+        },
+        {
+          "text": "Koupil jsem chleba mléko a máslo.",
+          "count": 1,
+          "correct": "Koupil jsem chleba, mléko a máslo."
+        },
+        {
+          "text": "Nekoupil jsem chleba ani mléko ani máslo.",
+          "count": 2,
+          "correct": "Nekoupil jsem chleba, ani mléko, ani máslo."
+        },
+        {
+          "text": "Umyj nádobí ale neuklízej pokoj.",
+          "count": 1,
+          "correct": "Umyj nádobí, ale neuklízej pokoj."
+        },
+        {
+          "text": "Můžeš zůstat doma nebo jít s námi ven.",
+          "count": 0,
+          "correct": "Můžeš zůstat doma nebo jít s námi ven."
+        },
+        {
+          "text": "Ať už uděláš cokoli budu tě podporovat.",
+          "count": 1,
+          "correct": "Ať už uděláš cokoli, budu tě podporovat."
+        }
+      ]
+    ;
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: String(item.count),
+      prompt: `Kolik čárek ve větě chybí? (napiš jen číslo, i 0)\n\n${item.text}`,
+      hintTitle: 'Interpunkce v souvětí',
+      hintBody: [
+        'Čárka odděluje vedlejší větu od věty hlavní (na obou stranách, pokud je vedlejší věta vložená doprostřed).',
+        'Čárka se píše i před spojkami "ale", "avšak", "protože", "že", "aby", "který/kterou/...", "když", "až", "jestli/zda".',
+        'Před slučovacími/vylučovacími spojkami "a", "i", "nebo" mezi dvěma jednoduchými větami/členy se čárka NEpíše - pokud se ale tyto spojky opakují (např. "ani...ani"), čárka se píše před každým opakováním kromě prvního.',
+        `Správně: "${item.correct}"`,
+      ],
+      check: (input) => normalizeAnswer(input) === normalizeAnswer(String(item.count)),
+    };
+  }
+
+  if (subtype === 'literarni_smer') {
+    const items =
+      [
+        {
+          "text": "Starověký literární okruh spjatý s řeckou a římskou kulturou, jehož vrcholnými díly jsou Homérovy eposy Ilias a Odysseia a řecké tragédie (např. Sofoklova Antigona), se nazývá ___.",
+          "answer": [
+            "antika"
+          ]
+        },
+        {
+          "text": "Období evropské literatury vázané na křesťanství a latinu (případně staroslověnštinu), typické žánry legenda a kronika (např. Kosmova Kronika česká), se souhrnně označuje jako ___.",
+          "answer": [
+            "stredoveka literatura",
+            "literatura stredoveku"
+          ]
+        },
+        {
+          "text": "Kulturní hnutí vycházející z návratu k antickým ideálům a k člověku jako středu zájmu (antropocentrismus), jehož představiteli jsou Francesco Petrarca a Giovanni Boccaccio (Dekameron), se nazývá ___.",
+          "answer": [
+            "humanismus a renesance",
+            "renesance"
+          ]
+        },
+        {
+          "text": "Umělecký sloh 17. a počátku 18. století stavějící na kontrastech, citové expresivitě a tématu pomíjivosti pozemského života, jehož představitelem u nás je Jan Amos Komenský (Labyrint světa a ráj srdce), se jmenuje ___.",
+          "answer": [
+            "baroko"
+          ]
+        },
+        {
+          "text": "Umělecký směr napodobující antické vzory a řídící se přísnými pravidly (mj. zásadou tří jednot), typický pro francouzské drama Moliéra, Corneille a Racina, se nazývá ___.",
+          "answer": [
+            "klasicismus"
+          ]
+        },
+        {
+          "text": "Myšlenkové a literární hnutí 18. století stavějící na kultu rozumu a kritice feudalismu a církve, spojené s francouzskými encyklopedisty Voltairem a Diderotem, se nazývá ___.",
+          "answer": [
+            "osvicenstvi"
+          ]
+        },
+        {
+          "text": "Směr předznamenávající romantismus, který proti racionalismu klade důraz na cit, přírodu a kritiku civilizace (např. J. J. Rousseau a jeho román Nová Heloisa), se nazývá ___.",
+          "answer": [
+            "preromantismus",
+            "sentimentalismus"
+          ]
+        },
+        {
+          "text": "České hnutí konce 18. a první poloviny 19. století usilující o obnovu národního jazyka, kultury a vzdělanosti, spojené se jmény Josef Dobrovský a Josef Jungmann, se nazývá ___.",
+          "answer": [
+            "narodni obrozeni"
+          ]
+        },
+        {
+          "text": "Umělecký směr klade důraz na cit, fantazii a výjimečného hrdinu v rozporu se společností; jeho vrcholným českým dílem je Máj Karla Hynka Máchy. Jak se tento směr jmenuje?",
+          "answer": [
+            "romantismus"
+          ]
+        },
+        {
+          "text": "Literární směr usilující o objektivní a věcné zobrazení skutečnosti a společnosti bez idealizace, jehož představiteli jsou Honoré de Balzac (Lidská komedie) a Nikolaj Vasiljevič Gogol, se nazývá ___.",
+          "answer": [
+            "realismus"
+          ]
+        },
+        {
+          "text": "Směr navazující na realismus, který zdůrazňuje vliv dědičnosti, prostředí a doby na člověka a čerpá i z vědeckých (biologických) poznatků; jeho čelním představitelem je Émile Zola. O jaký směr jde?",
+          "answer": [
+            "naturalismus"
+          ]
+        },
+        {
+          "text": "Básnický směr konce 19. století, který místo přímého popisu užívá náznak, symbol a hudebnost verše, reprezentovaný francouzskými básníky Paulem Verlainem a Stéphanem Mallarmém, se nazývá ___.",
+          "answer": [
+            "symbolismus"
+          ]
+        },
+        {
+          "text": "Směr přelomu 19. a 20. století vyjadřující únavu ze života, přecitlivělost a zálibu v umělosti a výstřednosti, v české poezii zastoupený Karlem Hlaváčkem (sbírka Pozdě k ránu), se nazývá ___.",
+          "answer": [
+            "dekadence"
+          ]
+        },
+        {
+          "text": "Ryze český meziválečný avantgardní směr spojený se skupinou Devětsil, usilující o hravou, obraznou poezii všedního dne (V. Nezval, J. Seifert), se nazývá ___.",
+          "answer": [
+            "poetismus"
+          ]
+        },
+        {
+          "text": "Avantgardní směr 20. století, vycházející z podvědomí, snů a metody automatického textu (u nás např. Nezvalova sbírka Praha s prsty deště), založený André Bretonem, se nazývá ___.",
+          "answer": [
+            "surrealismus"
+          ]
+        },
+        {
+          "text": "Filozoficko-literární směr 20. století zabývající se otázkou smyslu lidské existence, svobody a absurdity, spojený se jmény Jean-Paul Sartre a Albert Camus (Cizinec), se nazývá ___.",
+          "answer": [
+            "existencialismus"
+          ]
+        }
+      ]
+    ;
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: item.text,
+      hintTitle: 'Literární směry a období',
+      hintBody: [
+        'Zkus si vybavit dobu vzniku, typické znaky (téma, styl, postoj ke skutečnosti) a hlavní představitele/díla popsané v zadání.',
+        'Pomáhá řadit směry chronologicky - od antiky přes středověk, renesanci, baroko, klasicismus a osvícenství, romantismus, realismus a naturalismus, až po moderní směry přelomu 19./20. století a avantgardu 20. století.',
+      ],
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  if (subtype === 'literarni_pojem') {
+    const items =
+      [
+        {
+          "text": "Rým, při němž se rýmují dva bezprostředně sousední verše podle schématu aabb, se nazývá ___.",
+          "answer": [
+            "rým sdružený",
+            "sdružený rým"
+          ]
+        },
+        {
+          "text": "Rým, při němž se pravidelně střídají sudé a liché verše podle schématu abab, se nazývá ___.",
+          "answer": [
+            "rým střídavý",
+            "střídavý rým"
+          ]
+        },
+        {
+          "text": "Verš nebo skupina veršů, které se doslovně nebo s obměnou pravidelně opakují, obvykle na konci každé sloky básně či písně, se nazývají ___.",
+          "answer": [
+            "refrén"
+          ]
+        },
+        {
+          "text": "Rozsáhlá veršovaná epická skladba líčící významné, často hrdinské události a postavy (např. Homérova Ilias), se nazývá ___.",
+          "answer": [
+            "epos"
+          ]
+        },
+        {
+          "text": "Lyrickoepický žánr s pochmurným dějem, gradujícím napětím a tragickým koncem, typicky zpracovávající námět viny a trestu nebo osudové zkázy, se nazývá ___.",
+          "answer": [
+            "balada"
+          ]
+        },
+        {
+          "text": "Pevná básnická forma o čtrnácti verších, rozdělená do dvou čtyřverší a dvou trojverší s přesně daným rýmovým schématem, se nazývá ___.",
+          "answer": [
+            "sonet"
+          ]
+        },
+        {
+          "text": "Krátký alegorický epický útvar, v němž vystupují zvířata jednající a mluvící jako lidé a jehož závěr přináší mravní ponaučení, se nazývá ___.",
+          "answer": [
+            "bajka"
+          ]
+        },
+        {
+          "text": "Kratší prozaický epický útvar s jednoduchou, sevřenou dějovou linií, která graduje k jednomu překvapivému zvratu, a rozsahem stojící mezi povídkou a románem, se nazývá ___.",
+          "answer": [
+            "novela"
+          ]
+        },
+        {
+          "text": "Způsob vyprávění, při němž vypravěč sám vystupuje jako postava příběhu a líčí děj v první osobě jednotného čísla, se nazývá ___.",
+          "answer": [
+            "ich-forma",
+            "ich forma"
+          ]
+        },
+        {
+          "text": "Způsob vyprávění, při němž vypravěč stojí mimo děj a o postavách i událostech vypráví ve třetí osobě, se nazývá ___.",
+          "answer": [
+            "er-forma",
+            "er forma"
+          ]
+        },
+        {
+          "text": "Kompoziční postup, při němž se vyprávění vrací zpět v čase k dříve proběhlým událostem, čímž narušuje přímočarý chronologický sled děje, se nazývá ___.",
+          "answer": [
+            "retrospektiva"
+          ]
+        },
+        {
+          "text": "Básnický trop založený na přenesení významu slova na jiné na základě jejich vnější podobnosti, aniž by se použila spojka jako, se nazývá ___.",
+          "answer": [
+            "metafora"
+          ]
+        },
+        {
+          "text": "Básnická figura, při níž jsou neživým věcem, zvířatům nebo přírodním jevům přisuzovány lidské vlastnosti, city a jednání, se nazývá ___.",
+          "answer": [
+            "personifikace",
+            "zosobnění"
+          ]
+        },
+        {
+          "text": "Otázka položená s cílem zdůraznit určitou myšlenku nebo upoutat pozornost, na niž se neočekává skutečná odpověď, se nazývá ___.",
+          "answer": [
+            "řečnická otázka"
+          ]
+        }
+      ]
+    ;
+    const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
+    return {
+      key: `czech:${subtype}:${item.text}`,
+      answerText: item.answer[0],
+      prompt: item.text,
+      hintTitle: 'Literární pojmy (teorie literatury)',
+      hintBody: [
+        'Zamysli se, jestli definice popisuje formu verše/rýmu, literární žánr, způsob vyprávění, nebo básnickou figuru/trop.',
+        'Pomáhá si u básnických figur připomenout konkrétní příklad věty, na které je daný pojem vidět.',
+      ],
+      check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
+    };
+  }
+
+  // basnicky_prostredek
+  const items =
+      [
+        {
+          "text": "Který básnický prostředek je použit ve verši: „Její oči byly dvě hvězdy zářící ve tmě.“?",
+          "answer": [
+            "metafora"
+          ]
+        },
+        {
+          "text": "Urči básnický prostředek v této větě: „Vítr si pohrával s listím a šeptal staré příběhy.“",
+          "answer": [
+            "personifikace"
+          ]
+        },
+        {
+          "text": "Jaký básnický prostředek najdeš v ukázce: „Byl unavený jako pes po celodenní honičce.“?",
+          "answer": [
+            "přirovnání"
+          ]
+        },
+        {
+          "text": "O jaký básnický prostředek se jedná ve větě: „Kráčel liduprázdnou ulicí pod olověnou oblohou.“?",
+          "answer": [
+            "epiteton"
+          ]
+        },
+        {
+          "text": "Který básnický prostředek je použit v tomto verši: „Čekal jsem na tebe snad tisíc let, než jsi konečně přišla.“?",
+          "answer": [
+            "hyperbola"
+          ]
+        },
+        {
+          "text": "Identifikuj básnický prostředek v následující ukázce: „To se ti povedlo, rozbít babiččin oblíbený hrnek hned první den návštěvy.“",
+          "answer": [
+            "ironie"
+          ]
+        },
+        {
+          "text": "Jaký básnický prostředek je zastoupen ve větě: „Copak nevidíš, že už je pozdě na omluvy?“?",
+          "answer": [
+            "řečnická otázka"
+          ]
+        },
+        {
+          "text": "Který básnický prostředek najdeš v tomto verši: „Pod pařezem pindal pilný permoník.“?",
+          "answer": [
+            "aliterace"
+          ]
+        },
+        {
+          "text": "Urči básnický prostředek použitý v ukázce: „Bum, prásk, řinkot skla se rozlehl tichou nocí.“",
+          "answer": [
+            "onomatopoie"
+          ]
+        },
+        {
+          "text": "O jaký básnický prostředek jde v následujících verších: „Nikdy jsem nezapomněl na tvůj úsměv, nikdy jsem nezapomněl na tvůj hlas, nikdy jsem nezapomněl na ten den.“?",
+          "answer": [
+            "anafora"
+          ]
+        },
+        {
+          "text": "Který básnický prostředek je použit ve větě: „Nejprve se usmál, pak se zasmál a nakonec propukl v bouřlivý smích.“?",
+          "answer": [
+            "gradace"
+          ]
+        },
+        {
+          "text": "Jaký básnický prostředek najdeš v této větě: „Celá vesnice vyběhla ven, aby přivítala hosty.“?",
+          "answer": [
+            "metonymie"
+          ]
+        },
+        {
+          "text": "Identifikuj básnický prostředek v ukázce: „V pokoji panovalo hlučné ticho, které nikdo nedokázal přerušit.“",
+          "answer": [
+            "oxymóron"
+          ]
+        },
+        {
+          "text": "Který básnický prostředek je použit ve větě: „Dědeček nás navždy opustil minulou zimu.“?",
+          "answer": [
+            "eufemismus"
+          ]
+        },
+        {
+          "text": "O jaký básnický prostředek se jedná ve verši: „Ó hory mohutné, kéž bych mezi vámi mohl navždy zůstat.“?",
+          "answer": [
+            "apostrofa"
+          ]
+        },
+        {
+          "text": "Jaký básnický prostředek najdeš v následující větě: „Jeho slova byla ostré nože, které bolestivě zraňovaly srdce posluchačů.“?",
+          "answer": [
+            "metafora"
+          ]
+        }
+      ]
+  ;
   const item = weightedChoice(items, (it) => mistakeWeight(mc, `czech:${subtype}:${it.text}`));
   return {
     key: `czech:${subtype}:${item.text}`,
     answerText: item.answer[0],
-    prompt: `Doplň do věty správnou předložku:\n\n${item.text}`,
-    hintTitle: 'Jak správně vybrat předložku',
+    prompt: item.text,
+    hintTitle: 'Básnické prostředky (figury a tropy)',
     hintBody: [
-      'Volba předložky v češtině závisí na ustálené vazbě konkrétního slovesa nebo výrazu, ne na doslovném překladu.',
-      'Nejlepší je učit se celé spojení najednou (např. "bydlet v", "jít do", "vrátit se z"), nikoli předložku samostatně.',
-      'Zkus si větu přečíst nahlas s různými předložkami — správná varianta zpravidla zní přirozeně a odpovídá běžnému úzu.',
+      'Metafora přenáší význam bez spojky "jako" (na rozdíl od přirovnání, které "jako"/"jak" používá).',
+      'Personifikace přisuzuje lidské vlastnosti neživým věcem, epiteton je ozdobný básnický přívlastek, hyperbola je záměrné přehánění.',
+      'Anafora a gradace se týkají OPAKOVÁNÍ nebo STUPŇOVÁNÍ napříč větou/verši, aliterace a onomatopoie se týkají ZVUKOVÉ stránky textu.',
     ],
     check: (input) => item.answer.some((a) => normalizeAnswer(a) === normalizeAnswer(input)),
   };
@@ -9301,7 +9957,7 @@ function buildQuiz(subject, mistakeCounts, mode, srs, examOnly, tenseFocus) {
   const difficulty = (isObj && subject.difficulty) || 'medium';
   let gen;
   if (type === 'math') gen = generateMath(mc, difficulty);
-  else if (type === 'czech') gen = generateCzech(mc);
+  else if (type === 'czech') gen = generateCzech(mc, difficulty);
   else if (type === 'english') gen = generateEnglish(mc, difficulty, tenseFocus);
   else gen = generateGeneric(mc);
   return { type, ...gen };
@@ -9309,7 +9965,7 @@ function buildQuiz(subject, mistakeCounts, mode, srs, examOnly, tenseFocus) {
 
 const CATEGORY_LABELS = {
   math: 'Automaticky generované maturitní příklady z matematiky (lineární a kvadratické rovnice, zlomky, procenta, Pythagorova věta, posloupnosti, kombinatorika).',
-  czech: 'Automaticky generovaná cvičení z českého jazyka (i/y, předložky).',
+  czech: 'Automaticky generovaná cvičení z českého jazyka (i/y, předložky, slovní druhy, větné členy, čárky ve větě, literární směry, literární pojmy, básnické prostředky).',
   english: 'Automaticky generovaná maturitní cvičení z angličtiny (členy, předložky, nepravidelná slovesa, slovní zásoba, časy, podmínkové věty, trpný rod, frázová slovesa, nepřímá řeč).',
   generic: 'Obecné znalostní otázky přizpůsobené libovolnému předmětu.',
   custom: 'Tvoje vlastní otázka přidaná k tomuto předmětu.',
@@ -9334,7 +9990,11 @@ const MATH_SUBTYPE_LABELS = {
   linear: 'lineární rovnice', fraction: 'zlomky', percentage: 'procenta',
   quadratic: 'kvadratická rovnice', geometry: 'Pythagorova věta', sequence: 'posloupnosti a řady', combinatorics: 'kombinatorika',
 };
-const CZECH_SUBTYPE_LABELS = { iy: 'i/y v příčestí minulém', preposition: 'předložka' };
+const CZECH_SUBTYPE_LABELS = {
+  iy: 'i/y v příčestí minulém', preposition: 'předložka', slovni_druh: 'slovní druh',
+  vetny_clen: 'větný člen', carky: 'čárky ve větě', literarni_smer: 'literární směr',
+  literarni_pojem: 'literární pojem', basnicky_prostredek: 'básnický prostředek',
+};
 const ENGLISH_SUBTYPE_LABELS = {
   // pozor: generateEnglish ukládá slovní zásobu pod klíčem "english:vocab:...", ne
   // "vocabulary" (viz generateEnglish výš) - klíč v mapě proto musí být "vocab".
@@ -9553,6 +10213,7 @@ const app = createApp({
       timetable: {}, goals: [], studyTimeByDay: {},
       readBooks: [], bookNotes: {}, englishPracticeLog: {},
       englishExtraExercisesCount: 0, englishExtraStreak: { count: 0, best: 0, lastDate: null },
+      dailyQuestion: null, dailyQuestionStreak: { count: 0, best: 0, lastDate: null },
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -9702,7 +10363,12 @@ const app = createApp({
               englishPracticeLog: (remote.stats.englishPracticeLog && typeof remote.stats.englishPracticeLog === 'object') ? remote.stats.englishPracticeLog : {},
               englishExtraExercisesCount: (typeof remote.stats.englishExtraExercisesCount === 'number') ? remote.stats.englishExtraExercisesCount : 0,
               englishExtraStreak: (remote.stats.englishExtraStreak && typeof remote.stats.englishExtraStreak === 'object') ? remote.stats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
+              dailyQuestion: (remote.stats.dailyQuestion && typeof remote.stats.dailyQuestion === 'object') ? remote.stats.dailyQuestion : null,
+              dailyQuestionStreak: (remote.stats.dailyQuestionStreak && typeof remote.stats.dailyQuestionStreak === 'object') ? remote.stats.dailyQuestionStreak : { count: 0, best: 0, lastDate: null },
             });
+            // Merge mohl přinést otázku dne z jiného zařízení/dne (nebo žádnou) -
+            // znovu ověřit/doplnit podle DNEŠNÍHO data a AKTUÁLNÍHO seznamu předmětů.
+            ensureDailyQuestion();
           }
           setSyncMetaUpdatedAt(remote.updatedAt);
           markSynced();
@@ -11147,6 +11813,75 @@ const app = createApp({
       bumpEnglishExtraStreak();
     }
 
+    /* ---------- ❓ Otázka dne ----------------------------------------------
+       Jedna jediná otázka napříč všemi (nearchivovanými) předměty na daný
+       kalendářní den - vygeneruje se přes stejné buildQuiz(), jaké appka
+       používá pro běžné procvičování, ale výsledek (prompt/nápověda/správná
+       odpověď) se ULOŽÍ do stats.dailyQuestion, takže při dalším otevření
+       appky ten samý den appka otázku znovu negeneruje, ale ukáže tu uloženou
+       (a taky přežije reload appky/obnovu stránky). Kontrola odpovědi tu
+       záměrně používá jen normalizeAnswer(...) === normalizeAnswer(uloženou
+       primární odpovědí) - u pár subtypů s víc uznávanými synonymy (např.
+       předložka, literární směr) tak appka neuzná úplně každé synonymum jako
+       u běžného kvízu (tam se to řeší přes uloženou "check" funkci, kterou
+       ale nejde spolehlivě serializovat/uložit mezi dny) - jde o vědomý
+       kompromis, hlavní odpověď (answerText) je vždycky uznaná. */
+    function ensureDailyQuestion() {
+      const today = dateKey(new Date());
+      if (stats.dailyQuestion && stats.dailyQuestion.date === today) return;
+      const candidates = subjects.filter((s) => !s.archived);
+      if (candidates.length === 0) { stats.dailyQuestion = null; return; }
+      const subject = choice(candidates);
+      const built = buildQuiz(subject, stats.mistakeCounts, 'normal', stats.srs, false, null);
+      if (!built) { stats.dailyQuestion = null; return; }
+      stats.dailyQuestion = {
+        date: today,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        subjectEmoji: subject.emoji,
+        prompt: built.prompt,
+        hintTitle: built.hintTitle || '',
+        hintBody: built.hintBody || [],
+        hintImage: built.hintImage || '',
+        answerText: built.answerText || '',
+        userInput: '',
+        answered: false,
+        correct: null,
+        wrongAttempt: false,
+        showHint: false,
+      };
+    }
+    function checkDailyQuestion() {
+      const dq = stats.dailyQuestion;
+      if (!dq || dq.answered) return;
+      const ok = normalizeAnswer(dq.userInput) === normalizeAnswer(dq.answerText);
+      if (ok) {
+        dq.answered = true;
+        dq.correct = true;
+        dq.wrongAttempt = false;
+        bumpDailyQuestionStreak();
+        fireConfetti(30);
+      } else {
+        dq.wrongAttempt = true;
+      }
+    }
+    function toggleDailyQuestionHint() {
+      if (stats.dailyQuestion) stats.dailyQuestion.showHint = !stats.dailyQuestion.showHint;
+    }
+    function bumpDailyQuestionStreak() {
+      if (!stats.dailyQuestionStreak || typeof stats.dailyQuestionStreak !== 'object') {
+        stats.dailyQuestionStreak = { count: 0, best: 0, lastDate: null };
+      }
+      const st = stats.dailyQuestionStreak;
+      const today = dateKey(new Date());
+      if (st.lastDate === today) return;
+      const yesterday = dateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      st.count = st.lastDate === yesterday ? (st.count || 0) + 1 : 1;
+      st.best = Math.max(st.best || 0, st.count);
+      st.lastDate = today;
+    }
+    const dailyQuestionStreakInfo = computed(() => stats.dailyQuestionStreak || { count: 0, best: 0, lastDate: null });
+
     /* ---- 🎧 Poslech / diktát (ENGLISH_PRACTICE_SENTENCES) ---- */
     const englishListeningDifficulty = ref('easy'); // 'easy' | 'medium' | 'hard' | 'all'
     const englishListeningRate = ref('normal'); // 'normal' | 'slow'
@@ -12219,7 +12954,13 @@ const app = createApp({
        vytvoří až při první potřebě (ne hned při startu appky) a pak zůstává
        připravený pro další fotky, ať se pokaždé nečeká na novou inicializaci. */
     const ocrFileEl = ref(null);
-    const ocrModal = reactive({ open: false, status: 'idle', progress: 0, text: '', error: '', targetState: null });
+    // mode: 'note' (výchozí - rozpoznaný text jde vložit do rozepsaného zápisu,
+    // viz targetState) nebo 'card' (rozpoznaný text appka rovnou nabídne
+    // rozdělit na otázku/odpověď a přidat mezi "Moje vlastní otázky" u
+    // aktuálního předmětu - viz openOcrPicker(null, 'card') u tlačítka
+    // "📷 Vytvořit kartičku z fotky"). cardFront/cardBack se po rozpoznání
+    // předvyplní heuristikou (splitOcrTextForCard), ale jdou ručně upravit.
+    const ocrModal = reactive({ open: false, status: 'idle', progress: 0, text: '', error: '', targetState: null, mode: 'note', cardFront: '', cardBack: '' });
     let ocrWorkerPromise = null;
     function getOcrWorker() {
       if (!ocrWorkerPromise) {
@@ -12242,9 +12983,29 @@ const app = createApp({
       }
       return ocrWorkerPromise;
     }
-    function openOcrPicker(targetState) {
+    function openOcrPicker(targetState, mode) {
       ocrModal.targetState = targetState;
+      ocrModal.mode = mode === 'card' ? 'card' : 'note';
       nextTick(() => { if (ocrFileEl.value) ocrFileEl.value.click(); });
+    }
+    /** Jednoduchá heuristika, jak rozpoznaný text z fotky rozdělit na "přední"
+     *  (otázka/pojem) a "zadní" stranu (odpověď/vysvětlení) kartičky - appka
+     *  zkusí nejdřív oddělovač (pomlčku/dvojtečku) na prvním řádku (typický
+     *  zápis "pojem - vysvětlení" nebo slovníček "slovo: překlad"), jinak
+     *  vezme první řádek jako přední stranu a zbytek jako zadní. Uživatel si
+     *  výsledek může před přidáním kdykoliv ručně opravit. */
+    function splitOcrTextForCard(text) {
+      const raw = (text || '').trim();
+      if (!raw) return { front: '', back: '' };
+      const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+      const firstLine = lines[0] || raw;
+      const rest = lines.slice(1).join('\n');
+      const dashMatch = firstLine.match(/^(.{1,80}?)\s*[-–—:]\s+(.+)$/);
+      if (dashMatch && dashMatch[2].trim()) {
+        return { front: dashMatch[1].trim(), back: (dashMatch[2].trim() + (rest ? '\n' + rest : '')).trim() };
+      }
+      if (lines.length > 1) return { front: firstLine, back: rest };
+      return { front: raw, back: '' };
     }
     async function handleOcrFile(event) {
       const file = (event.target.files || [])[0];
@@ -12255,11 +13016,16 @@ const app = createApp({
       ocrModal.progress = 0;
       ocrModal.text = '';
       ocrModal.error = '';
+      ocrModal.cardFront = '';
+      ocrModal.cardBack = '';
       try {
         const worker = await getOcrWorker();
         ocrModal.status = 'recognizing';
         const result = await worker.recognize(file);
         ocrModal.text = ((result && result.data && result.data.text) || '').trim();
+        const split = splitOcrTextForCard(ocrModal.text);
+        ocrModal.cardFront = split.front;
+        ocrModal.cardBack = split.back;
         ocrModal.status = 'done';
       } catch (e) {
         console.warn('Rozpoznávání textu z fotky se nepodařilo.', e);
@@ -12273,6 +13039,27 @@ const app = createApp({
       state.content = state.content ? `${state.content}\n\n${ocrModal.text.trim()}` : ocrModal.text.trim();
       closeOcrModal();
     }
+    /** Přidá rozpoznaný text rovnou jako vlastní otázku/kartičku u aktuálního
+     *  předmětu (viz "Moje vlastní otázky" / addCustomQuestion výš) - na
+     *  rozdíl od ruční vlastní otázky appka NEROZDĚLUJE zadní stranu podle
+     *  čárek na víc uznávaných odpovědí (OCR text bývá delší souvislý text,
+     *  kde by čárky rozbily smysl), bere ji jako JEDNU odpověď. V režimu
+     *  🃏 Kartičky se u vlastních otázek stejně jen sám/sama ohodnotíš, takže
+     *  to nevadí ani u delší odpovědi. */
+    function insertOcrTextAsCard() {
+      if (!activeSubject.value) return;
+      const question = (ocrModal.cardFront || '').trim();
+      const answer = (ocrModal.cardBack || '').trim();
+      if (!question || !answer) return;
+      if (!activeSubject.value.customQuestions) activeSubject.value.customQuestions = [];
+      activeSubject.value.customQuestions.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        question,
+        answers: [answer],
+      });
+      showCustomQuestions.value = true;
+      closeOcrModal();
+    }
     function closeOcrModal() {
       ocrModal.open = false;
       ocrModal.status = 'idle';
@@ -12280,6 +13067,9 @@ const app = createApp({
       ocrModal.text = '';
       ocrModal.error = '';
       ocrModal.targetState = null;
+      ocrModal.mode = 'note';
+      ocrModal.cardFront = '';
+      ocrModal.cardBack = '';
     }
 
     /* ---------- Import textového (.txt) souboru přímo do zápisu ----------
@@ -12788,6 +13578,8 @@ const app = createApp({
               englishPracticeLog: (importedStats.englishPracticeLog && typeof importedStats.englishPracticeLog === 'object') ? importedStats.englishPracticeLog : {},
               englishExtraExercisesCount: (typeof importedStats.englishExtraExercisesCount === 'number') ? importedStats.englishExtraExercisesCount : 0,
               englishExtraStreak: (importedStats.englishExtraStreak && typeof importedStats.englishExtraStreak === 'object') ? importedStats.englishExtraStreak : { count: 0, best: 0, lastDate: null },
+              dailyQuestion: (importedStats.dailyQuestion && typeof importedStats.dailyQuestion === 'object') ? importedStats.dailyQuestion : null,
+              dailyQuestionStreak: (importedStats.dailyQuestionStreak && typeof importedStats.dailyQuestionStreak === 'object') ? importedStats.dailyQuestionStreak : { count: 0, best: 0, lastDate: null },
             });
           }
           activeSubjectId.value = null;
@@ -12863,6 +13655,12 @@ const app = createApp({
        statistiky předmětu...) dál patří otevřenému activeSubject beze změny. */
     const mixedQuizMode = ref(false);
     const mixedQuizSubjectId = ref(null);
+    /** Když appka zrovna běží v "Maturitě nanečisto" (viz startMaturitaMock
+     *  níž), omezí se mixedQuizMode jen na TYHLE vybrané předměty místo
+     *  úplně všech - null/prázdné pole = běžný mixedQuizMode zapnutý ručně
+     *  tlačítkem "🔀 Mix předmětů" (mísí opravdu všechny nearchivované
+     *  předměty, beze změny oproti dřívějšímu chování). */
+    const mixedQuizRestrictIds = ref(null);
     const quizSourceSubject = computed(() => {
       if (mixedQuizMode.value && mixedQuizSubjectId.value) {
         return subjects.find((s) => s.id === mixedQuizSubjectId.value) || activeSubject.value;
@@ -12875,6 +13673,7 @@ const app = createApp({
     function toggleMixedQuiz() {
       mixedQuizMode.value = !mixedQuizMode.value;
       if (!mixedQuizMode.value) mixedQuizSubjectId.value = null;
+      mixedQuizRestrictIds.value = null; // ruční tlačítko vždy znamená "mix úplně všech předmětů"
       if (mixedQuizMode.value) examPracticeMode.value = false; // dvě různé "odkud brát otázky" pravidla najednou by nedávalo smysl
       generateNewQuiz();
     }
@@ -12943,7 +13742,10 @@ const app = createApp({
       stopSpeaking(); // nová otázka - případné přehrávání předchozího zadání už nedává smysl
       let sourceSubject = activeSubject.value;
       if (mixedQuizMode.value) {
-        const candidates = subjects.filter((s) => !s.archived);
+        const pool = subjects.filter((s) => !s.archived);
+        const candidates = (mixedQuizRestrictIds.value && mixedQuizRestrictIds.value.length > 0)
+          ? pool.filter((s) => mixedQuizRestrictIds.value.includes(s.id))
+          : pool;
         if (candidates.length > 0) {
           sourceSubject = candidates[Math.floor(Math.random() * candidates.length)];
           mixedQuizSubjectId.value = sourceSubject.id;
@@ -13019,6 +13821,10 @@ const app = createApp({
       quizSession.active = false;
       quizSession.showSummary = false;
       stopTimedSession();
+      if (mixedQuizRestrictIds.value && mixedQuizRestrictIds.value.length > 0) {
+        mixedQuizMode.value = false;
+        mixedQuizRestrictIds.value = null;
+      }
       generateNewQuiz();
     }
     function continuePractice() {
@@ -13086,6 +13892,42 @@ const app = createApp({
       if (!timedSession.totalSeconds) return 0;
       return Math.round((timedSession.correctCount / timedSession.totalSeconds) * 60 * 10) / 10;
     });
+
+    /* ---------- Maturita nanečisto (časovaný zkušební test napříč předměty) --
+       Znovupoužívá timedSession + mixedQuizMode/mixedQuizRestrictIds výše -
+       jediná nová věc je panel na výběr předmětů a délky testu. */
+    const showMaturitaMock = ref(false);
+    const maturitaMockSubjectIds = ref([]);
+    const maturitaMockMinutes = ref(30);
+    function toggleMaturitaMockSetup() {
+      showMaturitaMock.value = !showMaturitaMock.value;
+      if (showMaturitaMock.value) {
+        maturitaMockSubjectIds.value = subjects.filter((s) => !s.archived).map((s) => s.id);
+      }
+    }
+    function toggleMaturitaMockSubject(id) {
+      const idx = maturitaMockSubjectIds.value.indexOf(id);
+      if (idx === -1) maturitaMockSubjectIds.value.push(id);
+      else maturitaMockSubjectIds.value.splice(idx, 1);
+    }
+    function startMaturitaMock() {
+      const chosen = subjects.filter((s) => !s.archived && maturitaMockSubjectIds.value.includes(s.id));
+      if (chosen.length === 0) {
+        alert('Vyber aspoň jeden předmět, ze kterého tě má appka zkoušet.');
+        return;
+      }
+      openSubject(chosen[0].id);
+      examPracticeMode.value = false;
+      mixedQuizMode.value = true;
+      mixedQuizRestrictIds.value = chosen.map((s) => s.id);
+      showMaturitaMock.value = false;
+      startTimedSession(maturitaMockMinutes.value * 60);
+      nextTick(() => {
+        const el = document.getElementById('active-subject-header');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    const isMaturitaMockSession = computed(() => !!(mixedQuizRestrictIds.value && mixedQuizRestrictIds.value.length > 0));
 
     /* ---------- Časovač/Pomodoro na soustředěné učení -----------------------
        Na rozdíl od timedSession výše (odpočet v rámci jednoho konkrétního
@@ -13625,6 +14467,9 @@ const app = createApp({
       // cloudem porovnává, co je novější...).
       await initPersistentData();
       refreshStorageEstimate();
+      // Otázka dne se generuje/doplní hned po načtení předmětů a statistik -
+      // ať appka na dashboardu ukáže tu dnešní hned od prvního vykreslení.
+      ensureDailyQuestion();
       // Ochrana série - zkontroluje/doplní kredit a případně "zamrzne" včerejšek,
       // viz refreshStreakFreeze výš. Musí běžet až PO initPersistentData, ať má
       // po ruce doopravdy načtená stats.dailyHistory.
@@ -13679,7 +14524,7 @@ const app = createApp({
       noteContentEl, editContentEl,
       quiz, quizCategoryLabel, quizSession, totalSessionMistakes, activeSubjectStats,
       practiceMode, flashcardFlipped,
-      mixedQuizMode, quizSourceSubject, toggleMixedQuiz,
+      mixedQuizMode, mixedQuizRestrictIds, quizSourceSubject, toggleMixedQuiz,
       examPracticeMode, examPrepNotesCount, toggleExamPracticeMode,
       examPracticeScope, setExamPracticeScope, examPrepAllCount, examPrepEligibleCount,
       multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption,
@@ -13725,7 +14570,7 @@ const app = createApp({
       exportSubjectFlashcardsToPrint,
       exportExamDatesToIcs,
       incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
-      ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, closeOcrModal,
+      ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, insertOcrTextAsCard, splitOcrTextForCard, closeOcrModal,
       drawModal, drawCanvasEl, openDrawModal, closeDrawModal, drawStart, drawMove, drawEnd, clearDrawCanvas, insertDrawingIntoNote,
       importTextFileEl, openImportTextPicker, handleImportTextFile,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, formatDateShortCs,
@@ -13739,6 +14584,7 @@ const app = createApp({
       showEnglishExtra, ENGLISH_RESOURCE_CATEGORIES, englishPlanProgress, englishPlanAllDone, logEnglishPractice, unlogEnglishPractice,
       englishExtraTab, selectEnglishExtraTab, englishSpeakingKey, stopSpeakingEnglish, speakEnglish,
       vocabMasteredTotal, vocabWordsTotal, englishExtraStreakInfo,
+      ensureDailyQuestion, checkDailyQuestion, toggleDailyQuestionHint, dailyQuestionStreakInfo,
       englishListeningDifficulty, englishListeningRate, setEnglishListeningRate, englishListeningSentence, englishListeningInput, englishListeningResult, englishListeningRevealed,
       nextEnglishListeningSentence, setEnglishListeningDifficulty, playEnglishListeningSentence, playEnglishListeningWordByWord, checkEnglishDictation, revealEnglishListeningAnswer,
       VOCAB_DECK, englishVocabTopicKey, englishVocabCurrentWord, englishVocabFlipped, activeVocabTopic, vocabTopicsOverview,
@@ -13754,6 +14600,8 @@ const app = createApp({
       exportSubjectData, triggerImportSubjectFile, handleImportSubjectFile,
       speechSupported, speakingNoteId, isSpeakingQuizPrompt, stopSpeaking, speakNote, speakQuizPrompt,
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
+      showMaturitaMock, toggleMaturitaMockSetup, maturitaMockSubjectIds, toggleMaturitaMockSubject,
+      maturitaMockMinutes, startMaturitaMock, isMaturitaMockSession,
       showPomodoro, pomodoro, pomodoroTimeLabel, startPomodoro, pausePomodoro, resetPomodoro,
       setDifficulty, activeSubjectIsMath, activeSubjectIsEnglish, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
       englishTenseFocus, setEnglishTenseFocus, TENSE_FORM_LABELS,
