@@ -1068,12 +1068,12 @@
      milisekund, ale bez tohohle by appka nakrátko bleskla prázdný dashboard,
      než se data doopravdy zobrazí. Sdíleného (read-only) zobrazení přes odkaz
      se netýká - to má vlastní "shareView.loading" stav v šabloně níž. -->
-<div v-if="!dataLoaded && !shareView.active && !reportView.active" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
+<div v-if="!dataLoaded && !shareView.active && !reportView.active && !questionShareView.active" class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-slate-950">
   <div class="w-10 h-10 border-4 border-slate-700 border-t-cyan-400 rounded-full animate-spin"></div>
   <p class="text-slate-400 text-sm">Načítám tvoje data…</p>
   <p v-if="dataLoadError" class="text-rose-400 text-sm max-w-md text-center px-4">{{ dataLoadError }}</p>
 </div>
-<template v-if="!shareView.active && !reportView.active && !challengeView.active">
+<template v-if="!shareView.active && !reportView.active && !challengeView.active && !questionShareView.active">
 
   <!-- ============================================================= -->
   <!-- HORNÍ LIŠTA -->
@@ -1082,6 +1082,73 @@
     <div class="max-w-7xl mx-auto px-6 md:px-12 py-5 flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
       <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
+      <div class="relative">
+        <button
+          @click="toggleProfileSwitcher"
+          class="btn-ghost !text-sm !py-1.5 !px-2.5 rounded-full flex items-center gap-1.5"
+          title="Profily appky - přepnout, přidat nebo upravit"
+        >
+          <span class="text-base">{{ activeProfile.emoji }}</span>
+          <span class="hidden sm:inline">{{ activeProfile.name }}</span>
+          <span class="text-slate-500 text-xs">▾</span>
+        </button>
+        <div v-if="showProfileSwitcher" class="absolute left-0 top-full mt-2 z-20 w-72 p-3 rounded-xl border border-slate-800 bg-slate-900/95 shadow-xl">
+          <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">👥 Profily appky</p>
+          <p class="text-xs text-slate-500 mb-3">Každý profil má svoje vlastní předměty i statistiky, úplně oddělené od ostatních - hodí se, když appku sdílíte víc sourozenců/kamarádů na jednom zařízení.</p>
+          <div class="space-y-1.5 mb-3 max-h-56 overflow-y-auto">
+            <div
+              v-for="p in profiles" :key="p.id"
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+              :class="p.id === activeProfileId ? 'bg-cyan-500/10 border border-cyan-800/40' : 'hover:bg-slate-800/50'"
+            >
+              <span class="text-lg shrink-0">{{ p.emoji }}</span>
+              <input
+                :value="p.name"
+                @change="renameProfile(p, $event.target.value)"
+                class="input !py-1 !text-sm flex-1 min-w-0"
+                :title="p.id === activeProfileId ? 'Aktivní profil - appka ho teď používá' : 'Přejmenovat profil'"
+              />
+              <button
+                v-if="p.id !== activeProfileId"
+                @click="switchToProfile(p)"
+                class="btn-secondary !text-xs !py-1 !px-2 shrink-0"
+                title="Přepnout appku na tenhle profil"
+              >Přepnout</button>
+              <span v-else class="text-xs text-cyan-400 font-semibold shrink-0 px-1">aktivní</span>
+              <button
+                v-if="p.id !== activeProfileId && profiles.length > 1"
+                @click="deleteProfile(p)"
+                class="btn-ghost !text-sm !p-1 shrink-0 text-rose-400"
+                title="Smazat tenhle profil i se všemi jeho daty"
+              >🗑️</button>
+            </div>
+          </div>
+          <div class="border-t border-slate-800 pt-3">
+            <p class="text-xs text-slate-500 mb-2">➕ Nový profil</p>
+            <div class="flex flex-wrap gap-1 mb-2">
+              <button
+                v-for="e in PROFILE_EMOJI_CHOICES" :key="e"
+                @click="newProfileForm.emoji = e"
+                class="w-7 h-7 rounded-full flex items-center justify-center text-base border-2 transition"
+                :class="newProfileForm.emoji === e ? 'border-cyan-400 bg-cyan-500/10' : 'border-transparent hover:bg-slate-800/60'"
+              >{{ e }}</button>
+            </div>
+            <div class="flex gap-2">
+              <input
+                v-model="newProfileForm.name"
+                @keyup.enter="addProfile"
+                type="text"
+                placeholder="Jméno (např. Anička)…"
+                class="input !text-sm flex-1"
+              />
+              <button @click="addProfile" class="btn-primary !text-sm !px-3 shrink-0">Vytvořit</button>
+            </div>
+          </div>
+          <div class="flex justify-end mt-3">
+            <button @click="showProfileSwitcher = false" class="btn-ghost !text-xs">Zavřít</button>
+          </div>
+        </div>
+      </div>
       <button
         @click="showShortcutsHelp = true"
         class="ml-auto btn-ghost !text-lg !p-2 rounded-full"
@@ -1188,21 +1255,48 @@
 
         <div v-if="globalSearchQuery.trim()" class="absolute z-20 mt-2 w-full max-h-96 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/95 backdrop-blur shadow-2xl divide-y divide-slate-800">
           <button
-            v-for="r in globalSearchResults" :key="r.subjectId + '-' + r.noteId"
-            @click="openSearchResult(r.subjectId, r.noteId)"
+            v-for="r in globalSearchResults" :key="r.id"
+            @click="openSearchResult(r)"
             class="w-full text-left px-4 py-3 hover:bg-slate-800/70 transition-colors"
           >
             <div class="flex items-center gap-2 text-sm">
-              <span>{{ r.subjectEmoji }}</span>
-              <span class="text-cyan-300 font-semibold">{{ r.subjectName }}</span>
+              <span>{{ r.icon }}</span>
+              <span class="text-cyan-300 font-semibold">{{ r.groupLabel }}</span>
               <span class="text-slate-600">·</span>
-              <span class="font-medium text-slate-100 truncate">{{ r.noteTitle }}</span>
+              <span class="font-medium text-slate-100 truncate">{{ r.title }}</span>
             </div>
             <p class="text-slate-400 text-xs mt-1 line-clamp-2">{{ r.snippet }}</p>
           </button>
           <p v-if="globalSearchResults.length === 0" class="px-4 py-6 text-center text-slate-500 text-sm">
             Nic jsme nenašli pro „{{ globalSearchQuery }}".
           </p>
+        </div>
+      </div>
+
+      <!-- Velký odpočet do maturity - samostatné datum napříč celou appkou, nezávislé na termínech jednotlivých předmětů -->
+      <div
+        class="mb-6 entrance entrance-delay-5 rounded-2xl border overflow-hidden"
+        :class="stats.maturitaDate ? 'border-violet-700/50 bg-gradient-to-r from-violet-950/50 via-slate-900/60 to-slate-900/60' : 'border-dashed border-slate-700 bg-slate-900/30'"
+      >
+        <div class="px-6 py-5 flex items-center justify-between gap-4 flex-wrap">
+          <div class="min-w-0">
+            <p class="text-xs uppercase tracking-wider text-violet-400 font-semibold mb-1">🎓 Velký odpočet do maturity</p>
+            <template v-if="maturitaCountdown">
+              <p class="text-4xl sm:text-5xl font-black text-slate-100 leading-none">
+                <template v-if="maturitaCountdown.days > 0">{{ maturitaCountdown.days }} <span class="text-lg font-semibold text-slate-400">{{ pluralize(maturitaCountdown.days, 'den', 'dny', 'dní') }}</span></template>
+                <template v-else-if="maturitaCountdown.days === 0">Dnes! 🎉</template>
+                <template v-else>Hotovo 🎉</template>
+              </p>
+              <p class="text-sm text-slate-400 mt-1">{{ maturitaCountdown.days >= 0 ? `do ${maturitaCountdown.dateLabel}` : `Maturita byla ${maturitaCountdown.dateLabel}` }}</p>
+            </template>
+            <p v-else class="text-slate-500 text-sm mt-1">Nastav si datum a appka ukáže výrazný odpočet nezávisle na termínech jednotlivých předmětů.</p>
+          </div>
+          <button @click="toggleMaturitaCountdownSetup" class="btn-ghost !text-violet-300 shrink-0">⚙️ {{ stats.maturitaDate ? 'Upravit datum' : 'Nastavit datum' }}</button>
+        </div>
+        <div v-if="showMaturitaCountdownSetup" class="px-6 pb-5 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-4">
+          <input type="date" v-model="maturitaDateInput" class="input !py-1.5 !text-sm !w-auto" />
+          <button @click="applyMaturitaDate" :disabled="!maturitaDateInput" class="btn-primary !py-1.5 !px-4 text-sm">💾 Uložit</button>
+          <button v-if="stats.maturitaDate" @click="clearMaturitaDate" class="btn-ghost !text-rose-300 !text-sm">🗑️ Smazat odpočet</button>
         </div>
       </div>
 
@@ -1246,6 +1340,20 @@
         <span class="text-cyan-300 font-semibold shrink-0 hidden sm:inline">Začít →</span>
       </button>
 
+      <!-- Večerní mini-opakování - krátká 5minutová dávka položek po termínu opakování napříč VŠEMI předměty, appka kartu aktivně nabízí hlavně večer -->
+      <button
+        v-if="showEveningReviewCard"
+        @click="startEveningReview"
+        class="w-full mb-6 flex items-center gap-4 rounded-xl border border-indigo-800/50 bg-gradient-to-r from-indigo-950/40 to-slate-900/40 px-5 py-4 text-left hover:border-indigo-600/60 transition entrance entrance-delay-5"
+      >
+        <span class="text-3xl shrink-0">🌙</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs uppercase tracking-wider text-indigo-400 font-semibold mb-0.5">Večerní mini-opakování · 5 minut</p>
+          <p class="text-slate-100 font-semibold truncate">{{ totalDueReviewCount }} {{ pluralize(totalDueReviewCount, 'otázka', 'otázky', 'otázek') }} k zopakování napříč {{ eveningReviewSubjects.length }} {{ pluralize(eveningReviewSubjects.length, 'předmětem', 'předměty', 'předměty') }}</p>
+        </div>
+        <span class="text-indigo-300 font-semibold shrink-0 hidden sm:inline">Spustit →</span>
+      </button>
+
       <!-- Otázka dne - jedna otázka napříč předměty na daný den, viz ensureDailyQuestion -->
       <div v-if="stats.dailyQuestion" class="mb-6 rounded-xl border border-violet-800/50 bg-gradient-to-r from-violet-950/30 to-slate-900/40 px-5 py-4 entrance entrance-delay-5">
         <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
@@ -1257,6 +1365,7 @@
         <template v-if="!stats.dailyQuestion.answered">
           <div class="flex flex-col sm:flex-row gap-2" :class="{ 'anim-shake': stats.dailyQuestion.wrongAttempt }">
             <input
+              id="daily-question-input"
               v-model="stats.dailyQuestion.userInput"
               @keyup.enter="checkDailyQuestion"
               type="text"
@@ -1348,6 +1457,9 @@
           </button>
           <button @click="showBadges = !showBadges" class="btn-ghost !text-amber-300">
             🏅 {{ showBadges ? 'Skrýt odznaky' : `Odznaky (${unlockedBadgeCount}/${badgeStatus.length})` }}
+          </button>
+          <button @click="showYearInReview = !showYearInReview" class="btn-ghost !text-violet-300">
+            🎉 {{ showYearInReview ? 'Skrýt roční souhrn' : 'Rok ve Studijním Hubu' }}
           </button>
           <button @click="toggleStudyGroup" class="btn-ghost !text-fuchsia-300">
             🏆 {{ showStudyGroup ? 'Skrýt žebříček' : 'Žebříček se spolužáky' }}
@@ -1545,6 +1657,7 @@
           </div>
         </Transition>
 
+
         <Transition name="fade">
           <div v-if="showActivityHeatmap" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Mapa aktivity za posledních {{ Math.round(activityHeatmapDays.length / 7) }} týdnů</p>
@@ -1587,6 +1700,49 @@
                 <p class="text-xs font-semibold leading-tight">{{ b.label }}</p>
               </div>
             </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showYearInReview" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">🎉 Rok ve Studijním Hubu</p>
+            <p class="text-xs text-slate-500 mb-4">Celkové shrnutí napříč úplně všemi předměty od začátku, kdy appku používáš - hodí se stáhnout jako obrázek na konci pololetí/roku.</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.totalSolved }}</p>
+                <p class="text-xs text-slate-500">vyřešeno</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.successRate }} %</p>
+                <p class="text-xs text-slate-500">úspěšnost</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.bestStreak }}</p>
+                <p class="text-xs text-slate-500">{{ pluralize(yearInReviewStats.bestStreak, 'den v sérii', 'dny v sérii', 'dní v sérii') }}</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.daysActive }}</p>
+                <p class="text-xs text-slate-500">{{ pluralize(yearInReviewStats.daysActive, 'den učení', 'dny učení', 'dní učení') }}</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">Level {{ yearInReviewStats.currentLevel }}</p>
+                <p class="text-xs text-slate-500">{{ yearInReviewStats.totalXp }} XP</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.subjectsCount }}</p>
+                <p class="text-xs text-slate-500">{{ yearInReviewStats.notesCount }} zápisů</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.unlockedBadgeCount }}/{{ yearInReviewStats.badgeTotal }}</p>
+                <p class="text-xs text-slate-500">odznaků</p>
+              </div>
+              <div class="rounded-xl bg-slate-800/50 px-3 py-3 text-center">
+                <p class="text-2xl font-bold text-slate-100">{{ yearInReviewStats.perfectSessions }}</p>
+                <p class="text-xs text-slate-500">{{ pluralize(yearInReviewStats.perfectSessions, 'session bez chyby', 'sessions bez chyby', 'sessions bez chyby') }}</p>
+              </div>
+            </div>
+            <p v-if="yearInReviewStats.topSubject" class="text-sm text-violet-300 mb-4">💜 Nejvíc ses věnoval/a: {{ yearInReviewStats.topSubject.emoji }} {{ yearInReviewStats.topSubject.name }} ({{ yearInReviewStats.topSubject.solvedCount }}×)</p>
+            <button @click="downloadYearInReviewImage" class="btn-primary w-full">📥 Stáhnout jako obrázek</button>
           </div>
         </Transition>
 
@@ -1692,6 +1848,24 @@
               <span v-if="srsCalendarSummary.today > 0">{{ srsCalendarSummary.today }} má termín dnes.</span>
               <span v-if="srsCalendarSummary.next7Days > 0">{{ srsCalendarSummary.next7Days }} v příštích 7 dnech.</span>
             </p>
+
+            <!-- Odhad "jak dlouho ti to vydrží" - dopředný pohled na stejná SRS data -->
+            <div v-if="srsForgettingEstimate" class="mb-4 px-3 py-3 rounded-lg bg-violet-950/20 border border-violet-800/40">
+              <p class="text-sm mb-2">
+                <template v-if="srsForgettingEstimate.medianDays > 0">
+                  📉 Odhad: naučená látka ti běžně <b class="text-violet-300">vydrží ~{{ srsForgettingEstimate.medianDays }} {{ pluralize(srsForgettingEstimate.medianDays, 'den', 'dny', 'dní') }}</b>, než začne potřebovat zopakovat (z {{ srsForgettingEstimate.trackedCount }} {{ pluralize(srsForgettingEstimate.trackedCount, 'naučené položky', 'naučených položek', 'naučených položek') }}).
+                </template>
+                <template v-else>
+                  📉 <b class="text-rose-300">Právě teď</b> je většina naučené látky už po termínu opakování - nejvyšší čas na zopakování.
+                </template>
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span v-for="p in srsForgettingEstimate.projections" :key="p.days" class="text-xs px-2 py-1 rounded-full bg-slate-900/60 border border-slate-700 text-slate-400">
+                  za {{ p.days }} {{ pluralize(p.days, 'den', 'dny', 'dní') }}: <b :class="p.percent >= 70 ? 'text-rose-400' : (p.percent >= 40 ? 'text-amber-400' : 'text-emerald-400')">{{ p.percent }} %</b> po termínu
+                </span>
+              </div>
+            </div>
+
             <div class="flex flex-col gap-1.5 max-h-96 overflow-y-auto">
               <div v-for="item in srsCalendarItems.slice(0, 30)" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
                 <div class="min-w-0">
@@ -1742,6 +1916,23 @@
                   <div v-if="b.accuracy !== null" class="h-full rounded-full" :class="b.accuracy >= 80 ? 'bg-emerald-500' : (b.accuracy >= 50 ? 'bg-amber-500' : 'bg-rose-500')" :style="{ width: b.accuracy + '%' }"></div>
                 </div>
                 <span class="w-24 shrink-0 text-right text-xs text-slate-500">{{ b.accuracy !== null ? b.accuracy + ' % (' + b.count + 'x)' : '— (' + b.count + 'x)' }}</span>
+              </div>
+            </div>
+            <div v-if="hourlyActivityHasData" class="mt-5 pt-4 border-t border-slate-800/70">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Podrobněji po hodinách</p>
+              <p class="text-xs text-slate-500 mb-3">Stejná data, jen rozpočítaná po jednotlivých hodinách místo pěti částí dne — najeď na sloupec pro detail.</p>
+              <div class="chart-frame">
+                <div class="chart-bars">
+                  <div v-for="h in hourlyActivityChart" :key="h.hour" class="chart-bar-wrap">
+                    <div
+                      class="chart-bar"
+                      :class="hourlyBarClass(h)"
+                      :style="{ height: hourlyBarHeight(h) + '%' }"
+                      :title="hourlyBarTitle(h)"
+                    ></div>
+                    <span class="chart-bar-label">{{ h.hour % 3 === 0 ? h.label : '' }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2651,6 +2842,12 @@
               :class="{ 'quiz-mode-active': multipleChoiceMode }"
               title="Místo psaní odpovědi appka nabídne 4 možnosti, ze kterých vybíráš"
             >🔘 Výběr z možností</button>
+            <button
+              @click="toggleQuizSound"
+              class="quiz-mode-btn !px-2.5"
+              :class="{ 'quiz-mode-active': quizSoundEnabled }"
+              :title="quizSoundEnabled ? 'Zvuk a vibrace při odpovědi jsou zapnuté - klikni pro vypnutí' : 'Zvuk a vibrace při odpovědi jsou vypnuté - klikni pro zapnutí'"
+            >{{ quizSoundEnabled ? '🔊' : '🔇' }}</button>
           </div>
           <div class="flex flex-wrap gap-2 mb-4">
             <button
@@ -2684,7 +2881,7 @@
 
           <!-- Souhrn výsledků dokončeného časovaného testu -->
           <div v-else-if="timedSession.showSummary" class="bg-slate-950/50 border border-slate-800 rounded-xl p-5">
-            <h4 class="text-lg font-bold mb-1">{{ isMaturitaMockSession ? '🎓 Výsledky Maturity nanečisto' : '⏱️ Výsledky časového testu' }}</h4>
+            <h4 class="text-lg font-bold mb-1">{{ eveningReviewActive ? '🌙 Výsledky večerního opakování' : (isMaturitaMockSession ? '🎓 Výsledky Maturity nanečisto' : '⏱️ Výsledky časového testu') }}</h4>
             <p class="text-slate-300 mb-4">
               Vyřešeno: <b class="text-cyan-300">{{ timedSession.correctCount }}</b> {{ pluralize(timedSession.correctCount, 'příklad', 'příklady', 'příkladů') }}
               za {{ timedSession.totalSeconds }} s
@@ -2699,7 +2896,7 @@
           <!-- Aktuální příklad -->
           <div v-else class="bg-slate-950/50 border border-slate-800 rounded-xl p-5">
             <p v-if="quizSession.active" class="text-xs uppercase tracking-wider text-cyan-400 font-semibold mb-2">Otázka {{ quizSession.index + 1 }} / {{ quizSession.total }}</p>
-            <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">{{ isMaturitaMockSession ? '🎓 Maturita nanečisto' : '⏱️' }} Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
+            <p v-if="timedSession.active" class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-2">{{ eveningReviewActive ? '🌙 Večerní opakování' : (isMaturitaMockSession ? '🎓 Maturita nanečisto' : '⏱️') }} Zbývá {{ timedSession.secondsLeft }} s · ✅ vyřešeno {{ timedSession.correctCount }}</p>
             <p v-if="quiz.wasReview" class="review-badge">🔁 Opakování — tohle ti nedávno nešlo</p>
             <p v-if="mixedQuizMode && quizSourceSubject" class="text-xs uppercase tracking-wider text-fuchsia-400 font-semibold mb-2">🔀 {{ quizSourceSubject.emoji }} {{ quizSourceSubject.name }}</p>
             <p v-if="examPracticeMode && quiz.type !== 'exam-empty'" class="text-xs uppercase tracking-wider text-emerald-400 font-semibold mb-2">
@@ -2717,6 +2914,11 @@
             <template v-else>
             <div class="flex items-start gap-2">
               <p class="quiz-prompt flex-1">{{ quiz.prompt }}</p>
+              <button
+                @click="shareCurrentQuestion"
+                class="btn-ghost !text-lg !p-1 shrink-0"
+                title="Sdílet tuhle otázku odkazem"
+              >🔗</button>
               <button
                 v-if="speechSupported"
                 @click="isSpeakingQuizPrompt ? stopSpeaking() : speakQuizPrompt()"
@@ -2818,6 +3020,37 @@
                   <input v-model="newCustomQuestion.answer" @keyup.enter="addCustomQuestion" class="input" placeholder="Odpověď (více variant odděl čárkou)" />
                   <button @click="addCustomQuestion" :disabled="!newCustomQuestion.question.trim() || !newCustomQuestion.answer.trim()" class="btn-primary w-full">➕ Přidat vlastní otázku</button>
                   <button type="button" @click="openOcrPicker(null, 'card')" class="btn-secondary w-full text-sm" title="Vyfotí zápisník/učebnici a appka zkusí z fotky rovnou udělat vlastní otázku (rozdělí text na otázku a odpověď)">📷 Vytvořit kartičku z fotky (OCR)</button>
+                  <button type="button" @click="showAutoQuestionsPicker = !showAutoQuestionsPicker" class="btn-secondary w-full text-sm" title="Appka z vybraného zápisu sama najde pár vhodných vět a schová v nich slovo - vygenerované doplňovačky si pak jedním klikem uložíš mezi vlastní otázky">🪄 Auto-otázky z mých zápisků</button>
+                </div>
+
+                <div v-if="showAutoQuestionsPicker" class="mt-3 space-y-2">
+                  <p v-if="autoQuestionEligibleNotes.length === 0" class="text-xs text-slate-500">Zatím nemáš žádný dost dlouhý souvislý zápis (aspoň pár vět textu, ne checklist), ze kterého by appka mohla otázky vygenerovat.</p>
+                  <template v-else>
+                    <select v-model="autoQuestionsNoteId" class="input !text-sm">
+                      <option :value="null" disabled>Vyber zápis…</option>
+                      <option v-for="n in autoQuestionEligibleNotes" :key="n.id" :value="n.id">{{ n.title }}</option>
+                    </select>
+                    <button @click="generateAutoQuestionsForSelectedNote" :disabled="autoQuestionsNoteId === null" class="btn-primary w-full text-sm">🪄 Vygenerovat doplňovačky</button>
+                  </template>
+                </div>
+
+                <div v-if="autoQuestionsForNote" class="mt-3 bg-slate-950/40 border border-violet-800/40 rounded-lg p-3">
+                  <div class="flex items-center justify-between gap-2 mb-2">
+                    <p class="text-xs uppercase tracking-wider text-violet-400 font-semibold truncate">🪄 Návrhy ze zápisu „{{ autoQuestionsForNote.noteTitle }}“</p>
+                    <button @click="closeAutoQuestions" class="btn-ghost !text-xs !px-2 !py-1 shrink-0" title="Zavřít náhled">✕</button>
+                  </div>
+                  <p v-if="autoQuestionsForNote.items.length === 0" class="text-xs text-slate-500">Appka v tomhle zápisu bohužel nenašla vhodnou větu s dost dlouhým slovem ke schování - zkus to s jiným, delším zápisem.</p>
+                  <div v-else class="space-y-2">
+                    <div v-for="item in autoQuestionsForNote.items" :key="item.key" class="flex items-center gap-2 text-sm bg-slate-900/50 rounded-lg px-3 py-2">
+                      <div class="min-w-0 flex-1">
+                        <p class="text-slate-200">{{ item.blankedSentence }}</p>
+                        <p class="text-xs text-slate-500 truncate">Odpověď: {{ item.word }}</p>
+                      </div>
+                      <button v-if="!item.added" @click="addAutoQuestionToSubject(item)" class="btn-ghost !text-emerald-300 shrink-0 !text-lg !px-2" title="Trvale přidat mezi vlastní otázky">➕</button>
+                      <span v-else class="text-emerald-400 text-xs shrink-0">✅ přidáno</span>
+                    </div>
+                    <button v-if="autoQuestionsForNote.items.some((i) => !i.added)" @click="addAllAutoQuestions" class="btn-secondary w-full text-sm">➕ Přidat všechny zbývající</button>
+                  </div>
                 </div>
               </div>
             </Transition>
@@ -2921,6 +3154,9 @@
                 rows="4" class="input"
                 placeholder="Obsah zápisu… (podporuje **tučně**, *kurzívu*, řádky s „- “ jako odrážky, „## “ jako nadpis, tabulky a blok kódu - viz tlačítka výš)"
               ></textarea>
+              <div v-if="czechTypographyIssues(noteForm.content).length > 0" class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-amber-400/80" title="Appka jen tiše navrhuje, nic sama needituje - kontrola je zjednodušená a nemusí být vždy přesná">
+                <span v-for="issue in czechTypographyIssues(noteForm.content)" :key="issue.type">✏️ {{ issue.message }}{{ issue.count > 1 ? ` (${issue.count}×)` : '' }}</span>
+              </div>
               <div v-if="noteForm.images.length > 0" class="flex flex-wrap gap-3">
                 <div v-for="(img, i) in noteForm.images" :key="i" class="composing-thumb-card">
                   <div class="composing-thumb">
@@ -3028,6 +3264,9 @@
                       <button type="button" @click="openDrawModal(editForm)" class="fmt-btn" title="Nakreslí jednoduchý náčrtek/diagram myší nebo prstem a vloží ho k zápisu jako obrázek">✏️ Nakreslit</button>
                     </div>
                     <textarea ref="editContentEl" v-model="editForm.content" rows="4" class="input mb-2" placeholder="Obsah zápisu"></textarea>
+                    <div v-if="czechTypographyIssues(editForm.content).length > 0" class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-amber-400/80 mb-2" title="Appka jen tiše navrhuje, nic sama needituje - kontrola je zjednodušená a nemusí být vždy přesná">
+                      <span v-for="issue in czechTypographyIssues(editForm.content)" :key="issue.type">✏️ {{ issue.message }}{{ issue.count > 1 ? ` (${issue.count}×)` : '' }}</span>
+                    </div>
                   </template>
 
                   <template v-else>
@@ -3302,6 +3541,35 @@
 
         <div class="flex justify-end mt-4">
           <button @click="closeShareModal" class="btn-secondary text-sm">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: SDÍLENÍ JEDNÉ KONKRÉTNÍ OTÁZKY PŘES ODKAZ -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="questionShareModal.open" class="modal-overlay" @click.self="closeQuestionShareModal">
+      <div class="modal-card !max-w-md">
+        <h3 class="text-lg font-bold mb-1 flex items-center gap-2">🔗 Sdílet otázku</h3>
+        <p class="text-slate-400 text-sm mb-4">
+          Kdokoliv s tímto odkazem uvidí jen tuhle jednu otázku (bez hesla nebo účtu) s tlačítkem na odhalení odpovědi - hodí se, když chceš poslat kamarádovi jen konkrétní otázku, ne celý předmět.
+        </p>
+
+        <div v-if="questionShareModal.loading" class="text-slate-500 text-sm py-6 text-center">Vytvářím odkaz…</div>
+
+        <div v-else-if="questionShareModal.error" class="bg-rose-950/30 border border-rose-800/50 rounded-lg p-3 text-rose-300 text-sm mb-2">{{ questionShareModal.error }}</div>
+
+        <div v-else-if="questionShareModal.url" class="mb-2">
+          <div class="flex gap-2">
+            <input type="text" readonly :value="questionShareModal.url" class="input flex-1 text-xs" @click="$event.target.select()">
+            <button @click="copyQuestionShareLink" class="btn-primary text-sm shrink-0">{{ questionShareModal.copied ? '✅ Zkopírováno' : '📋 Kopírovat' }}</button>
+          </div>
+        </div>
+
+        <div class="flex justify-end mt-4">
+          <button @click="closeQuestionShareModal" class="btn-secondary text-sm">Zavřít</button>
         </div>
       </div>
     </div>
@@ -3613,6 +3881,45 @@
   </div>
 
 </template>
+<template v-else-if="questionShareView.active">
+
+  <!-- ============================================================= -->
+  <!-- READ-ONLY PROHLÍŽEČ SDÍLENÉ OTÁZKY (?q=<id> v adrese) -->
+  <!-- Zobrazí jen jednu konkrétní otázku s tlačítkem na odhalení -->
+  <!-- odpovědi - bez skórování, bez celé appky na pozadí (viz -->
+  <!-- shareCurrentQuestion / loadQuestionShareFromUrl / questionShareView -->
+  <!-- v hlavním JS bloku výš). -->
+  <!-- ============================================================= -->
+  <div class="max-w-xl mx-auto px-6 md:px-12 py-10">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
+      <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
+      <span class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 ml-2">🔗 sdílená otázka</span>
+    </div>
+
+    <div v-if="questionShareView.loading" class="text-center py-20 text-slate-400">Načítám otázku…</div>
+
+    <div v-else-if="questionShareView.error" class="bg-rose-950/30 border border-rose-800/50 rounded-xl p-6 text-center">
+      <p class="text-rose-300 font-semibold mb-1">Otázku se nepodařilo načíst</p>
+      <p class="text-slate-400 text-sm">{{ questionShareView.error }}</p>
+    </div>
+
+    <div v-else-if="questionShareView.data">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="text-3xl">{{ questionShareView.data.subjectEmoji }}</span>
+        <h1 class="text-xl font-bold">{{ questionShareView.data.subjectName }}</h1>
+      </div>
+      <div class="bg-slate-900/40 border border-slate-800 rounded-xl p-6 text-center">
+        <p class="text-lg font-semibold mb-4">{{ questionShareView.data.prompt }}</p>
+        <button v-if="!questionShareView.revealed" @click="questionShareViewReveal" class="btn-primary">👁️ Zobrazit odpověď</button>
+        <p v-else class="text-cyan-300 text-lg">{{ questionShareView.data.answerText }}</p>
+      </div>
+    </div>
+
+    <p class="text-center text-slate-600 text-xs mt-10">Vytvořeno ve <a href="?" class="text-cyan-400 hover:underline">Studijním Hubu</a> — appce na procvičování a zápisky do školy.</p>
+  </div>
+
+</template>
 <template v-else>
 
   <!-- ============================================================= -->
@@ -3688,9 +3995,57 @@ const { createApp, reactive, ref, computed, watch, onMounted, onBeforeUnmount, n
 /* =====================================================================
    POMOCNÉ FUNKCE
    ===================================================================== */
-const STORAGE_KEY = 'studijniHubData_v1';
-const STATS_KEY = 'studijniHubStats_v1';
-const TRASH_KEY = 'studijniHubTrash_v1';
+/* ---------- Víc uživatelských profilů v appce ----------
+   Appka od teď umí appku "rozdělit" na víc oddělených profilů (typicky
+   sourozenci na jednom počítači/tabletu) - každý profil má svoje vlastní
+   předměty, statistiky i koš, úplně nezávislé na ostatních. PROFILES_KEY
+   drží jen SEZNAM profilů (id/jméno/emoji) a to, který je právě aktivní -
+   samotná DATA profilu (STORAGE_KEY/STATS_KEY/TRASH_KEY/SYNC_PATH níž) se
+   podle aktivního profilu jen "přesměrují" na jiný (suffixovaný) klíč,
+   zbytek appky (initPersistentData, watch(subjects)/watch(stats), sync s
+   cloudem...) zůstává úplně beze změny - přepnutí appky na jiný profil
+   appka řeší jednorázovým znovunačtením stránky (location.reload), NE
+   přepisováním stovek reaktivních hodnot za běhu. VÝCHOZÍ profil ('default')
+   schválně používá úplně STEJNÉ klíče jako appka používala už dřív (žádný
+   suffix) - appka tak nikdy nepřijde o dřív uložená data jen kvůli tomuto
+   vylepšení, ať appku otevře kdokoliv, kdo appku měl nainstalovanou i
+   předtím. */
+const PROFILES_KEY = 'studijniHubProfiles_v1';
+function loadProfilesRegistry() {
+  try {
+    const raw = localStorage.getItem(PROFILES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.list) && parsed.list.length && typeof parsed.activeId === 'string') {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Seznam profilů se nepodařilo načíst, appka se vrací k jednomu výchozímu profilu.', e);
+  }
+  return { list: [{ id: 'default', name: 'Já', emoji: '🎓', createdAt: Date.now() }], activeId: 'default' };
+}
+function saveProfilesRegistry(reg) {
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(reg)); }
+  catch (e) { console.warn('Seznam profilů se nepodařilo uložit.', e); }
+}
+// Appka tohle musí zjistit HNED, synchronně, ještě před tím, než appka
+// vůbec rozhodne, který STORAGE_KEY/STATS_KEY/TRASH_KEY/SYNC_PATH použije -
+// proto appka registr profilů čte přímo tady nahoře, ne až v setup().
+const profilesRegistryAtBoot = loadProfilesRegistry();
+const ACTIVE_PROFILE_ID = profilesRegistryAtBoot.list.some((p) => p.id === profilesRegistryAtBoot.activeId)
+  ? profilesRegistryAtBoot.activeId
+  : 'default';
+/** Vrátí klíč do úložiště (localStorage/IndexedDB) přesměrovaný podle
+ *  aktivního profilu - výchozí profil ('default') appka schválně vrací
+ *  BEZE ZMĚNY (viz komentář výš), ostatní profily appka rozliší suffixem. */
+function profileScopedKey(baseKey, profileId) {
+  return (profileId && profileId !== 'default') ? `${baseKey}__${profileId}` : baseKey;
+}
+
+const STORAGE_KEY = profileScopedKey('studijniHubData_v1', ACTIVE_PROFILE_ID);
+const STATS_KEY = profileScopedKey('studijniHubStats_v1', ACTIVE_PROFILE_ID);
+const TRASH_KEY = profileScopedKey('studijniHubTrash_v1', ACTIVE_PROFILE_ID);
 const TRASH_RETENTION_DAYS = 14;
 
 // Synchronizace mezi zařízeními přes Firebase Realtime Database (zdarma, bez
@@ -3707,8 +4062,15 @@ const FIREBASE_DB_URL = 'https://studijni-hub-default-rtdb.europe-west1.firebase
 // potřeba ve Firebase konzoli nastavit pravidla tak, aby povolovala přístup
 // jen pod touhle konkrétní cestou - viz komentář u SYNC_SECURITY_RULES níž.
 const SYNC_SECRET = '75b708c4e04eb242d512b0eb7734a8f4';
-const SYNC_PATH = `/studijniHub_${SYNC_SECRET}.json`;
-const SYNC_META_KEY = 'studijniHubSyncMeta_v1';
+// Výchozí profil sdílí přesně tu samou cestu, kterou appka používala už
+// před zavedením víc profilů (viz komentář u PROFILES_KEY výš) - appka tak
+// nikdy nepřestane synchronizovat existující data jen kvůli tomuto
+// vylepšení. Každý DALŠÍ profil appka posílá na vlastní, odlišenou cestu
+// (podle ACTIVE_PROFILE_ID), ať appka profily navzájem nepřepisuje.
+const SYNC_PATH = (ACTIVE_PROFILE_ID && ACTIVE_PROFILE_ID !== 'default')
+  ? `/studijniHub_${SYNC_SECRET}_profil_${ACTIVE_PROFILE_ID}.json`
+  : `/studijniHub_${SYNC_SECRET}.json`;
+const SYNC_META_KEY = profileScopedKey('studijniHubSyncMeta_v1', ACTIVE_PROFILE_ID);
 const SYNC_PUSH_DEBOUNCE_MS = 1500;
 
 // Sdílení JEDNOHO předmětu přes odkaz (read-only, bez hesla/účtu) - úplně
@@ -3758,6 +4120,25 @@ function buildChallengeUrl(challengeId) {
   const url = new URL(window.location.href);
   url.hash = '';
   url.search = '?challenge=' + challengeId;
+  return url.toString();
+}
+
+// Sdílení JEDNÉ KONKRÉTNÍ otázky/kartičky přes odkaz - stejný princip jako
+// výš (samostatný, neuhodnutelný uzel v databázi, NEZÁVISLÝ na SYNC_PATH i
+// na ostatních veřejných uzlech). Na rozdíl od sdílení celého předmětu jde
+// jen o AKTUÁLNÍ otázku ve kvízu (quiz.prompt/quiz.answerText) - appka je
+// vyplňuje stejně bez ohledu na to, jestli otázka pochází z vlastní otázky,
+// z doplňovačky ze zápisků, z rozboru vět nebo z procedurálně generovaného
+// předmětu, takže funguje pro úplně libovolný typ otázky. Hodí se, když
+// chce uživatel poslat jen jednu konkrétní otázku (např. "zkus tohle"),
+// bez nutnosti sdílet celý předmět. Je potřeba mít ve Firebase konzoli
+// povolený i tenhle uzel ("publicQuestionShares"), jinak appka o tom
+// uživatele informuje přímo v UI.
+const QUESTION_SHARE_PATH_PREFIX = '/publicQuestionShares/';
+function buildQuestionShareUrl(shareId) {
+  const url = new URL(window.location.href);
+  url.hash = '';
+  url.search = '?q=' + shareId;
   return url.toString();
 }
 
@@ -4078,6 +4459,43 @@ function stripMarkdownForSpeech(raw) {
     .replace(/^-\s+/gm, '')
     .replace(/\n+/g, '. ')
     .trim();
+}
+
+/** Odstraní bloky kódu (``` ```) a matematické vzorce ($ $ / $$ $$) před
+ *  kontrolou typografie (viz czechTypographyIssues níž) - tam jsou uvozovky/
+ *  mezery/interpunkce často záměrně jinak, než by appka v běžném textu
+ *  čekala (kód, LaTeX zápis), appka by je tedy zbytečně/matoucně hlásila. */
+function stripCodeAndMathForTypography(text) {
+  // Nahrazuje včetně okolních bílých znaků JEDNOU mezerou (ne prázdným
+  // řetězcem) - jinak by odstranění bloku mezi dvěma existujícími mezerami
+  // ("... text $vzorec$ text ...") vytvořilo UMĚLOU dvojitou mezeru, kterou
+  // by appka pak nesmyslně sama hlásila jako typografickou chybu.
+  return String(text || '')
+    .replace(/\s*```[\s\S]*?```\s*/g, ' ')
+    .replace(/\s*\$\$[\s\S]*?\$\$\s*/g, ' ')
+    .replace(/\s*\$[^$\n]*\$\s*/g, ' ');
+}
+/* ---------- Kontrola psaní v zápiscích (česká typografie) ----------
+   Jednoduché NEDESTRUKTIVNÍ upozornění na pár častých typografických chyb v
+   češtině - appka nic sama needituje/needituje (na rozdíl od tlačítek
+   "Formátování" výš), jen při psaní zápisu tiše navrhne, co by šlo zlepšit.
+   Úmyslně jde jen o pár nejčastějších/nejjistějších případů (žádná
+   plnohodnotná kontrola pravopisu/gramatiky) - appka je jednosouborová bez
+   připojení na internet/AI, nemá tedy k dispozici žádný slovník ani rozbor
+   vět (na to slouží samostatná appčina funkce "Rozbor vět"). */
+function czechTypographyIssues(text) {
+  const clean = stripCodeAndMathForTypography(text);
+  if (!clean.trim()) return [];
+  const issues = [];
+  const straightQuotes = clean.match(/"/g);
+  if (straightQuotes) issues.push({ type: 'straight-quotes', message: 'Rovné uvozovky " - čeština používá „ “', count: straightQuotes.length });
+  const spaceBeforePunct = clean.match(/ +[.,!?;:]/g);
+  if (spaceBeforePunct) issues.push({ type: 'space-before-punct', message: 'Mezera před interpunkčním znaménkem (např. „slovo !“ místo „slovo!“)', count: spaceBeforePunct.length });
+  const doubleSpace = clean.match(/ {2,}/g);
+  if (doubleSpace) issues.push({ type: 'double-space', message: 'Dvojitá mezera', count: doubleSpace.length });
+  const missingSpaceAfterComma = clean.match(/,[^\s\d)"'„“]/g);
+  if (missingSpaceAfterComma) issues.push({ type: 'missing-space-after-comma', message: 'Chybí mezera po čárce', count: missingSpaceAfterComma.length });
+  return issues;
 }
 
 const CONFETTI_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#facc15', '#4ade80', '#fb923c'];
@@ -8190,6 +8608,19 @@ function idbSetRaw(key, value) {
   }));
 }
 
+/** Trvale smaže jeden klíč z IndexedDB - používá se jen při smazání celého
+ *  uživatelského profilu (viz deleteProfile), NIKDY při běžném provozu
+ *  appky. Tichá no-op i bez podpory IndexedDB (staré/soukromé režimy) -
+ *  appka tam data profilu stejně nikdy neuložila. */
+function idbDeleteRaw(key) {
+  return openIdb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error('Smazání z IndexedDB selhalo.'));
+  })).catch(() => {}); // appka smazání profilu nesmí shodit jen kvůli chybějící/nedostupné IndexedDB
+}
+
 /** Jednorázově přestěhuje existující data z localStorage[key] do IndexedDB
  *  (jen pokud v IndexedDB pro daný klíč ještě nic není a v localStorage
  *  něco je) - zápis do IndexedDB ověří zpětným přečtením a teprve POTOM
@@ -8299,6 +8730,10 @@ function parseStatsJson(raw) {
     // Žebříček se spolužáky - jen identita v (případné) skupině, samotný
     // žebříček appka vždy načítá čerstvě z /publicGroups/ (viz fetchGroupLeaderboard).
     studyGroup: { id: null, memberId: null, name: '' },
+    // Velký odpočet do maturity (YYYY-MM-DD, nebo null) - na rozdíl od
+    // subject.examDate u jednotlivých předmětů jde o JEDNO datum napříč celou
+    // appkou (maturita se neváže na konkrétní předmět), viz maturitaCountdown.
+    maturitaDate: null,
   };
   try {
     if (raw) {
@@ -10119,10 +10554,25 @@ const CZ_STOPWORDS = new Set([
 /** Najde ve větě vhodné (delší, ne zas tak obecné) slovo, které appka schová
  *  a nechá uživatele doplnit - viz "doplňovačka" u zkoušení ze zápisků. */
 function pickBlankCandidate(plain) {
+  const found = pickBlankCandidates(plain, 1);
+  return found.length > 0 ? found[0] : null;
+}
+
+/** Jako pickBlankCandidate výš, ale vrátí až maxCount RŮZNÝCH doplňovaček
+ *  najednou (z různých vět zápisu, bez opakování stejné věty) - appka to
+ *  používá v generátoru "Auto-otázky z mých zápisků" (viz
+ *  generateAutoQuestionsForSelectedNote), kde si uživatel z víc návrhů
+ *  najednou sám vybere, které se mu hodí, a natrvalo si je uloží mezi vlastní
+ *  otázky. Na rozdíl od pickBlankCandidate, který appka používá potichu za
+ *  běhu jen pro JEDNU nahodilou (pokaždé jinou) doplňovačku v běžném
+ *  procvičování. */
+function pickBlankCandidates(plain, maxCount) {
   const sentences = splitSentences(plain);
-  if (!sentences.length) return null;
+  if (!sentences.length) return [];
   const wordRe = new RegExp('[' + CZ_LETTER_CLASS + ']{5,}', 'g');
+  const results = [];
   for (const idx of shuffledIndices(sentences.length)) {
+    if (results.length >= maxCount) break;
     const sentence = sentences[idx];
     wordRe.lastIndex = 0;
     const matches = [];
@@ -10134,9 +10584,9 @@ function pickBlankCandidate(plain) {
     if (!matches.length) continue;
     const picked = choice(matches);
     const blankedSentence = sentence.slice(0, picked.index) + '_____' + sentence.slice(picked.index + picked.word.length);
-    return { sentence, word: picked.word, blankedSentence };
+    results.push({ sentence, word: picked.word, blankedSentence });
   }
-  return null;
+  return results;
 }
 
 /** Sestaví ze zápisů daného předmětu dvě sady možných otázek:
@@ -10718,6 +11168,92 @@ const app = createApp({
     }
     applyAccent(); // sladí barvu appky s uloženou volbou hned při startu
 
+    /* ---------- Víc uživatelských profilů v appce ----------
+       Registr profilů (seznam + aktivní id) appka NAČTE synchronně ještě
+       před setup() - viz profilesRegistryAtBoot/ACTIVE_PROFILE_ID úplně
+       nahoře v souboru, kde appka podle aktivního profilu zvolí i
+       STORAGE_KEY/STATS_KEY/TRASH_KEY/SYNC_PATH. Tady appka jen zpřístupní
+       tentýž seznam jako reaktivní stav pro šablonu (přidání/přejmenování/
+       smazání/přepnutí). PŘEPNUTÍ appka řeší uložením nového activeId a
+       úplným znovunačtením appky (location.reload) - appka tak nemusí za
+       běhu přepisovat stovky reaktivních hodnot (subjects/stats a všechny
+       na nich závislé computed), jen appku spustí znovu s jinak
+       "přesměrovanými" klíči, přesně jako běžný start appky. */
+    const profiles = reactive(profilesRegistryAtBoot.list.map((p) => ({ ...p })));
+    const activeProfileId = ref(ACTIVE_PROFILE_ID);
+    const activeProfile = computed(() => profiles.find((p) => p.id === activeProfileId.value) || profiles[0]);
+    const hasMultipleProfiles = computed(() => profiles.length > 1);
+    const showProfileSwitcher = ref(false);
+    const PROFILE_EMOJI_CHOICES = ['🙂', '🎓', '📚', '⭐', '🚀', '🦊', '🐱', '🐼', '🌙', '🔥', '🎯', '🌈'];
+    const newProfileForm = reactive({ name: '', emoji: '🙂' });
+    function persistProfilesRegistry() {
+      saveProfilesRegistry({
+        list: profiles.map((p) => ({ id: p.id, name: p.name, emoji: p.emoji, createdAt: p.createdAt })),
+        activeId: activeProfileId.value,
+      });
+    }
+    function toggleProfileSwitcher() {
+      showProfileSwitcher.value = !showProfileSwitcher.value;
+      if (showProfileSwitcher.value) { newProfileForm.name = ''; newProfileForm.emoji = '🙂'; }
+    }
+    function addProfile() {
+      const trimmed = (newProfileForm.name || '').trim();
+      if (!trimmed) { alert('Napiš nejdřív jméno nového profilu, ať appka pozná, komu patří.'); return; }
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      profiles.push({ id, name: trimmed.slice(0, 30), emoji: newProfileForm.emoji || '🙂', createdAt: Date.now() });
+      persistProfilesRegistry();
+      newProfileForm.name = '';
+    }
+    function renameProfile(profile, name) {
+      const trimmed = (name || '').trim();
+      if (!profile || !trimmed) return;
+      profile.name = trimmed.slice(0, 30);
+      persistProfilesRegistry();
+    }
+    async function deleteProfile(profile) {
+      if (!profile) return;
+      if (profile.id === activeProfileId.value) {
+        alert('Právě aktivní profil appka smazat nedovolí - nejdřív se přepni na jiný profil, a tenhle pak smaž.');
+        return;
+      }
+      if (profiles.length <= 1) return; // appka musí vždycky mít aspoň jeden profil
+      if (!confirm(`Opravdu smazat profil "${profile.name}" i se všemi jeho předměty a statistikami? Tohle appka nejde vrátit zpět.`)) return;
+      const idx = profiles.findIndex((p) => p.id === profile.id);
+      if (idx === -1) return;
+      profiles.splice(idx, 1);
+      persistProfilesRegistry();
+      // appka smaže i skutečně uložená data profilu (IndexedDB + případná
+      // starší záloha v localStorage) - stejný princip odvození klíčů jako
+      // appka sama používá za běžného provozu (viz STORAGE_KEY výš).
+      const keysToDelete = [
+        profileScopedKey('studijniHubData_v1', profile.id),
+        profileScopedKey('studijniHubStats_v1', profile.id),
+        profileScopedKey('studijniHubTrash_v1', profile.id),
+        profileScopedKey('studijniHubSyncMeta_v1', profile.id),
+      ];
+      keysToDelete.forEach((k) => {
+        idbDeleteRaw(k);
+        try { localStorage.removeItem(k); } catch (e) { /* nevadí, appka pokračuje */ }
+      });
+    }
+    async function switchToProfile(profile) {
+      if (!profile || profile.id === activeProfileId.value) { showProfileSwitcher.value = false; return; }
+      // appka nejdřív explicitně DOČKÁ uložení právě rozehraného profilu
+      // (ne jen spoléhá na debounced watch(subjects)/watch(stats) výš), ať
+      // appka při přepnutí neztratí žádnou čerstvou změnu.
+      try {
+        await Promise.all([
+          saveKeyToIdb(STORAGE_KEY, JSON.stringify(subjects)),
+          saveKeyToIdb(STATS_KEY, JSON.stringify(stats)),
+        ]);
+      } catch (e) {
+        console.warn('Poslední uložení dat před přepnutím profilu se nepodařilo, appka i tak pokračuje v přepnutí.', e);
+      }
+      activeProfileId.value = profile.id;
+      persistProfilesRegistry();
+      window.location.reload();
+    }
+
     /* ---------- Velký pozdrav na dashboardu podle denní doby ---------- */
     const greeting = computed(() => greetingForHour(new Date().getHours()));
 
@@ -10771,6 +11307,7 @@ const app = createApp({
       dailyQuestion: null, dailyQuestionStreak: { count: 0, best: 0, lastDate: null },
       celebratedLevel: 1,
       studyGroup: { id: null, memberId: null, name: '' },
+      maturitaDate: null,
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -10929,6 +11466,7 @@ const app = createApp({
               // skupině je (jinak by sloučení z jiného, staršího zařízení mohlo
               // appku "vyhodit" ze skupiny, do které se mezitím přidala odsud).
               studyGroup: (stats.studyGroup && stats.studyGroup.id) ? stats.studyGroup : normalizeStudyGroup(remote.stats.studyGroup),
+              maturitaDate: (typeof remote.stats.maturitaDate === 'string' && remote.stats.maturitaDate) ? remote.stats.maturitaDate : null,
             });
             // Merge mohl přinést otázku dne z jiného zařízení/dne (nebo žádnou) -
             // znovu ověřit/doplnit podle DNEŠNÍHO data a AKTUÁLNÍHO seznamu předmětů.
@@ -11221,6 +11759,82 @@ const app = createApp({
     }
     const challengeViewCurrentQuestion = computed(() => (challengeView.data && !challengeView.done) ? challengeView.data.questions[challengeView.index] : null);
 
+    /* ---------- Sdílení JEDNÉ KONKRÉTNÍ otázky/kartičky (tvorba) ----------
+       Na rozdíl od sdílení celého předmětu (shareModal výš) appka odesílá
+       jen aktuálně rozehranou otázku ve kvízu (quiz.prompt/quiz.answerText) -
+       díky tomu, že appka tahle dvě pole vyplňuje stejně bez ohledu na zdroj
+       otázky (vlastní otázka, doplňovačka ze zápisků, rozbor vět, nebo
+       procedurálně generovaný předmět), stačí appce jeden univerzální
+       mechanismus pro sdílení libovolné otázky. */
+    const questionShareModal = reactive({ open: false, loading: false, error: '', url: '', copied: false });
+    async function shareCurrentQuestion() {
+      if (!quiz.prompt) return;
+      questionShareModal.open = true;
+      questionShareModal.loading = true;
+      questionShareModal.error = '';
+      questionShareModal.url = '';
+      questionShareModal.copied = false;
+      try {
+        const shareId = generateShareId();
+        const payload = {
+          subjectName: (activeSubject.value && activeSubject.value.name) || 'Studijní Hub',
+          subjectEmoji: (activeSubject.value && activeSubject.value.emoji) || '🎓',
+          prompt: quiz.prompt,
+          answerText: quiz.answerText || '',
+          sharedAt: Date.now(),
+        };
+        const res = await fetch(FIREBASE_DB_URL + QUESTION_SHARE_PATH_PREFIX + shareId + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        questionShareModal.url = buildQuestionShareUrl(shareId);
+      } catch (e) {
+        console.warn('Odkaz na otázku se nepodařilo vytvořit.', e);
+        questionShareModal.error = 'Odkaz na sdílení otázky se teď nepodařilo vytvořit. Zkontroluj připojení k internetu, případně to, jestli má appka ve Firebase konzoli povolený i uzel "publicQuestionShares" (stejně jako u sdílení předmětu).';
+      } finally {
+        questionShareModal.loading = false;
+      }
+    }
+    function closeQuestionShareModal() { questionShareModal.open = false; }
+    async function copyQuestionShareLink() {
+      if (!questionShareModal.url) return;
+      try {
+        await navigator.clipboard.writeText(questionShareModal.url);
+        questionShareModal.copied = true;
+        setTimeout(() => { questionShareModal.copied = false; }, 2500);
+      } catch (e) {
+        // stejné jako u copyShareLink výš - odkaz je i vypsaný v textovém poli
+      }
+    }
+
+    /* ---------- Sdílení JEDNÉ KONKRÉTNÍ otázky/kartičky (prohlížení) ----------
+       Když někdo otevře odkaz s ?q=<id>, appka mu ukáže jen tuhle jednu
+       otázku (bez celého předmětu/appky na pozadí, žádný účet) s tlačítkem
+       na odhalení odpovědi - žádné skórování, na rozdíl od výzvy výš. */
+    const questionShareView = reactive({ active: false, loading: false, error: '', data: null, revealed: false });
+    async function loadQuestionShareFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const qId = params.get('q');
+      if (!qId || !/^[a-f0-9]+$/i.test(qId)) return;
+      questionShareView.active = true;
+      questionShareView.loading = true;
+      try {
+        const res = await fetch(FIREBASE_DB_URL + QUESTION_SHARE_PATH_PREFIX + qId + '.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        if (!data || typeof data.prompt !== 'string') throw new Error('Otázka nenalezena');
+        questionShareView.data = data;
+      } catch (e) {
+        console.warn('Otázku se nepodařilo načíst.', e);
+        questionShareView.error = 'Tenhle odkaz na otázku je buď neplatný, nebo už neexistuje.';
+      } finally {
+        questionShareView.loading = false;
+      }
+    }
+    function questionShareViewReveal() { questionShareView.revealed = true; }
+
     /* ---------- Žebříček se spolužáky ---------- (viz GROUP_PATH_PREFIX/
        normalizeStudyGroup výš) - appka pošle jen pár čísel za sebe do
        společného uzlu v databázi a stáhne si zpátky ostatní členy. Nic se
@@ -11441,6 +12055,122 @@ const app = createApp({
       }
     }
 
+    /* ---------- "Rok ve Studijním Hubu" - celkové shrnutí ke stažení ----------
+       Souhrnná "wrapped"-style kartička se VŠEMI dosavadními appčinými
+       statistikami napříč VŠEMI předměty (na rozdíl od exportu jednoho
+       předmětu nebo report-odkazu, který appka posílá jen konkrétnímu
+       člověku) - appka ji jen vykreslí do canvasu a nabídne ke stažení jako
+       PNG, stejným principem jako downloadGroupLeaderboardImage výš. Hodí se
+       ke konci pololetí/školního roku jako trvalá připomínka odvedené práce. */
+    const showYearInReview = ref(false);
+    const yearInReviewStats = computed(() => {
+      const activeSubjectsList = subjects.filter((s) => !s.archived);
+      const daysActive = Object.values(stats.dailyHistory || {}).filter((c) => c > 0).length;
+      const notesCount = subjects.reduce((sum, s) => sum + (Array.isArray(s.notes) ? s.notes.length : 0), 0);
+      const topSubject = activeSubjectsList.reduce(
+        (best, s) => ((s.solvedCount || 0) > (best ? best.solvedCount || 0 : -1) ? s : best),
+        null
+      );
+      const historyKeys = Object.keys(stats.dailyHistory || {}).sort();
+      return {
+        totalSolved: stats.totalSolved || 0,
+        successRate: successRate.value,
+        currentLevel: currentLevel.value,
+        totalXp: totalXp.value,
+        bestStreak: stats.bestStreak || 0,
+        daysActive,
+        subjectsCount: activeSubjectsList.length,
+        notesCount,
+        unlockedBadgeCount: unlockedBadgeCount.value,
+        badgeTotal: badgeStatus.value.length,
+        perfectSessions: stats.perfectSessions || 0,
+        topSubject: topSubject && (topSubject.solvedCount || 0) > 0
+          ? { name: topSubject.name, emoji: topSubject.emoji, solvedCount: topSubject.solvedCount }
+          : null,
+        firstActivityKey: historyKeys.length > 0 ? historyKeys[0] : null,
+      };
+    });
+    function downloadYearInReviewImage() {
+      const s = yearInReviewStats.value;
+      try {
+        const width = 640;
+        const height = 900;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext && canvas.getContext('2d');
+        if (!ctx) { alert('Tvůj prohlížeč bohužel neumí vykreslit obrázek souhrnu (canvas).'); return; }
+
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, '#1e1b4b');
+        grad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#a5b4fc';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🎓 STUDIJNÍ HUB', width / 2, 56);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 40px sans-serif';
+        ctx.fillText('Rok ve Studijním Hubu', width / 2, 104);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(new Date().toLocaleDateString('cs-CZ'), width / 2, 130);
+
+        const rows = [
+          ['✅', String(s.totalSolved), 'vyřešených příkladů'],
+          ['🎯', s.successRate + ' %', 'celková úspěšnost'],
+          ['⭐', 'Level ' + s.currentLevel, s.totalXp + ' XP celkem'],
+          ['🔥', String(s.bestStreak), s.bestStreak === 1 ? 'den v nejlepší sérii' : 'dní v nejlepší sérii'],
+          ['📅', String(s.daysActive), s.daysActive === 1 ? 'den aktivního učení' : 'dní aktivního učení'],
+          ['📚', String(s.subjectsCount), 'předmětů', String(s.notesCount) + ' zápisů celkem'],
+          ['🏅', s.unlockedBadgeCount + ' / ' + s.badgeTotal, 'získaných odznaků'],
+          ['🌟', String(s.perfectSessions), s.perfectSessions === 1 ? 'session bez chyby' : 'sessions bez chyby'],
+        ];
+        let y = 180;
+        const rowH = 72;
+        rows.forEach(([emoji, big, small, extra]) => {
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(32, y - 30, width - 64, rowH - 14, 14) : ctx.rect(32, y - 30, width - 64, rowH - 14);
+          ctx.fill();
+          ctx.textAlign = 'left';
+          ctx.font = '28px sans-serif';
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(emoji, 52, y + 6);
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(big, 96, y);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillText(small + (extra ? ' · ' + extra : ''), 96, y + 20);
+          y += rowH;
+        });
+
+        if (s.topSubject) {
+          ctx.textAlign = 'center';
+          ctx.font = '15px sans-serif';
+          ctx.fillStyle = '#c4b5fd';
+          ctx.fillText(`💜 Nejvíc ses věnoval/a: ${s.topSubject.emoji} ${s.topSubject.name} (${s.topSubject.solvedCount}×)`, width / 2, y + 16);
+          y += 40;
+        }
+        ctx.textAlign = 'center';
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#475569';
+        ctx.fillText('Vygenerováno ve Studijním Hubu', width / 2, height - 24);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'rok-ve-studijnim-hubu.png';
+        a.click();
+      } catch (e) {
+        console.warn('Obrázek ročního souhrnu se nepodařilo vytvořit.', e);
+        alert('Obrázek ročního souhrnu se teď nepodařilo vytvořit.');
+      }
+    }
+
     /* Prohlížení reportu (?report=<id> v adrese appky) - viz šablona "v-else"
        pod <div id="app"> (třetí, poslední větev vedle appky/sdíleného
        předmětu). Detekce a načtení běží v onMounted níž, stejně jako u
@@ -11546,6 +12276,43 @@ const app = createApp({
       } finally {
         shareView.loading = false;
       }
+    }
+
+    /* ---------- Zástupci appky (PWA manifest shortcuts) ----------
+       Dlouhé podržení ikony NAINSTALOVANÉ appky na ploše/v docku/na mobilu
+       nabídne rychlé zástupce (viz "shortcuts" v manifest.json - appka se
+       podporu appka pozná stejně jako u ostatních URL parametrů výš: appka
+       se otevře s ?shortcut=... v adrese). Appka to zkontroluje hned po
+       startu (POTÉ, co jsou načtené předměty/statistiky - "Mix předmětů" bez
+       nich nedává smysl) a rovnou skočí na danou akci, ať uživatel nemusí
+       nic hledat ručně. */
+    function runAppShortcut() {
+      const params = new URLSearchParams(window.location.search);
+      const shortcut = params.get('shortcut');
+      if (!shortcut) return;
+      // Vyčistí adresní řádek, ať appka po refreshi/dalším otevření znovu
+      // automaticky neskáče na zástupce, ale zůstane tam, kde uživatel skončil.
+      try { window.history.replaceState({}, '', window.location.pathname); } catch (e) { /* nevadí */ }
+      if (shortcut === 'daily-question') {
+        nextTick(() => {
+          const el = document.getElementById('daily-question-input');
+          if (el && el.focus) el.focus();
+        });
+      } else if (shortcut === 'mixed-quiz') {
+        startMixedQuizShortcut();
+      }
+    }
+    /** Rovnou spustí míchaný kvíz napříč předměty - narozdíl od ručního
+     *  tlačítka "Mix předmětů" (toggleMixedQuiz), které je dostupné až uvnitř
+     *  detailu konkrétního předmětu, tahle appku nejdřív "vloží" do
+     *  libovolného nearchivovaného předmětu (doporučeného, nebo prvního
+     *  dostupného) a mix aktivuje hned za tím - přesně to, co potřebuje
+     *  zástupce appky, kde uživatel ještě žádný předmět neotevřel. */
+    function startMixedQuizShortcut() {
+      const candidate = recommendedSubject.value || subjects.find((s) => !s.archived);
+      if (!candidate) return;
+      openSubject(candidate.id);
+      if (!mixedQuizMode.value) toggleMixedQuiz();
     }
 
     /* ---------- Koš (dočasně smazané předměty a zápisy) ----------
@@ -11889,6 +12656,49 @@ const app = createApp({
       return `týden od ${w.label} — úspěšnost ${w.successRate} % (${w.solved} z ${w.attempts} ${w.attempts === 1 ? 'pokusu' : 'pokusů'})`;
     }
 
+    /* ---------- Nejproduktivnější čas dne ----------
+       Appka NEUKLÁDÁ žádná nová statistická data navíc - vychází přímo z už
+       existujícího podrobného deníku procvičování (stats.practiceLog, viz
+       logPracticeEvent), který u každé odpovědi eviduje i přesný čas (ts).
+       Podle hodiny z tohoto času appka spočítá úspěšnost/aktivitu za
+       jednotlivé hodiny dne (0-23, v místním čase zařízení) - stejný princip
+       jako u týdenního grafu úspěšnosti výš (chart-bar-rate-* třídy). Protože
+       deník appka drží jen posledních PRACTICE_LOG_LIMIT položek, jde spíš o
+       AKTUÁLNÍ (nedávný) vzorec než o "od nepaměti" - což dává smysl, appku
+       zajímá, kdy se uživateli dobře učí TEĎ, ne před půl rokem.
+       Tenhle podrobnější (hodinový) graf appka zobrazuje jako doplněk uvnitř
+       už existujícího panelu "Kdy se mi nejlíp daří" (viz practiceByTimeOfDay/
+       timeOfDayInsight níž) - ne jako samostatné tlačítko/panel, aby appka
+       nenabízela dvě skoro stejné věci vedle sebe. */
+    const hourlyActivityChart = computed(() => {
+      const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: String(h).padStart(2, '0'), attempts: 0, solved: 0, successRate: null }));
+      for (const entry of stats.practiceLog || []) {
+        const d = new Date(entry.ts);
+        if (isNaN(d.getTime())) continue;
+        const bucket = buckets[d.getHours()];
+        bucket.attempts++;
+        if (entry.correct) bucket.solved++;
+      }
+      for (const b of buckets) {
+        if (b.attempts > 0) b.successRate = Math.round((b.solved / b.attempts) * 100);
+      }
+      return buckets;
+    });
+    const hourlyActivityHasData = computed(() => hourlyActivityChart.value.some((h) => h.attempts > 0));
+    function hourlyBarClass(h) {
+      if (h.successRate === null) return 'chart-bar-rate-none';
+      if (h.successRate >= 80) return 'chart-bar-rate-good';
+      if (h.successRate >= 50) return 'chart-bar-rate-mid';
+      return 'chart-bar-rate-low';
+    }
+    function hourlyBarHeight(h) {
+      return h.successRate === null ? 3 : Math.max(3, h.successRate);
+    }
+    function hourlyBarTitle(h) {
+      if (h.attempts === 0) return `${h.label}:00–${h.label}:59 — bez procvičování`;
+      return `${h.label}:00–${h.label}:59 — úspěšnost ${h.successRate} % (${h.solved} z ${h.attempts} ${h.attempts === 1 ? 'pokusu' : 'pokusů'})`;
+    }
+
     /* ---------- Přehled slabých míst napříč VŠEMI předměty ----------
        Appka už dřív sledovala chybovost (mistakeCounts) a podle ní zvýhodňovala
        otázky při náhodném výběru (viz mistakeWeight), ale nikde to neukazovala
@@ -11972,6 +12782,41 @@ const app = createApp({
       if (item.daysUntil === 0) return 'splatné dnes';
       return `za ${item.daysUntil} ${pluralize(item.daysUntil, 'den', 'dny', 'dní')}`;
     }
+
+    /* ---------- Odhad "jak dlouho ti to vydrží" (SRS forgetting estimate) ----------
+       Doplněk ke Kalendáři opakování výš (srsCalendarItems/srsCalendarSummary),
+       který ukazuje STEJNÁ SRS data z jiného úhlu - ne jako výpis konkrétních
+       položek, ale jako dopředný odhad: kdyby se uživatel teď přestal/a učit, za
+       jak dlouho by mu začaly naučené věci "vypadávat" z appčina rozvržení
+       opakování. Appka počítá jen z položek, které aspoň JEDNOU úspěšně
+       zodpověděla (reps > 0) - nikdy nezodpovězené nebo dosud jen chybně
+       zodpovězené položky do odhadu appka nepočítá, o těch ještě nic neví. */
+    const SRS_FORGETTING_HORIZONS = [3, 7, 14, 30];
+    const srsForgettingEstimate = computed(() => {
+      const srs = stats.srs || {};
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const learned = Object.entries(srs)
+        .filter(([key, rec]) => rec && typeof rec.dueAt === 'number' && typeof rec.reps === 'number' && rec.reps > 0 && isSrsEligibleKey(key))
+        .map(([, rec]) => rec);
+      if (learned.length === 0) return null;
+      const daysUntilDue = learned.map((rec) => (rec.dueAt - now) / dayMs).sort((a, b) => a - b);
+      // Medián "dní do splatnosti" mezi ještě NEsplatnými položkami - appka ho
+      // bere jako hrubý odhad, za jak dlouho typicky přijde další opakování.
+      // Když appka nemá žádnou ještě nesplatnou položku (všechno je už po
+      // termínu), appka vrátí 0 - "vydrží" už 0 dní, je čas zopakovat hned.
+      const notYetDue = daysUntilDue.filter((d) => d > 0);
+      let medianDays = 0;
+      if (notYetDue.length > 0) {
+        const mid = Math.floor(notYetDue.length / 2);
+        medianDays = notYetDue.length % 2 === 0 ? (notYetDue[mid - 1] + notYetDue[mid]) / 2 : notYetDue[mid];
+      }
+      const projections = SRS_FORGETTING_HORIZONS.map((days) => {
+        const dueByThen = daysUntilDue.filter((d) => d <= days).length;
+        return { days, count: dueByThen, percent: Math.round((dueByThen / learned.length) * 100) };
+      });
+      return { trackedCount: learned.length, medianDays: Math.max(0, Math.round(medianDays)), projections };
+    });
 
     /* ---------- Kalendářní mapa aktivity (heatmap, dlouhodobý přehled) ---------- */
     const showActivityHeatmap = ref(false);
@@ -12103,7 +12948,19 @@ const app = createApp({
     }
     function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; examPracticeScope.value = 'single'; examQuizSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); }
 
-    /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ---------- */
+    /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ----------
+       Kromě vlastních zápisků appka od tohohle rozšíření hledá i v appce
+       předpřipraveném REFERENČNÍM obsahu, který dřív appka do vyhledávání
+       vůbec nezahrnovala: Gramatický přehled (Čeština i Angličtina navíc),
+       Matematika navíc (vzorečník) a Rozbor knih. Každá položka výsledku má
+       společné "kind"/"id"/"icon"/"groupLabel"/"title"/"snippet" (viz
+       openSearchResult níž, který podle "kind" rozhoduje, KAM appku
+       přesměruje), zápisky navíc "subjectId"/"noteId"/"tags" pro zpětnou
+       kompatibilitu s openSearchResult/searchByTag. Zápisky appka do
+       výsledků přidává PRVNÍ (vlastní obsah uživatele je nejrelevantnější),
+       teprve pak referenční obsah - výsledný společný strop 30 položek tak
+       zápiskům dává přednost, ať appka referenčním obsahem nezahltí výpis
+       na úkor uživatelových vlastních poznámek. */
     const globalSearchQuery = ref('');
     const globalSearchResults = computed(() => {
       const q = normalizeAnswer(globalSearchQuery.value);
@@ -12130,10 +12987,34 @@ const app = createApp({
             snippet = flat.slice(0, 100) + (flat.length > 100 ? '…' : '');
           }
           results.push({
-            subjectId: s.id, subjectName: s.name, subjectEmoji: s.emoji,
-            noteId: n.id, noteTitle: n.title, snippet, tags: n.tags || [],
+            kind: 'note', id: `note-${s.id}-${n.id}`, icon: s.emoji, groupLabel: s.name, title: n.title, snippet,
+            subjectId: s.id, subjectName: s.name, subjectEmoji: s.emoji, noteId: n.id, noteTitle: n.title, tags: n.tags || [],
           });
         }
+      }
+      for (const t of CZECH_GRAMMAR_TOPICS) {
+        const haystack = normalizeAnswer([t.label, t.intro, ...t.rules.map((r) => r.title + ' ' + r.text)].join(' '));
+        if (!fuzzyIncludes(haystack, q)) continue;
+        results.push({ kind: 'grammar-cs', id: 'grammar-cs-' + t.key, icon: '📖', groupLabel: 'Čeština navíc · Gramatika', title: t.label, snippet: t.intro, topicKey: t.key });
+      }
+      for (const t of ENGLISH_GRAMMAR_TOPICS) {
+        const haystack = normalizeAnswer([t.label, t.intro, ...t.rules.map((r) => r.title + ' ' + r.text)].join(' '));
+        if (!fuzzyIncludes(haystack, q)) continue;
+        results.push({ kind: 'grammar-en', id: 'grammar-en-' + t.key, icon: '🌍', groupLabel: 'Angličtina navíc · Gramatika', title: t.label, snippet: t.intro, topicKey: t.key });
+      }
+      for (const t of MATH_FORMULA_TOPICS) {
+        const haystack = normalizeAnswer([t.label, t.intro, ...t.formulas.map((f) => f.name), ...t.steps].join(' '));
+        if (!fuzzyIncludes(haystack, q)) continue;
+        results.push({ kind: 'math', id: 'math-' + t.key, icon: '🔢', groupLabel: 'Matematika navíc', title: t.label, snippet: t.intro, topicKey: t.key });
+      }
+      for (const b of BOOK_ANALYSES) {
+        const haystack = normalizeAnswer([b.author, b.title, b.genre, b.theme, b.plot, b.characters].join(' '));
+        if (!fuzzyIncludes(haystack, q)) continue;
+        results.push({
+          kind: 'book', id: 'book-' + bookKey(b), icon: '📚', groupLabel: 'Rozbor knih',
+          title: `${b.title} (${b.author})`, snippet: [b.genre, b.theme].filter(Boolean).join(' · '),
+          bookAuthor: b.author, bookTitle: b.title,
+        });
       }
       return results.slice(0, 30);
     });
@@ -12145,17 +13026,42 @@ const app = createApp({
       nextTick(() => { if (globalSearchEl.value) globalSearchEl.value.focus(); });
     }
 
-    /** Otevře předmět daného zápisu, zápis rozbalí a jemně k němu odscrolluje. */
-    function openSearchResult(subjectId, noteId) {
+    /** Otevře výsledek vyhledávání (viz globalSearchResults výš) - podle
+     *  "kind" buď otevře předmět a rozbalí/odscrolluje ke konkrétnímu zápisu
+     *  (stejně jako appka dělala odjakživa), nebo přepne na dashboard a
+     *  rovnou otevře příslušné téma v Gramatickém přehledu/Matematice
+     *  navíc/Rozboru knih - ty panely žijí jen na dashboardu, proto appka
+     *  nejdřív zavře případně otevřený předmět. */
+    function openSearchResult(r) {
       globalSearchQuery.value = '';
-      openSubject(subjectId);
-      nextTick(() => {
-        expandedNoteId.value = noteId;
+      if (r.kind === 'note') {
+        openSubject(r.subjectId);
         nextTick(() => {
-          const el = document.getElementById('note-' + noteId);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          expandedNoteId.value = r.noteId;
+          nextTick(() => {
+            const el = document.getElementById('note-' + r.noteId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
         });
-      });
+      } else if (r.kind === 'grammar-cs') {
+        closeSubject();
+        showCzechExtra.value = true;
+        selectCzechExtraTopic(r.topicKey);
+      } else if (r.kind === 'grammar-en') {
+        closeSubject();
+        showEnglishExtra.value = true;
+        selectEnglishExtraTab('grammar');
+        selectEnglishGrammarTopic(r.topicKey);
+      } else if (r.kind === 'math') {
+        closeSubject();
+        showMathExtra.value = true;
+        selectMathExtraTopic(r.topicKey);
+      } else if (r.kind === 'book') {
+        closeSubject();
+        showBookAnalysis.value = true;
+        selectBookAnalysisAuthor(r.bookAuthor);
+        bookAnalysisTitle.value = r.bookTitle;
+      }
     }
 
     /* ---------- Karusel ---------- */
@@ -13168,6 +14074,42 @@ const app = createApp({
       }
       return best;
     }
+
+    /* ---------- Velký odpočet do maturity ----------
+       Na rozdíl od examInfo/setExamDate výš (termín VÁZANÝ na konkrétní
+       předmět) jde o JEDNO datum napříč celou appkou - maturita není
+       zkouška jednoho předmětu, ale celá zkušební zkouška z víc předmětů
+       najednou. Appka ho proto ukazuje jako samostatný výrazný ("velký")
+       odpočet na dashboardu, nezávisle na tom, kolik/jaké předměty má
+       uživatel appce zrovna přidané. Ukládá se do stats.maturitaDate (viz
+       parseStatsJson/pullFromCloudAndMerge/handleImportFile), takže se
+       synchronizuje mezi zařízeními stejně jako zbytek statistik. */
+    const showMaturitaCountdownSetup = ref(false);
+    const maturitaDateInput = ref('');
+    function toggleMaturitaCountdownSetup() {
+      showMaturitaCountdownSetup.value = !showMaturitaCountdownSetup.value;
+      if (showMaturitaCountdownSetup.value) maturitaDateInput.value = stats.maturitaDate || '';
+    }
+    function applyMaturitaDate() {
+      if (!maturitaDateInput.value) return;
+      stats.maturitaDate = maturitaDateInput.value;
+      showMaturitaCountdownSetup.value = false;
+    }
+    function clearMaturitaDate() {
+      stats.maturitaDate = null;
+      maturitaDateInput.value = '';
+      showMaturitaCountdownSetup.value = false;
+    }
+    /** Appka znovupoužívá stejné pomocné funkce jako u termínů jednotlivých
+     *  předmětů (daysUntil/formatDateShortCs) - jde jen o jiné, appce
+     *  nezávislé datum. */
+    const maturitaCountdown = computed(() => {
+      if (!stats.maturitaDate) return null;
+      const days = daysUntil(stats.maturitaDate);
+      if (days === null) return null;
+      return { days, dateLabel: formatDateShortCs(stats.maturitaDate) };
+    });
+
     /* ---------- Kalkulačka studijního plánu ----------
        Čistě odvozená pomůcka, žádná vlastní data navíc - z počtu položek
        (zápisy + vlastní otázky + rozbory vět) u předmětu a dní zbývajících
@@ -14532,6 +15474,7 @@ const app = createApp({
               // omylem převzít cizí memberId. Ať appka zůstane bez skupiny, uživatel
               // se případně znovu přidá kódem od spolužáků.
               studyGroup: { id: null, memberId: null, name: '' },
+              maturitaDate: (typeof importedStats.maturitaDate === 'string' && importedStats.maturitaDate) ? importedStats.maturitaDate : null,
             });
           }
           activeSubjectId.value = null;
@@ -14814,6 +15757,7 @@ const app = createApp({
       practiceMode.value = 'normal';
       quizSession.active = false;
       quizSession.showSummary = false;
+      eveningReviewActive.value = false; // znovu se nastaví na true jen ze startEveningReview() níž
       clearTimedInterval();
       timedSession.active = true;
       timedSession.showSummary = false;
@@ -14880,6 +15824,56 @@ const app = createApp({
       });
     }
     const isMaturitaMockSession = computed(() => !!(mixedQuizRestrictIds.value && mixedQuizRestrictIds.value.length > 0));
+
+    /* ---------- Večerní mini-opakování (adaptivní 5minutová dávka) ----------
+       Na rozdíl od Maturity nanečisto výš appka o ničem neptá - sama vybere
+       předměty, kde je aktuálně nejvíc položek PO TERMÍNU opakování podle
+       spaced repetition (dueReviewCountForSubject/totalDueReviewCount výš), a
+       rovnou na ně spustí krátký 5minutový časovaný test (znovupoužívá
+       timedSession + mixedQuizMode/mixedQuizRestrictIds, stejný princip jako
+       u Maturity nanečisto). Appka kartu s nabídkou aktivně ukazuje hlavně
+       večer (od EVENING_REVIEW_START_HOUR, přes půlnoc až do
+       EVENING_REVIEW_END_HOUR ráno) - přes den appka radši nabízí
+       recommendedSubject/Otázku dne výš, večer se ale hodí rychlé souhrnné
+       "dožene, co se za den nakupilo" napříč všemi předměty najednou. */
+    const EVENING_REVIEW_START_HOUR = 18;
+    const EVENING_REVIEW_END_HOUR = 4; // appka kartu ukazuje ještě do 4:00 ráno (pozdní večer/noc)
+    const EVENING_REVIEW_SECONDS = 5 * 60;
+    const eveningReviewActive = ref(false);
+    const isEveningHoursNow = computed(() => {
+      const h = new Date().getHours();
+      return h >= EVENING_REVIEW_START_HOUR || h < EVENING_REVIEW_END_HOUR;
+    });
+    /** Nearchivované předměty s aspoň jednou položkou po termínu, seřazené
+     *  sestupně podle počtu takových položek - appka z nich sestaví
+     *  mixedQuizRestrictIds pro startEveningReview() níž. */
+    const eveningReviewSubjects = computed(() => {
+      const srs = stats.srs || {};
+      return subjects
+        .filter((s) => !s.archived)
+        .map((s) => ({ subject: s, due: dueReviewCountForSubject(s, srs) }))
+        .filter((x) => x.due > 0)
+        .sort((a, b) => b.due - a.due)
+        .map((x) => x.subject);
+    });
+    const showEveningReviewCard = computed(() => isEveningHoursNow.value && eveningReviewSubjects.value.length > 0);
+    function startEveningReview() {
+      const chosen = eveningReviewSubjects.value;
+      if (chosen.length === 0) {
+        alert('Momentálně nemáš nic k opakování po termínu - skvělá práce! Zkus to znovu později, až appce zase nějaké položky "dozrají".');
+        return;
+      }
+      openSubject(chosen[0].id);
+      examPracticeMode.value = false;
+      mixedQuizMode.value = true;
+      mixedQuizRestrictIds.value = chosen.map((s) => s.id);
+      startTimedSession(EVENING_REVIEW_SECONDS); // resetuje eveningReviewActive na false, proto se nastavuje až POTÉ
+      eveningReviewActive.value = true;
+      nextTick(() => {
+        const el = document.getElementById('active-subject-header');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
 
     /* ---------- Časovač/Pomodoro na soustředěné učení -----------------------
        Na rozdíl od timedSession výše (odpočet v rámci jednoho konkrétního
@@ -15104,7 +16098,67 @@ const app = createApp({
       generateNewQuiz();
     }
 
+    /* ---------- Zvuk a vibrace v kvízu ----------
+       Jemná zvuková a haptická odezva při vyhodnocení odpovědi v kvízu -
+       navíc k současným vizuálním efektům (zatřesení při chybě, konfety při
+       odznacích/úrovni/dokonalé session). Zvuk appka generuje přes Web Audio
+       (stejný princip jako u pípnutí Pomodora výš u playPomodoroBeep - žádný
+       zvukový soubor navíc, funguje i offline), vibrace přes navigator.vibrate
+       (jen na zařízeních/prohlížečích, co to podporují - appka na to jinak
+       tiše nereaguje). Preferenci appka ukládá jen LOKÁLNĚ do zařízení (ne do
+       cloudu přes stats) - stejný princip jako u tmavého režimu/velikosti
+       písma/akcentové barvy výš, protože jde o čistě zařízení-specifické UI
+       nastavení (např. ve třídě chce mít uživatel appku potichu), ne o
+       studijní data, která by se měla přenášet mezi zařízeními. */
+    const QUIZ_SOUND_KEY = 'studijniHubQuizSound_v1';
+    function loadQuizSoundEnabled() {
+      try {
+        const saved = localStorage.getItem(QUIZ_SOUND_KEY);
+        if (saved === '0') return false;
+      } catch (e) { /* localStorage nedostupné - výchozí zapnuto */ }
+      return true;
+    }
+    const quizSoundEnabled = ref(loadQuizSoundEnabled());
+    function toggleQuizSound() {
+      quizSoundEnabled.value = !quizSoundEnabled.value;
+      try { localStorage.setItem(QUIZ_SOUND_KEY, quizSoundEnabled.value ? '1' : '0'); }
+      catch (e) { console.warn('Volbu zvuku v kvízu se nepodařilo uložit.', e); }
+    }
+    /** Krátký tón (vzestupné dvojtón při správné odpovědi, jeden nižší tón
+     *  při špatné) + jemná vibrace na mobilu. Volá se z recordCorrect/recordWrong
+     *  níž, takže pokrývá všechny způsoby odpovídání, co jimi procházejí -
+     *  psaní odpovědi, výběr z možností, časovaný režim i sebehodnocení karet. */
+    function playQuizFeedbackSound(correct) {
+      if (!quizSoundEnabled.value) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const now = ctx.currentTime;
+          const notes = correct ? [660, 880] : [220];
+          notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const start = now + i * 0.09;
+            gain.gain.setValueAtTime(0.0001, start);
+            gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + 0.2);
+          });
+          setTimeout(() => { ctx.close().catch(() => {}); }, 500);
+        }
+      } catch (e) { /* zvuk není kritický pro fungování appky */ }
+      try {
+        if (navigator.vibrate) navigator.vibrate(correct ? 15 : [40, 30, 40]);
+      } catch (e) { /* vibrace nejsou kritické */ }
+    }
+
     function recordCorrect() {
+      playQuizFeedbackSound(true);
       stats.totalSolved++;
       stats.currentStreak++;
       if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
@@ -15129,6 +16183,7 @@ const app = createApp({
     }
     /** Zaznamená chybnou odpověď / "neumím" do statistik. */
     function recordWrong() {
+      playQuizFeedbackSound(false);
       stats.currentStreak = 0;
       touchSubjectPractice();
       logPracticeEvent(false);
@@ -15315,6 +16370,59 @@ const app = createApp({
       if (idx !== -1) activeSubject.value.customQuestions.splice(idx, 1);
     }
 
+    /* ---------- Auto-otázky z vlastních zápisků (cloze/doplňovačka) ----------
+       Appka už dřív uměla potichu použít JEDNU náhodnou doplňovačku ze zápisu
+       přímo za běhu procvičování (viz buildNotesPool/pickBlankCandidate výš) -
+       uživatel ji ale nikde neviděl předem a nešlo si ji nijak "podržet"
+       natrvalo. Tenhle generátor z vybraného zápisu vytáhne NĚKOLIK doplňovaček
+       najednou (pickBlankCandidates výš), appka je ukáže k náhledu, a uživatel
+       si ty dobré jedním klikem uloží mezi vlastní otázky (customQuestions) -
+       stejně, jako by je vypsal/a ručně, jen tu nudnou práci ("najdi ve svém
+       zápisu vhodnou větu a schovej v ní slovo") udělá appka za něj/ni. */
+    const AUTO_QUESTIONS_MAX = 8;
+    const showAutoQuestionsPicker = ref(false);
+    const autoQuestionsNoteId = ref(null);
+    const autoQuestionsForNote = ref(null); // { noteId, noteTitle, items: [...] } | null
+    /** Appka negeneruje otázky ze zápisů typu "checklist" (tam nejde o souvislý
+     *  text) ani z moc krátkých zápisů - stejná podmínka jako u buildNotesPool
+     *  výš, ať appka nenabízí zápis, ze kterého beztak nic rozumného nevytáhne. */
+    function canGenerateAutoQuestions(note) {
+      if (!note || note.kind === 'checklist') return false;
+      return noteContentToPlainText(note.content).length >= 120;
+    }
+    const autoQuestionEligibleNotes = computed(() =>
+      activeSubject.value ? activeSubject.value.notes.filter(canGenerateAutoQuestions) : []
+    );
+    function generateAutoQuestionsForSelectedNote() {
+      const note = activeSubject.value && activeSubject.value.notes.find((n) => n.id === autoQuestionsNoteId.value);
+      if (!note) return;
+      const plain = noteContentToPlainText(note.content);
+      const items = pickBlankCandidates(plain, AUTO_QUESTIONS_MAX).map((c, i) => ({
+        key: `${note.id}-${i}-${c.word}`,
+        blankedSentence: c.blankedSentence,
+        word: c.word,
+        added: false,
+      }));
+      autoQuestionsForNote.value = { noteId: note.id, noteTitle: note.title, items };
+    }
+    function addAutoQuestionToSubject(item) {
+      if (!activeSubject.value || item.added) return;
+      if (!activeSubject.value.customQuestions) activeSubject.value.customQuestions = [];
+      activeSubject.value.customQuestions.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        question: item.blankedSentence,
+        answers: [item.word],
+      });
+      item.added = true;
+    }
+    function addAllAutoQuestions() {
+      if (!autoQuestionsForNote.value) return;
+      autoQuestionsForNote.value.items.forEach((item) => { if (!item.added) addAutoQuestionToSubject(item); });
+    }
+    function closeAutoQuestions() {
+      autoQuestionsForNote.value = null;
+    }
+
     /* ---------- Rozbory vět (jen u předmětů typu čeština) ---------- */
     const showSentenceAnalyses = ref(false);
     const newSentenceAnalysis = reactive({ sentence: '', subjectPart: '', predicatePart: '', sentenceType: '' });
@@ -15413,6 +16521,10 @@ const app = createApp({
       // loadChallengeFromUrl/challengeView výš.
       loadChallengeFromUrl();
       if (challengeView.active) return;
+      // Stejný princip pro sdílenou konkrétní otázku (?q=<id>) - viz
+      // loadQuestionShareFromUrl/questionShareView výš.
+      loadQuestionShareFromUrl();
+      if (questionShareView.active) return;
       // Vlastní data appky (předměty/statistiky/koš) se musí nejdřív doopravdy
       // načíst z IndexedDB (asynchronní) - teprve pak dává smysl cokoliv, co
       // s nimi pracuje (detekce sdílení volí výchozí předmět, synchronizace s
@@ -15427,6 +16539,7 @@ const app = createApp({
       // po ruce doopravdy načtená stats.dailyHistory.
       refreshStreakFreeze();
       detectIncomingShare();
+      runAppShortcut();
       startStudyTimeTracking();
       window.addEventListener('keydown', onKeydown);
       nextTick(updateScrollState);
@@ -15468,6 +16581,9 @@ const app = createApp({
       dataLoaded, dataLoadError,
       theme, greeting, heroVideoEl, prefersReducedMotion, onCardTilt, onCardTiltLeave,
       subjects, EMOJIS, GRADIENTS, ACCENT_PRESETS, accentId, setAccentColor, showAccentPicker,
+      profiles, activeProfileId, activeProfile, hasMultipleProfiles, showProfileSwitcher,
+      PROFILE_EMOJI_CHOICES, newProfileForm, toggleProfileSwitcher, addProfile, renameProfile,
+      deleteProfile, switchToProfile,
       stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak, appBadgingSupported, updateAppBadge,
       totalDueReviewCount, soonExamsForOverview, todayOverviewVisible,
       recentSubjects, recentSubjectIds,
@@ -15477,6 +16593,7 @@ const app = createApp({
       studyGroupCodeCopied, groupLeaderboard, groupLeaderboardRaw, groupLeaderboardSort, setGroupLeaderboardSort, groupLeaderboardLoading, solvedThisWeek,
       createStudyGroup, joinStudyGroup, leaveStudyGroup, pushMyGroupStats, fetchGroupLeaderboard, toggleStudyGroup, copyStudyGroupCode,
       downloadGroupLeaderboardImage,
+      showYearInReview, yearInReviewStats, downloadYearInReviewImage,
       activeSubjectId, activeSubject,
       carouselEl, canScrollLeft, canScrollRight, dragSubjectId, dragOverSubjectId,
       showArchived, visibleSubjects, archivedCount,
@@ -15493,13 +16610,16 @@ const app = createApp({
       mixedQuizMode, mixedQuizRestrictIds, quizSourceSubject, toggleMixedQuiz,
       examPracticeMode, examPrepNotesCount, toggleExamPracticeMode,
       examPracticeScope, setExamPracticeScope, examPrepAllCount, examPrepEligibleCount,
-      multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption,
+      multipleChoiceMode, toggleMultipleChoice, selectMultipleChoiceOption, quizSoundEnabled, toggleQuizSound,
       showCustomQuestions, newCustomQuestion,
+      showAutoQuestionsPicker, autoQuestionsNoteId, autoQuestionEligibleNotes, autoQuestionsForNote,
+      generateAutoQuestionsForSelectedNote, addAutoQuestionToSubject, addAllAutoQuestions, closeAutoQuestions,
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
+      hourlyActivityChart, hourlyActivityHasData, hourlyBarClass, hourlyBarHeight, hourlyBarTitle,
       showWeakSpots, weakestSpotsOverview,
       showWeakTopics, weakestTopicsOverview,
-      showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel,
+      showSrsCalendar, srsCalendarItems, srsCalendarSummary, srsDueLabel, srsForgettingEstimate,
       showPracticeLog, practiceLogRecent, formatPracticeLogTime, clearPracticeLog,
       showTimeOfDayInsight, practiceByTimeOfDay, timeOfDayInsight, MIN_TIME_OF_DAY_SAMPLE,
       canUndoLastAnswer, undoLastAnswer,
@@ -15520,12 +16640,14 @@ const app = createApp({
       progressReportModal, shareProgressReport, closeProgressReportModal, copyProgressReportLink, reportView,
       challengeModal, openChallengeModal, closeChallengeModal, startChallengePlaying, challengeModalReveal, challengeModalGrade, finishChallengeCreation, copyChallengeLink, challengeModalCurrentQuestion,
       challengeView, challengeViewReveal, challengeViewGrade, challengeViewCurrentQuestion,
+      questionShareModal, shareCurrentQuestion, closeQuestionShareModal, copyQuestionShareLink,
+      questionShareView, questionShareViewReveal,
       dictationSupported, isDictatingTarget, toggleDictation,
       voiceRecordingSupported, voiceRecordingActive, voiceRecordingSeconds, isVoiceRecordingTarget,
       toggleVoiceRecording, removeVoiceNote, formatVoiceDuration, startVoiceRecording, stopVoiceRecording, cancelVoiceRecording,
       generateNewQuiz, checkQuizAnswer,
       useFlashcardMode, flipFlashcard, gradeFlashcardQuality,
-      startSession, stopSession, continuePractice, pluralize,
+      startSession, stopSession, continuePractice, pluralize, czechTypographyIssues,
       addCustomQuestion, deleteCustomQuestion,
       chartBarHeight,
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
@@ -15535,11 +16657,12 @@ const app = createApp({
       importAnkiFileEl, triggerImportAnkiFile, handleImportAnkiFile,
       exportSubjectFlashcardsToPrint,
       exportExamDatesToIcs,
-      incomingShare, saveIncomingShareAsNote, dismissIncomingShare,
+      incomingShare, saveIncomingShareAsNote, dismissIncomingShare, runAppShortcut, startMixedQuizShortcut,
       ocrFileEl, ocrModal, openOcrPicker, handleOcrFile, insertOcrTextIntoNote, insertOcrTextAsCard, splitOcrTextForCard, closeOcrModal,
       drawModal, drawCanvasEl, openDrawModal, closeDrawModal, drawStart, drawMove, drawEnd, clearDrawCanvas, insertDrawingIntoNote,
       importTextFileEl, openImportTextPicker, handleImportTextFile,
       setExamDate, examInfo, examBadge, upcomingExams, showUpcomingExams, examTimeline, formatDateShortCs,
+      showMaturitaCountdownSetup, maturitaDateInput, toggleMaturitaCountdownSetup, applyMaturitaDate, clearMaturitaDate, maturitaCountdown,
       newExtraExamLabel, addExtraExamDate, setExtraExamDate, removeExtraExamDate,
       showWeeklyPlan, weeklyPlan,
       showTimetable, DAY_LABELS, DAY_ORDER, timetableForm, timetableSlotsForDay, addTimetableSlot, removeTimetableSlot, todayTimetable,
@@ -15571,6 +16694,7 @@ const app = createApp({
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
       showMaturitaMock, toggleMaturitaMockSetup, maturitaMockSubjectIds, toggleMaturitaMockSubject,
       maturitaMockMinutes, startMaturitaMock, isMaturitaMockSession,
+      showEveningReviewCard, eveningReviewSubjects, eveningReviewActive, startEveningReview, isEveningHoursNow,
       showPomodoro, pomodoro, pomodoroTimeLabel, startPomodoro, pausePomodoro, resetPomodoro,
       setDifficulty, activeSubjectIsMath, activeSubjectIsEnglish, DIFFICULTY_LEVELS, DIFFICULTY_LABELS,
       englishTenseFocus, setEnglishTenseFocus, TENSE_FORM_LABELS,

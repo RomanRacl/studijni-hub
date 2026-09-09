@@ -23,5 +23,21 @@
       "text": "shared-text",
       "url": "shared-url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Otázka dne",
+      "short_name": "Otázka dne",
+      "description": "Rovnou zodpovědět dnešní otázku dne",
+      "url": "./studijni-hub.html?shortcut=daily-question",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Míchaný kvíz",
+      "short_name": "Míchaný kvíz",
+      "description": "Rovnou spustit kvíz namíchaný napříč všemi předměty",
+      "url": "./studijni-hub.html?shortcut=mixed-quiz",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
 }
