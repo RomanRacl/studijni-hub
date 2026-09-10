@@ -1478,8 +1478,17 @@
           <button @click="openSpinWheel" class="btn-ghost !text-amber-300">
             🎡 Co se učit teď?
           </button>
+          <button @click="showParentRewards = !showParentRewards" class="btn-ghost !text-amber-300">
+            🎁 {{ showParentRewards ? 'Skrýt odměny' : (newlyEarnedRewards.length > 0 ? `Odměny (${newlyEarnedRewards.length} nová!)` : 'Odměny za cíle') }}
+          </button>
           <button v-if="hasMultipleProfiles" @click="toggleLocalLeaderboard" class="btn-ghost !text-fuchsia-300">
             🏆 {{ showLocalLeaderboard ? 'Skrýt žebříček profilů' : 'Žebříček profilů (na tomto zařízení)' }}
+          </button>
+          <button v-if="hasMultipleProfiles" @click="toggleFamilyDeadlines" class="btn-ghost !text-rose-300">
+            👪 {{ showFamilyDeadlines ? 'Skrýt rodinný přehled termínů' : 'Rodinný přehled termínů' }}
+          </button>
+          <button @click="toggleFamilyProgressReport" class="btn-ghost !text-cyan-300">
+            📊 {{ showFamilyProgressReport ? 'Skrýt report pokroku' : 'Report pokroku ke stažení' }}
           </button>
           <button @click="toggleStudyGroup" class="btn-ghost !text-fuchsia-300">
             🏆 {{ showStudyGroup ? 'Skrýt žebříček' : 'Žebříček se spolužáky' }}
@@ -1502,6 +1511,9 @@
           <button v-if="stats.practiceLog.length > 0" @click="showTimeOfDayInsight = !showTimeOfDayInsight" class="btn-ghost !text-violet-300">
             ⏰ {{ showTimeOfDayInsight ? 'Skrýt kdy se mi daří' : 'Kdy se mi nejlíp daří' }}
           </button>
+          <button v-if="studyTimeBreakdownSummary.allTimeMinutes > 0" @click="toggleStudyTimeBreakdown" class="btn-ghost !text-cyan-300">
+            ⏳ {{ showStudyTimeBreakdown ? 'Skrýt čas u učení' : 'Čas u učení' }}
+          </button>
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
           </button>
@@ -1516,6 +1528,9 @@
           </button>
           <button @click="showGoals = !showGoals" class="btn-ghost !text-amber-300">
             🎯 {{ showGoals ? 'Skrýt vlastní cíle' : `Vlastní cíle${activeGoalsWithProgress.length > 0 ? ` (${activeGoalsWithProgress.length})` : ''}` }}
+          </button>
+          <button v-if="!parentStudyGoalProgress" @click="openParentStudyGoalForm" class="btn-ghost !text-emerald-300">
+            🧭 Cíl od rodiče
           </button>
           <button @click="showBookAnalysis = !showBookAnalysis" class="btn-ghost !text-fuchsia-300">
             📚 {{ showBookAnalysis ? 'Skrýt rozbor knih' : 'Rozbor knih (povinná četba)' }}
@@ -1537,6 +1552,13 @@
           </button>
 
           <div class="flex items-center gap-2 ml-auto">
+            <button
+              v-if="parentStudyGoalProgress"
+              @click="openParentStudyGoalForm"
+              class="text-xs px-2 py-1 rounded-full border flex items-center gap-1 select-none"
+              :class="parentStudyGoalProgress.done ? 'border-emerald-800 text-emerald-300' : 'border-slate-700 text-slate-400'"
+              :title="`Cíl od rodiče: ${parentStudyGoalProgress.current}/${parentStudyGoalProgress.target} ${parentStudyGoalProgress.metric === 'minutes' ? 'minut' : 'příkladů'} (${parentStudyGoalProgress.period === 'daily' ? 'dnes' : 'tento týden'}). Klikni pro úpravu.`"
+            >🧭 {{ parentStudyGoalProgress.current }}/{{ parentStudyGoalProgress.target }} {{ parentStudyGoalProgress.done ? '✅' : '' }}</button>
             <span
               v-if="dailyStreak > 0"
               class="text-xs px-2 py-1 rounded-full border border-orange-800/60 text-orange-300 flex items-center gap-1 select-none"
@@ -1544,8 +1566,9 @@
             >📅 {{ dailyStreak }} {{ pluralize(dailyStreak, 'den', 'dny', 'dní') }} v řadě</span>
             <span
               v-if="todayStudyMinutes > 0 || weekStudyMinutes > 0"
-              class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 flex items-center gap-1 select-none"
-              title="Appka počítá jen čas, kdy máš tuhle kartu prohlížeče otevřenou a viditelnou na popředí - ne skutečné soustředění."
+              @click="toggleStudyTimeBreakdown"
+              class="text-xs px-2 py-1 rounded-full border border-slate-700 text-slate-400 flex items-center gap-1 select-none cursor-pointer hover:border-cyan-700 hover:text-cyan-300"
+              title="Appka počítá jen čas, kdy máš tuhle kartu prohlížeče otevřenou a viditelnou na popředí - ne skutečné soustředění. Klikni pro podrobnější rozpis."
             >⏱️ dnes {{ todayStudyMinutes }} min <span class="opacity-70">· týden {{ weekStudyMinutes }} min</span></span>
             <span
               v-if="dailyStreak > 0 || stats.streakFreezeCredits > 0"
@@ -1819,6 +1842,57 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showFamilyDeadlines" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">👪 Rodinný přehled termínů</p>
+            <p class="text-xs text-slate-500 mb-3">Nadcházející zkoušky a nesplněné domácí úkoly za všechny profily na tomto zařízení najednou, bez přepínání.</p>
+            <p v-if="familyDeadlinesLoading" class="text-sm text-slate-500">Appka čte termíny ostatních profilů…</p>
+            <div v-else-if="familyDeadlinesEntries.length === 0" class="text-slate-500 text-sm text-center py-6 border border-dashed border-slate-800 rounded-xl">
+              Žádné nadcházející zkoušky ani nesplněné úkoly u žádného profilu.
+            </div>
+            <div v-else class="flex flex-col gap-1.5">
+              <div v-for="(item, idx) in familyDeadlinesEntries" :key="idx" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <span class="text-lg shrink-0">{{ item.profileEmoji }}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="truncate">
+                    <span class="text-xs text-slate-400">{{ item.profileName }} · {{ item.subjectEmoji }} {{ item.subjectName }}</span>
+                  </p>
+                  <p class="truncate">{{ item.kind === 'exam' ? '📅' : '📝' }} {{ item.label }}</p>
+                </div>
+                <span
+                  v-if="item.days != null"
+                  class="shrink-0 text-xs px-2 py-0.5 rounded-full"
+                  :class="item.days < 0 ? 'bg-rose-950/60 text-rose-300' : (item.days <= 3 ? 'bg-amber-950/60 text-amber-300' : 'bg-slate-700/60 text-slate-300')"
+                >{{ item.days < 0 ? 'po termínu' : (item.days === 0 ? 'dnes' : `za ${item.days} ${pluralize(item.days, 'den', 'dny', 'dní')}`) }}</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showFamilyProgressReport" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between mb-1 mt-3 flex-wrap gap-2">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">📊 Report pokroku ke stažení</p>
+              <div class="flex items-center gap-2">
+                <button @click="setFamilyProgressReportPeriod('week')" class="btn-ghost !py-1 !px-2 !text-xs" :class="{ 'quiz-mode-active': familyProgressReportPeriod === 'week' }">Týden</button>
+                <button @click="setFamilyProgressReportPeriod('month')" class="btn-ghost !py-1 !px-2 !text-xs" :class="{ 'quiz-mode-active': familyProgressReportPeriod === 'month' }">Měsíc</button>
+                <button @click="downloadFamilyProgressReportImage" class="btn-primary !py-1 !px-3 !text-xs">⬇️ Stáhnout obrázek</button>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Krátký přehled za posledních {{ familyProgressReportPeriod === 'month' ? '30 dní' : '7 dní' }} za všechny profily na tomto zařízení najednou - hodí se pravidelně poslat/ukázat rodiči.</p>
+            <p v-if="familyProgressReportLoading" class="text-sm text-slate-500">Appka sestavuje report…</p>
+            <div v-else class="flex flex-col gap-1.5">
+              <div v-for="entry in familyProgressReportEntries" :key="entry.id" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <span class="text-lg shrink-0">{{ entry.emoji }}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium truncate">{{ entry.name }}</p>
+                  <p class="text-xs text-slate-500 truncate">✅ {{ entry.solved }} vyřešeno · {{ entry.successRate === null ? 'bez pokusů' : `${entry.successRate} % úspěšnost` }} · 🔥 {{ entry.bestStreak }} nejlepší série</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showStudyGroup" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Žebříček se spolužáky</p>
 
@@ -1928,6 +2002,32 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showParentRewards" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between mb-1 mt-3">
+              <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">🎁 Odměny za splněné cíle</p>
+              <button @click="openAddParentRewardModal" class="btn-ghost !text-amber-300 !py-1 !px-2 !text-xs">+ Přidat odměnu</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Odměny appce nadefinuje rodič (dosažená úroveň/série/celkem vyřešeno) - appka pak sama pozná, kdy je odměna vysloužená.</p>
+            <div v-if="parentRewardsWithStatus.length === 0" class="text-slate-500 text-sm text-center py-6 border border-dashed border-slate-800 rounded-xl">
+              Zatím žádné odměny - přidej první tlačítkem výš.
+            </div>
+            <div v-else class="flex flex-col gap-1.5">
+              <div v-for="item in parentRewardsWithStatus" :key="item.id"
+                class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm"
+                :class="item.claimed ? 'bg-slate-800/30 opacity-60' : (item.achieved ? 'bg-emerald-950/40 border border-emerald-800' : 'bg-slate-800/50')"
+              >
+                <div class="flex-1 min-w-0">
+                  <p class="font-medium truncate">🎁 {{ item.rewardText }}</p>
+                  <p class="text-xs text-slate-500">{{ parentRewardMetaLabel(item.metaType) }}: {{ item.currentValue }}/{{ item.metaValue }}{{ item.claimed ? ' · vyzvednuto' : (item.achieved ? ' · splněno!' : '') }}</p>
+                </div>
+                <button v-if="item.achieved && !item.claimed" @click="claimParentReward(item.id)" class="btn-primary !py-1.5 !px-3 !text-xs shrink-0">🎉 Vyzvednout</button>
+                <button @click="requestRemoveParentReward(item.id)" class="btn-ghost !text-rose-300 !p-1 shrink-0" title="Smazat odměnu">✕</button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showSrsCalendar && srsCalendarItems.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Kalendář naplánovaného opakování</p>
             <p class="text-xs text-slate-500 mb-3">
@@ -2020,6 +2120,38 @@
                     ></div>
                     <span class="chart-bar-label">{{ h.hour % 3 === 0 ? h.label : '' }}</span>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showStudyTimeBreakdown" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Odhad stráveného času učením</p>
+            <p class="text-xs text-slate-500 mb-3">Appka počítá jen čas, kdy máš appku otevřenou a viditelnou na popředí - ne skutečné soustředění (viz odznak výš).</p>
+            <div class="flex flex-wrap gap-2 mb-4">
+              <span class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300">Dnes: <b class="text-cyan-300">{{ studyTimeBreakdownSummary.todayMinutes }} min</b></span>
+              <span class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300">Tento týden: <b class="text-cyan-300">{{ studyTimeBreakdownSummary.weekMinutes }} min</b></span>
+              <span class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300">Posledních 30 dní: <b class="text-cyan-300">{{ studyTimeBreakdownSummary.monthMinutes }} min</b></span>
+              <span class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700 text-slate-300">Celkem od začátku: <b class="text-cyan-300">{{ Math.round(studyTimeBreakdownSummary.allTimeMinutes / 60) }} h</b></span>
+            </div>
+            <p v-if="studyTimeBreakdownSummary.bestDay" class="text-sm mb-3 px-3 py-2 rounded-lg bg-cyan-950/30 border border-cyan-800/50">
+              Nejsilnější den za posledních 30 dní: <b class="text-cyan-300">{{ formatDateShortCs(studyTimeBreakdownSummary.bestDay.key) }}</b> ({{ studyTimeBreakdownSummary.bestDay.minutes }} min).
+              Průměr na den, kdy appka appku vůbec otevřela: <b>{{ studyTimeBreakdownSummary.avgPerActiveDayMinutes }} min</b> ({{ studyTimeBreakdownSummary.activeDaysIn30 }} {{ pluralize(studyTimeBreakdownSummary.activeDaysIn30, 'aktivní den', 'aktivní dny', 'aktivních dní') }}).
+            </p>
+            <div v-if="!studyTimeDailyHasData" class="text-slate-500 text-sm py-6 text-center">
+              Zatím žádná historie času - otevři appku a nějakou dobu appce nech kartu na popředí.
+            </div>
+            <div v-else class="chart-frame">
+              <div class="chart-bars">
+                <div v-for="d in studyTimeDailyBreakdown" :key="d.key" class="chart-bar-wrap">
+                  <div
+                    class="chart-bar"
+                    :style="{ height: studyTimeBarHeight(d.minutes) + '%' }"
+                    :title="`${d.shortLabel} — ${d.minutes} min`"
+                  ></div>
+                  <span class="chart-bar-label">{{ d.shortLabel }}</span>
                 </div>
               </div>
             </div>
@@ -2146,34 +2278,44 @@
             <div class="flex flex-wrap items-end gap-2 mb-4">
               <label class="text-xs text-slate-500">Typ
                 <select v-model="newGoalForm.type" class="input !py-1.5 !text-sm block mt-0.5">
-                  <option value="total">Celkem vyřešeno</option>
-                  <option value="subject">U konkrétního předmětu</option>
+                  <option value="total">Celkem vyřešeno (týdenní)</option>
+                  <option value="subject">U konkrétního předmětu (týdenní)</option>
+                  <option value="rateByDate">Úspěšnost u předmětu do termínu</option>
                 </select>
               </label>
-              <label v-if="newGoalForm.type === 'subject'" class="text-xs text-slate-500">Předmět
+              <label v-if="newGoalForm.type === 'subject' || newGoalForm.type === 'rateByDate'" class="text-xs text-slate-500">Předmět
                 <select v-model="newGoalForm.subjectId" class="input !py-1.5 !text-sm block mt-0.5">
                   <option :value="null" disabled>Vyber předmět…</option>
                   <option v-for="s in subjects.filter(x => !x.archived)" :key="s.id" :value="s.id">{{ s.emoji }} {{ s.name }}</option>
                 </select>
               </label>
-              <label class="text-xs text-slate-500">Cíl (za týden)
-                <input type="number" min="1" v-model.number="newGoalForm.target" class="input !py-1.5 !text-sm block mt-0.5 !w-24" />
+              <label v-if="newGoalForm.type === 'rateByDate'" class="text-xs text-slate-500">Termín
+                <input type="date" v-model="newGoalForm.dueDate" class="input !py-1.5 !text-sm block mt-0.5" />
               </label>
-              <button @click="addGoal" :disabled="newGoalForm.type === 'subject' && newGoalForm.subjectId == null" class="btn-primary !py-1.5 !px-4 text-sm">➕ Přidat cíl</button>
+              <label class="text-xs text-slate-500">{{ newGoalForm.type === 'rateByDate' ? 'Cílová úspěšnost (%)' : 'Cíl (za týden)' }}
+                <input type="number" min="1" :max="newGoalForm.type === 'rateByDate' ? 100 : undefined" v-model.number="newGoalForm.target" class="input !py-1.5 !text-sm block mt-0.5 !w-24" />
+              </label>
+              <button @click="addGoal" :disabled="(newGoalForm.type === 'subject' || newGoalForm.type === 'rateByDate') && newGoalForm.subjectId == null" class="btn-primary !py-1.5 !px-4 text-sm">➕ Přidat cíl</button>
             </div>
 
             <div v-if="activeGoalsWithProgress.length === 0" class="text-slate-500 text-sm">Zatím nemáš žádný vlastní cíl.</div>
             <div class="flex flex-col gap-2">
               <div v-for="g in activeGoalsWithProgress" :key="g.id" class="rounded-lg bg-slate-800/40 p-3">
                 <div class="flex items-center justify-between gap-2 mb-1.5">
-                  <span class="text-sm font-semibold">{{ g.type === 'subject' && g.subject ? `${g.subject.emoji} ${g.subject.name}` : '🧠 Celkem' }}</span>
+                  <span class="text-sm font-semibold">
+                    {{ g.subject ? `${g.subject.emoji} ${g.subject.name}` : '🧠 Celkem' }}
+                    <span v-if="g.type === 'rateByDate'" class="font-normal text-slate-500">(cíl do {{ formatDateShortCs(g.dueDate) }})</span>
+                  </span>
                   <div class="flex items-center gap-2">
-                    <span class="text-xs" :class="g.done ? 'text-emerald-400' : 'text-slate-400'">{{ g.progress }} / {{ g.target }}{{ g.done ? ' ✅' : '' }}</span>
+                    <span v-if="g.type === 'rateByDate'" class="text-xs" :class="g.done ? 'text-emerald-400' : (g.overdue ? 'text-rose-400' : 'text-slate-400')">
+                      {{ g.progress }} % / {{ g.target }} %{{ g.done ? ' ✅' : (g.overdue ? ' ⏰ po termínu' : (g.daysLeft != null ? ` (zbývá ${g.daysLeft} dní)` : '')) }}
+                    </span>
+                    <span v-else class="text-xs" :class="g.done ? 'text-emerald-400' : 'text-slate-400'">{{ g.progress }} / {{ g.target }}{{ g.done ? ' ✅' : '' }}</span>
                     <button @click="removeGoal(g.id)" class="btn-ghost !text-xs !p-1" title="Smazat cíl">✕</button>
                   </div>
                 </div>
                 <div class="h-2 rounded-full bg-slate-900 overflow-hidden">
-                  <div class="h-full rounded-full" :class="g.done ? 'bg-emerald-500' : 'bg-cyan-500'" :style="{ width: g.percent + '%' }"></div>
+                  <div class="h-full rounded-full" :class="g.done ? 'bg-emerald-500' : (g.overdue ? 'bg-rose-500' : 'bg-cyan-500')" :style="{ width: g.percent + '%' }"></div>
                 </div>
               </div>
             </div>
@@ -2874,6 +3016,18 @@
                     <span v-if="activeSubjectGradeSummary.half2Count">2. pololetí: <b>{{ activeSubjectGradeSummary.half2Avg.toFixed(2) }}</b></span>
                   </div>
                   <p v-else class="text-xs opacity-70 mb-3">Zatím žádné známky - appka spočítá průměr, jakmile nějakou zapíšeš.</p>
+                  <div v-if="activeSubjectGradePrediction && (activeSubjectGradePrediction.half1 || activeSubjectGradePrediction.half2)" class="flex flex-wrap gap-3 mb-3 text-sm">
+                    <span v-if="activeSubjectGradePrediction.half1" class="px-2 py-1 rounded-lg bg-black/20">
+                      🔮 1. pol. na vysvědčení: <b>{{ activeSubjectGradePrediction.half1.predictedGrade }} ({{ GRADE_LABELS_CS[activeSubjectGradePrediction.half1.predictedGrade] }})</b>
+                      <span v-if="activeSubjectGradePrediction.half1.trend === 'improving'"> 📈 zlepšuje se</span>
+                      <span v-else-if="activeSubjectGradePrediction.half1.trend === 'worsening'"> 📉 zhoršuje se</span>
+                    </span>
+                    <span v-if="activeSubjectGradePrediction.half2" class="px-2 py-1 rounded-lg bg-black/20">
+                      🔮 2. pol. na vysvědčení: <b>{{ activeSubjectGradePrediction.half2.predictedGrade }} ({{ GRADE_LABELS_CS[activeSubjectGradePrediction.half2.predictedGrade] }})</b>
+                      <span v-if="activeSubjectGradePrediction.half2.trend === 'improving'"> 📈 zlepšuje se</span>
+                      <span v-else-if="activeSubjectGradePrediction.half2.trend === 'worsening'"> 📉 zhoršuje se</span>
+                    </span>
+                  </div>
                   <div v-if="activeSubject.grades.length" class="flex flex-col gap-1 max-h-40 overflow-y-auto mb-3 pr-1">
                     <div v-for="g in activeSubject.grades" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-black/20">
                       <span class="font-bold">{{ g.value }}</span>
@@ -2987,6 +3141,10 @@
             <button @click="stopSession" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'normal' && !quizSession.active && !quizSession.showSummary && !timedSession.active && !timedSession.showSummary }">🔓 Volně</button>
             <button v-for="n in [5, 10, 15]" :key="n" @click="startSession(n)" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'normal' && quizSession.active && quizSession.total === n }">🏁 Test na {{ n }}</button>
             <button @click="useFlashcardMode" class="quiz-mode-btn" :class="{ 'quiz-mode-active': practiceMode === 'flashcard' }" title="Otázka na líci, odpověď na rubu - sám/sama se ohodnotíš">🃏 Kartičky</button>
+            <button @click="startMemoryGame(activeSubject, 6)" class="quiz-mode-btn" title="Pexeso - hledej dvojice otázka/odpověď mezi zakrytými kartami">🧩 Párovací hra</button>
+            <button @click="toggleSubjectMindMap" class="quiz-mode-btn" title="Vizuální strom hlavních témat tohoto předmětu">🧠 Mapa myšlenek</button>
+            <button @click="startHangman(activeSubject)" class="quiz-mode-btn" title="Klasická šibenice - hádej pojem/slovíčko písmeno po písmenu">🪢 Šibenice</button>
+            <button @click="toggleWeaknessHeatmap" class="quiz-mode-btn" title="Podrobnější heatmapa slabých míst tohoto předmětu, včetně jednotlivých vlastních otázek/zápisků">🌡️ Heatmapa slabých míst</button>
             <button
               v-if="subjects.filter((s) => !s.archived).length > 1"
               @click="toggleMixedQuiz"
@@ -3027,14 +3185,21 @@
               :title="quizSoundEnabled ? 'Zvuk a vibrace při odpovědi jsou zapnuté - klikni pro vypnutí' : 'Zvuk a vibrace při odpovědi jsou vypnuté - klikni pro zapnutí'"
             >{{ quizSoundEnabled ? '🔊' : '🔇' }}</button>
           </div>
-          <div class="flex flex-wrap gap-2 mb-4">
+          <div class="flex flex-wrap items-center gap-2 mb-4">
             <button
-              v-for="secs in [60, 120, 300]" :key="secs"
+              @click="startTimedSession(60)"
+              class="quiz-mode-btn"
+              :class="{ 'quiz-mode-active': (timedSession.active || timedSession.showSummary) && timedSession.totalSeconds === 60 }"
+              title="Rychlá palba - 60 sekund, co nejvíc správných odpovědí, appka si pamatuje tvůj osobní rekord u tohoto předmětu"
+            >🔥 Rychlá palba (60 s)</button>
+            <span v-if="speedRunBestForActiveSubject" class="text-xs text-amber-400">🏆 rekord: {{ speedRunBestForActiveSubject.correctCount }}</span>
+            <button
+              v-for="secs in [120, 300]" :key="secs"
               @click="startTimedSession(secs)"
               class="quiz-mode-btn"
               :class="{ 'quiz-mode-active': (timedSession.active || timedSession.showSummary) && timedSession.totalSeconds === secs }"
               title="Vyřeš co nejvíc příkladů, než vyprší čas"
-            >⏱️ {{ secs < 60 ? secs + ' s' : (secs / 60) + ' min' }}</button>
+            >⏱️ {{ secs / 60 }} min</button>
           </div>
 
           <!-- Souhrn výsledků dokončeného testu na počet otázek -->
@@ -3060,11 +3225,14 @@
           <!-- Souhrn výsledků dokončeného časovaného testu -->
           <div v-else-if="timedSession.showSummary" class="bg-slate-950/50 border border-slate-800 rounded-xl p-5">
             <h4 class="text-lg font-bold mb-1">{{ eveningReviewActive ? '🌙 Výsledky večerního opakování' : (isMaturitaMockSession ? '🎓 Výsledky Maturity nanečisto' : '⏱️ Výsledky časového testu') }}</h4>
-            <p class="text-slate-300 mb-4">
+            <p class="text-slate-300 mb-2">
               Vyřešeno: <b class="text-cyan-300">{{ timedSession.correctCount }}</b> {{ pluralize(timedSession.correctCount, 'příklad', 'příklady', 'příkladů') }}
               za {{ timedSession.totalSeconds }} s
               <span class="text-slate-500">· tempo {{ timedPacePerMinute }} / min · {{ timedSession.mistakesTotal }} {{ pluralize(timedSession.mistakesTotal, 'chyba', 'chyby', 'chyb') }}</span>
             </p>
+            <p v-if="speedRunNewRecord" class="text-amber-400 font-semibold mb-4">🏆 Nový osobní rekord v Rychlé palbě u tohoto předmětu!</p>
+            <p v-else-if="timedSession.totalSeconds === 60 && speedRunBestForActiveSubject" class="text-slate-500 mb-4">Tvůj osobní rekord u tohoto předmětu: {{ speedRunBestForActiveSubject.correctCount }}</p>
+            <div v-else class="mb-4"></div>
             <div class="flex flex-wrap gap-2">
               <button @click="startTimedSession(timedSession.totalSeconds)" class="btn-primary">🔁 Spustit nový test na {{ timedSession.totalSeconds }} s</button>
               <button @click="stopSession" class="btn-secondary">🔓 Zpět na volné procvičování</button>
@@ -3740,6 +3908,200 @@
         <div class="flex justify-center gap-3 mt-3">
           <button @click="closeSpinWheelModal" class="btn-secondary">{{ spinWheelModal.result ? 'Zavřít' : 'Zrušit' }}</button>
           <button v-if="spinWheelModal.result" @click="startPracticeFromSpinWheel" class="btn-primary">🚀 Začít procvičovat</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: PÁROVACÍ HRA (PEXESO) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="memoryGame.active" class="modal-overlay" @click.self="closeMemoryGame">
+      <div class="modal-card !max-w-2xl">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-bold flex items-center gap-2">🧩 Párovací hra</h3>
+          <button @click="closeMemoryGame" class="btn-ghost !p-1.5">✕</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Najdi dvojice otázka ↔ odpověď. Nalezeno: {{ memoryGame.matchedPairs }}/{{ memoryGame.totalPairs }} · tahů: {{ memoryGame.moves }}</p>
+        <div v-if="memoryGame.finished" class="text-center py-4 mb-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300">
+          🎉 Hotovo! Zvládl/a jsi to na {{ memoryGame.moves }} {{ pluralize(memoryGame.moves, 'tah', 'tahy', 'tahů') }}.
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+          <button
+            v-for="card in memoryGame.cards" :key="card.id"
+            @click="flipMemoryCard(card)"
+            class="min-h-[84px] rounded-xl border p-2 text-xs text-left transition-colors"
+            :class="card.matched
+              ? 'bg-emerald-950/40 border-emerald-800 text-emerald-200'
+              : (memoryGame.flipped.includes(card) ? 'bg-cyan-950/40 border-cyan-700 text-slate-100' : 'bg-slate-800/70 border-slate-700 text-slate-500 hover:border-slate-500')"
+          >
+            <span v-if="card.matched || memoryGame.flipped.includes(card)" class="line-clamp-4 whitespace-pre-line">{{ card.text }}</span>
+            <span v-else class="flex items-center justify-center h-full text-xl">❓</span>
+          </button>
+        </div>
+        <div class="flex justify-end mt-3">
+          <button @click="closeMemoryGame" class="btn-secondary">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: MAPA MYŠLENEK PŘEDMĚTU -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="showSubjectMindMap && subjectMindMapTree" class="modal-overlay" @click.self="toggleSubjectMindMap">
+      <div class="modal-card !max-w-2xl">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-bold flex items-center gap-2">🧠 Mapa myšlenek: {{ subjectMindMapTree.label }}</h3>
+          <button @click="toggleSubjectMindMap" class="btn-ghost !p-1.5">✕</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Klepnutím na téma rozbalíš podrobnosti. Barva uzlu ukazuje, kolik chyb v něm zatím appka zaznamenala.</p>
+        <div v-if="subjectMindMapTree.branches.length === 0" class="text-sm text-slate-500 text-center py-6">
+          Pro tenhle předmět zatím appka nemá dost dat na sestavení mapy - přidej vlastní otázky, zápisky nebo procvičuj generované otázky.
+        </div>
+        <div v-else class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          <div v-for="branch in subjectMindMapTree.branches" :key="branch.key" class="rounded-xl border" :class="mindMapNodeColorClass(branch.weight)">
+            <button @click="toggleMindMapBranch(branch.key)" class="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-left">
+              <span>🔹 {{ branch.label }}</span>
+              <span class="flex items-center gap-2 text-xs font-normal">
+                <span v-if="branch.weight > 0">⚠️ {{ branch.weight }}</span>
+                <span v-if="branch.children.length > 0">{{ mindMapExpandedBranch === branch.key ? '▲' : '▼' }}</span>
+              </span>
+            </button>
+            <div v-if="mindMapExpandedBranch === branch.key && branch.children.length > 0" class="px-3 pb-2 space-y-1">
+              <div v-for="leaf in branch.children" :key="leaf.key" class="text-xs px-2 py-1 rounded-lg border" :class="mindMapNodeColorClass(leaf.weight)">
+                {{ leaf.label }}<span v-if="leaf.weight > 0"> · ⚠️ {{ leaf.weight }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end mt-3">
+          <button @click="toggleSubjectMindMap" class="btn-secondary">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: HEATMAPA SLABÝCH MÍST -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="showWeaknessHeatmap && activeSubject" class="modal-overlay" @click.self="toggleWeaknessHeatmap">
+      <div class="modal-card !max-w-2xl">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-bold flex items-center gap-2">🌡️ Heatmapa: {{ activeSubject.name }}</h3>
+          <button @click="toggleWeaknessHeatmap" class="btn-ghost !p-1.5">✕</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Každá dlaždice je jedno téma nebo vlastní otázka/zápisek. Čím červenější, tím víc chyb v ní appka zatím zaznamenala.</p>
+        <div v-if="activeSubjectWeaknessHeatmap.length === 0" class="text-sm text-slate-500 text-center py-6">
+          Pro tenhle předmět zatím appka nemá dost dat na sestavení heatmapy - přidej vlastní otázky, zápisky nebo procvičuj generované otázky.
+        </div>
+        <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+          <div v-for="cell in activeSubjectWeaknessHeatmap" :key="cell.key" class="rounded-xl border px-2.5 py-2 text-xs" :class="heatmapIntensityClass(cell.weight)">
+            <div class="font-semibold leading-snug">{{ cell.label }}</div>
+            <div class="mt-1 opacity-80">{{ cell.weight > 0 ? `⚠️ ${cell.weight} ${pluralize(cell.weight, 'chyba', 'chyby', 'chyb')}` : '✓ bez chyby' }}</div>
+          </div>
+        </div>
+        <div class="flex justify-end mt-3">
+          <button @click="toggleWeaknessHeatmap" class="btn-secondary">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: ŠIBENICE NA POJMY -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="hangman.active" class="modal-overlay" @click.self="closeHangman">
+      <div class="modal-card !max-w-lg text-center">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-lg font-bold flex items-center gap-2">🪢 Šibenice na pojmy</h3>
+          <button @click="closeHangman" class="btn-ghost !p-1.5">✕</button>
+        </div>
+        <p v-if="hangman.hint" class="text-xs text-slate-500 mb-3">Nápověda: {{ hangman.hint }}</p>
+        <div class="text-4xl mb-3">{{ ['🙂','😐','😟','😦','😧','😨','💀'][hangman.wrongGuesses.length] }}</div>
+        <p class="text-xs text-slate-500 mb-2">Chybné pokusy: {{ hangman.wrongGuesses.length }} / {{ HANGMAN_MAX_WRONG_GUESSES }}<span v-if="hangman.wrongGuesses.length > 0"> ({{ hangman.wrongGuesses.join(', ') }})</span></p>
+        <div class="text-2xl sm:text-3xl font-mono font-bold tracking-widest mb-4 break-all">{{ hangmanMaskedWord }}</div>
+
+        <div v-if="hangman.finished" class="mb-3 py-3 rounded-xl" :class="hangman.won ? 'bg-emerald-950/40 border border-emerald-800 text-emerald-300' : 'bg-rose-950/40 border border-rose-800 text-rose-300'">
+          <span v-if="hangman.won">🎉 Uhodl/a jsi: {{ hangman.word }}</span>
+          <span v-else>💀 Škoda, bylo to: {{ hangman.word }}</span>
+        </div>
+
+        <div v-else class="flex flex-wrap justify-center gap-1.5 mb-3">
+          <button
+            v-for="letter in HANGMAN_ALPHABET" :key="letter"
+            @click="guessHangmanLetter(letter)"
+            :disabled="hangman.guessed.includes(letter)"
+            class="w-8 h-8 rounded-lg text-xs font-bold border transition-colors"
+            :class="hangman.guessed.includes(letter)
+              ? (hangman.word.includes(letter) ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' : 'bg-rose-950/40 border-rose-800 text-rose-400')
+              : 'bg-slate-800/70 border-slate-700 text-slate-200 hover:bg-slate-700'"
+          >{{ letter }}</button>
+        </div>
+
+        <div class="flex justify-center gap-3 mt-2">
+          <button v-if="hangman.finished" @click="startHangman(subjects.find((s) => s.id === hangman.subjectId))" class="btn-primary">🔁 Další slovo</button>
+          <button @click="closeHangman" class="btn-secondary">Zavřít</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: NOVÁ ODMĚNA ZA SPLNĚNÝ CÍL -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="parentRewardModal.open" class="modal-overlay" @click.self="closeParentRewardModal">
+      <div class="modal-card !max-w-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">🎁 Nová odměna za cíl</h3>
+        <label class="text-xs text-slate-400 block mb-1">Odměna je za...</label>
+        <select v-model="parentRewardModal.metaType" class="input mb-3">
+          <option value="totalSolved">Celkem vyřešeno příkladů</option>
+          <option value="level">Dosaženou úroveň</option>
+          <option value="streak">Nejlepší sérii (dny v kuse)</option>
+        </select>
+        <label class="text-xs text-slate-400 block mb-1">Cílová hodnota</label>
+        <input v-model.number="parentRewardModal.metaValue" type="number" min="1" class="input mb-3" />
+        <label class="text-xs text-slate-400 block mb-1">Odměna (text)</label>
+        <input v-model="parentRewardModal.rewardText" @keyup.enter="submitParentRewardModal" type="text" placeholder="Např. výlet do zoo" class="input mb-2" />
+        <p v-if="parentRewardModal.error" class="text-rose-400 text-sm mb-2">{{ parentRewardModal.error }}</p>
+        <div class="flex justify-end gap-3 mt-3">
+          <button @click="closeParentRewardModal" class="btn-secondary">Zrušit</button>
+          <button @click="submitParentRewardModal" class="btn-primary">Přidat odměnu</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: STUDIJNÍ CÍL OD RODIČE -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="parentStudyGoalModal.open" class="modal-overlay" @click.self="closeParentStudyGoalModal">
+      <div class="modal-card !max-w-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">🧭 Studijní cíl od rodiče</h3>
+        <label class="text-xs text-slate-400 block mb-1">Období</label>
+        <select v-model="parentStudyGoalModal.period" class="input mb-3">
+          <option value="daily">Denní</option>
+          <option value="weekly">Týdenní</option>
+        </select>
+        <label class="text-xs text-slate-400 block mb-1">Měřeno v...</label>
+        <select v-model="parentStudyGoalModal.metric" class="input mb-3">
+          <option value="questions">Počtu vyřešených příkladů</option>
+          <option value="minutes">Minutách stráveného času v appce</option>
+        </select>
+        <label class="text-xs text-slate-400 block mb-1">Cílová hodnota</label>
+        <input v-model.number="parentStudyGoalModal.target" type="number" min="1" class="input mb-2" />
+        <div class="flex justify-between gap-3 mt-3">
+          <button v-if="stats.parentStudyGoal" @click="clearParentStudyGoal" class="btn-ghost !text-rose-300">Zrušit cíl</button>
+          <div class="flex gap-3 ml-auto">
+            <button @click="closeParentStudyGoalModal" class="btn-secondary">Zrušit</button>
+            <button @click="submitParentStudyGoalForm" class="btn-primary">Uložit cíl</button>
+          </div>
         </div>
       </div>
     </div>
@@ -4623,6 +4985,74 @@ function computeWeeklyProgress(dailyHistory, dailyAttempts, weeksCount, referenc
     });
   }
   return weeks;
+}
+
+/** Denní rozpis odhadovaného stráveného času (v minutách) za posledních
+ *  `days` dní zpětně od referenceDate, ze stats.studyTimeByDay (sekundy
+ *  na den, viz addStudySeconds) - stejný zdroj dat jako todayStudyMinutes/
+ *  weekStudyMinutes, jen tady appka poskytne celou řadu pro graf místo
+ *  jednoho čísla. */
+function buildStudyTimeDailyBreakdown(studyTimeByDay, days, referenceDate) {
+  const byDay = studyTimeByDay || {};
+  const result = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(referenceDate);
+    d.setDate(d.getDate() - i);
+    const key = dateKey(d);
+    result.push({
+      key,
+      shortLabel: `${d.getDate()}.${d.getMonth() + 1}.`,
+      minutes: Math.round((byDay[key] || 0) / 60),
+    });
+  }
+  return result;
+}
+
+/** Souhrnné metriky odhadovaného stráveného času - appka je počítá ze
+ *  stejného stats.studyTimeByDay, ale navíc k dnešku/týdnu (které appka
+ *  ukazuje v malém odznaku) appka doplní posledních 30 dní, úplně celkový
+ *  součet za appku od začátku a nejsilnější den v posledních 30 dnech. */
+function studyTimeSummary(studyTimeByDay, referenceDate) {
+  const byDay = studyTimeByDay || {};
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  const todaySec = byDay[dateKey(today)] || 0;
+
+  let weekSec = 0;
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    if (d > today) break;
+    weekSec += byDay[dateKey(d)] || 0;
+  }
+
+  let monthSec = 0;
+  let activeDaysIn30 = 0;
+  let bestDay = null;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const sec = byDay[dateKey(d)] || 0;
+    monthSec += sec;
+    if (sec > 0) activeDaysIn30++;
+    if (sec > 0 && (!bestDay || sec > bestDay.seconds)) {
+      bestDay = { key: dateKey(d), seconds: sec, minutes: Math.round(sec / 60) };
+    }
+  }
+
+  const allTimeSec = Object.values(byDay).reduce((sum, sec) => sum + (Number(sec) || 0), 0);
+
+  return {
+    todayMinutes: Math.round(todaySec / 60),
+    weekMinutes: Math.round(weekSec / 60),
+    monthMinutes: Math.round(monthSec / 60),
+    allTimeMinutes: Math.round(allTimeSec / 60),
+    activeDaysIn30,
+    avgPerActiveDayMinutes: activeDaysIn30 > 0 ? Math.round(monthSec / 60 / activeDaysIn30) : 0,
+    bestDay,
+  };
 }
 
 /** Nejdelší historická série po sobě jdoucích dní s aspoň jednou vyřešenou
@@ -8988,6 +9418,237 @@ async function loadRawForKey(key) {
   try { return localStorage.getItem(key); } catch (e) { return null; }
 }
 
+/* Sloučení pole odměn za cíle (stats.parentRewards) ze dvou zařízení podle
+   id - na rozdíl od favoriteKeys (prostá množina stringů) jde o objekty,
+   které se navíc časem mění (vyzvednutí odměny), takže se u shodného id
+   nebere ani jedna verze celá, ale "claimed"/"claimedAt" se sloučí jako
+   logické NEBO (jakmile je odměna vyzvednutá na jednom zařízení, zůstane
+   vyzvednutá i po sloučení, ať appka odměnu znovu "neztratí zpátky"). */
+function mergeParentRewardsArrays(localArr, remoteArr) {
+  const byId = new Map();
+  const add = (r) => {
+    if (!r || typeof r !== 'object' || r.id == null) return;
+    const existing = byId.get(r.id);
+    if (!existing) { byId.set(r.id, { ...r }); return; }
+    byId.set(r.id, {
+      ...existing,
+      ...r,
+      claimed: !!(existing.claimed || r.claimed),
+      claimedAt: existing.claimedAt || r.claimedAt || null,
+    });
+  };
+  (Array.isArray(localArr) ? localArr : []).forEach(add);
+  (Array.isArray(remoteArr) ? remoteArr : []).forEach(add);
+  return Array.from(byId.values());
+}
+
+/** Sloučení osobních rekordů "Rychlá palba" (stats.speedRunBests) ze dvou
+ *  zařízení - appka je objekt klíčovaný id předmětu, takže na rozdíl od
+ *  mergeParentRewardsArrays výš appka tady pro každé id jen porovná obě
+ *  hodnoty a ponechá tu lepší (víc vyřešeno, při remíze míň chyb), ať
+ *  sloučení z jiného zařízení omylem "nepřepíše" lepší lokální rekord
+ *  horším. */
+function mergeSpeedRunBests(localObj, remoteObj) {
+  const local = (localObj && typeof localObj === 'object') ? localObj : {};
+  const remote = (remoteObj && typeof remoteObj === 'object') ? remoteObj : {};
+  const isBetter = (a, b) => {
+    if (!a) return false;
+    if (!b) return true;
+    if (a.correctCount !== b.correctCount) return a.correctCount > b.correctCount;
+    return (a.mistakesTotal || 0) < (b.mistakesTotal || 0);
+  };
+  const result = {};
+  for (const id of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    result[id] = isBetter(local[id], remote[id]) ? local[id] : (remote[id] || local[id]);
+  }
+  return result;
+}
+
+/** Posledních N kalendářních dní (včetně dneška) jako pole klíčů dateKey -
+ *  Používá ho rodinný report pokroku (viz loadFamilyProgressReport níž).
+ *  Na rozdíl od mondayOfWeek výš (počítá vždy od pondělí) jde tady o
+ *  "posledních 7/30 dní", ať report dává smysl kdykoliv během týdne/měsíce,
+ *  ne jen těsně po jeho začátku. */
+function periodDateKeys(period, referenceDate) {
+  const days = period === 'month' ? 30 : 7;
+  const ref = referenceDate || new Date();
+  const keys = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(ref);
+    d.setDate(d.getDate() - i);
+    keys.push(dateKey(d));
+  }
+  return keys;
+}
+
+/** Sestaví strom hlavních témat předmětu pro "Mapu myšlenek předmětu" (vizuální
+ *  strom uzlů, viz subjectMindMapTree v setup()). Na rozdíl od
+ *  weakestTopicsOverview výš (jen témata, kde appka zaznamenala aspoň jednu
+ *  chybu) tahle appka funkce vypisuje VŠECHNA dostupná témata daného typu
+ *  předmětu, aby strom odpovídal skutečné struktuře látky, ne jen historii
+ *  chyb - weight u větve/listu (počet chyb ze stats.mistakeCounts) appka
+ *  používá jen k obarvení uzlu (víc chyb = sytější barva), samotná struktura
+ *  stromu na chybách nezávisí. Vrací { label, branches: [{ key, label,
+ *  weight, children: [{ key, label, weight }] }] }. Čistá funkce - žádnou
+ *  reaktivní appka proměnnou nečte, pouze svoje argumenty. */
+function buildSubjectMindMapTree(subject, mistakeCounts) {
+  const mc = mistakeCounts || {};
+  const sumPrefix = (prefix) => {
+    let total = 0;
+    for (const [key, count] of Object.entries(mc)) {
+      if (count > 0 && (key === prefix || key.startsWith(prefix + ':'))) total += count;
+    }
+    return total;
+  };
+  const branches = [];
+  const type = detectSubjectType(subject && subject.name);
+  const subtypeMap = type === 'math' ? MATH_SUBTYPE_LABELS
+    : type === 'czech' ? CZECH_SUBTYPE_LABELS
+    : type === 'english' ? ENGLISH_SUBTYPE_LABELS
+    : null;
+  if (subtypeMap) {
+    for (const [subtype, label] of Object.entries(subtypeMap)) {
+      branches.push({ key: `${type}:${subtype}`, label, weight: sumPrefix(`${type}:${subtype}`), children: [] });
+    }
+  }
+  const customQuestions = (subject && Array.isArray(subject.customQuestions)) ? subject.customQuestions : [];
+  if (customQuestions.length > 0) {
+    branches.push({
+      key: 'custom',
+      label: 'Vlastní otázky',
+      weight: sumPrefix('custom'),
+      children: customQuestions.slice(0, 30).map((q) => ({
+        key: `custom-leaf:${q.id}`,
+        label: String((q && q.question) || 'Otázka').slice(0, 60),
+        weight: mc[`custom:${q.id}`] || 0,
+      })),
+    });
+  }
+  const notes = (subject && Array.isArray(subject.notes)) ? subject.notes : [];
+  if (notes.length > 0) {
+    branches.push({
+      key: 'notes',
+      label: 'Poznámky',
+      weight: 0,
+      children: notes.slice(0, 30).map((n) => ({
+        key: `notes-leaf:${n.id}`,
+        label: String((n && n.title) || 'Poznámka').slice(0, 60),
+        weight: 0,
+      })),
+    });
+  }
+  const sentenceAnalyses = (subject && Array.isArray(subject.sentenceAnalyses)) ? subject.sentenceAnalyses : [];
+  if (sentenceAnalyses.length > 0) {
+    branches.push({
+      key: 'sentence',
+      label: 'Rozbory vět',
+      weight: sumPrefix('sentence'),
+      children: sentenceAnalyses.slice(0, 30).map((s) => ({
+        key: `sentence-leaf:${s.id}`,
+        label: String((s && s.sentence) || 'Věta').slice(0, 60),
+        weight: mc[`sentence:${s.id}`] || 0,
+      })),
+    });
+  }
+  return {
+    label: `${(subject && subject.emoji) || '📚'} ${(subject && subject.name) || 'Předmět'}`,
+    branches,
+  };
+}
+
+/** Podrobnější mapa slabých témat JEDNOHO předmětu (heatmapa) - na rozdíl od
+ *  weakestTopicsOverview/weakestSpotsOverview výš appka tenhle přehled
+ *  nepočítá napříč VŠEMI předměty, ale jen pro jeden konkrétní, a nezůstává
+ *  jen u agregovaných podtypů (weakestTopicsOverview) - appka znovupoužije
+ *  strom z buildSubjectMindMapTree a "rozbalí" ho do jednoho plochého pole
+ *  buněk, takže se do přehledu dostanou i jednotlivé vlastní otázky/zápisky/
+ *  rozbory vět, ne jen souhrn za celý podtyp. Vrací pole { key, label,
+ *  weight } seřazené od nejvíc problematické buňky. */
+function buildSubjectWeaknessHeatmap(subject, mistakeCounts) {
+  const tree = buildSubjectMindMapTree(subject, mistakeCounts);
+  const cells = [];
+  tree.branches.forEach((branch) => {
+    if (branch.children.length === 0) {
+      cells.push({ key: branch.key, label: branch.label, weight: branch.weight });
+    } else {
+      branch.children.forEach((child) => {
+        cells.push({ key: child.key, label: `${branch.label}: ${child.label}`, weight: child.weight });
+      });
+    }
+  });
+  return cells.sort((a, b) => b.weight - a.weight);
+}
+
+/** Barva dlaždice heatmapy podle váhy (počtu chyb) - jemnější škála (5
+ *  úrovní) než mindMapNodeColorClass výš, protože heatmapa zobrazuje malé
+ *  dlaždice vedle sebe, kde jemnější odstupňování je lépe vidět než u
+ *  jednotlivých řádků seznamu. */
+function heatmapIntensityClass(weight) {
+  if (!weight) return 'bg-slate-800/50 border-slate-700 text-slate-500';
+  if (weight === 1) return 'bg-emerald-900/50 border-emerald-700 text-emerald-300';
+  if (weight === 2) return 'bg-amber-900/50 border-amber-700 text-amber-300';
+  if (weight <= 4) return 'bg-orange-900/60 border-orange-700 text-orange-300';
+  return 'bg-rose-900/70 border-rose-600 text-rose-300';
+}
+
+/** Abeceda pro virtuální klávesnici u appce "Šibenice na pojmy" (viz hangman
+ *  v setup()) - běžných 26 písmen plus nejčastější česká diakritika, aby šlo
+ *  uhodnout i pojmy jako "zosobnění" nebo "řečnická otázka". */
+const HANGMAN_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ'.split('');
+const HANGMAN_MAX_WRONG_GUESSES = 6;
+const HANGMAN_MIN_WORD_LENGTH = 3;
+const HANGMAN_MAX_WORD_LENGTH = 24;
+
+/** appka slovo/pojem považuje za vhodné do šibenice, jen pokud jde o přiměřeně
+ *  krátký text tvořený výhradně písmeny, mezerami a pomlčkami (žádná čísla ani
+ *  jiná interpunkce) - appka tak vyřadí třeba číselné odpovědi z matematiky
+ *  nebo celé věty z odpovědí na otázky ze zápisků. */
+function isHangmanFriendlyWord(text) {
+  if (typeof text !== 'string') return false;
+  const t = text.trim();
+  if (t.length < HANGMAN_MIN_WORD_LENGTH || t.length > HANGMAN_MAX_WORD_LENGTH) return false;
+  return /^[\p{L} -]+$/u.test(t);
+}
+
+/** Sestaví pool slov/pojmů pro "Šibenici na pojmy" (viz hangman v
+ *  setup()) - u angličtiny appka bere anglická slovíčka z VOCAB_DECK (viz
+ *  "Angličtina navíc" → Slovníček), u češtiny/angličtiny appka navíc zkusí
+ *  i vylosovat pár otázek z buildQuiz() a použije jejich odpověď, pokud
+ *  vypadá jako krátký pojem (viz isHangmanFriendlyWord) - tím appka pokryje
+ *  hlavně literární pojmy a básnické prostředky. U libovolného předmětu
+ *  appka nakonec přidá i odpovědi z vlastních otázek. Appka takhle
+ *  nepotřebuje žádnou ručně sepsanou samostatnou databázi slov navíc -
+ *  recykluje to, co už umí generovat nebo má uloženo jinde. Čistá funkce
+ *  (kromě volání buildQuiz, které je samo o sobě deterministicky závislé
+ *  jen na svých argumentech + Math.random). */
+function buildHangmanWordPool(subject, mistakeCounts) {
+  const pool = [];
+  const seen = new Set();
+  const add = (word, hint) => {
+    const w = String(word || '').trim();
+    if (!isHangmanFriendlyWord(w)) return;
+    const norm = w.toLowerCase();
+    if (seen.has(norm) || pool.length >= 60) return;
+    seen.add(norm);
+    pool.push({ word: w.toUpperCase(), hint: hint ? String(hint).trim().slice(0, 140) : '' });
+  };
+  const type = detectSubjectType(subject && subject.name);
+  if (type === 'english') {
+    VOCAB_DECK.forEach((topic) => (topic.words || []).forEach((w) => add(w.en, w.cz)));
+  }
+  if (type === 'czech' || type === 'english') {
+    for (let i = 0; i < 60 && pool.length < 60; i++) {
+      const q = buildQuiz(subject, mistakeCounts || {}, 'quiz', {}, false);
+      if (q && typeof q.answerText === 'string') add(q.answerText, q.prompt);
+    }
+  }
+  (Array.isArray(subject && subject.customQuestions) ? subject.customQuestions : []).forEach((q) => {
+    const answer = Array.isArray(q && q.answers) ? q.answers[0] : null;
+    add(answer, q && q.question);
+  });
+  return pool;
+}
+
 /* =====================================================================
    Šifrování zálohy heslem (AES-GCM + PBKDF2) - viz exportBackupWithPassword
    a submitBackupPasswordModal níž ve setup(). Na rozdíl od běžného Exportu
@@ -9166,6 +9827,18 @@ function parseStatsJson(raw) {
     // Oblíbené/obtížné otázky - pole univerzálních quiz.key hodnot, které si
     // uživatel označil hvězdičkou, viz toggleFavoriteCurrentQuestion.
     favoriteKeys: [],
+    // Odměny za splněné cíle - rodič si v appce (chráněno rodičovským PINem,
+    // pokud je nastavený) nadefinuje odměnu vázanou na metu (úroveň/sérii/
+    // celkem vyřešeno), viz submitParentRewardForm/parentRewardsWithStatus.
+    parentRewards: [],
+    // Studijní cíl od rodiče (denní/týdenní, v příkladech nebo minutách) -
+    // viz submitParentStudyGoalForm/parentStudyGoalProgress. null = appka
+    // žádný cíl od rodiče nemá nastavený.
+    parentStudyGoal: null,
+    // Osobní rekordy v režimu "Rychlá palba" (60s time attack) - objekt
+    // { [subjectId]: { correctCount, mistakesTotal, achievedAt } }, viz
+    // recordSpeedRunResult/speedRunBestForActiveSubject.
+    speedRunBests: {},
   };
   try {
     if (raw) {
@@ -9204,6 +9877,9 @@ function parseStatsJson(raw) {
         dailyQuestion: (parsed && typeof parsed.dailyQuestion === 'object' && parsed.dailyQuestion) || null,
         dailyQuestionStreak: (parsed && typeof parsed.dailyQuestionStreak === 'object' && parsed.dailyQuestionStreak) || { count: 0, best: 0, lastDate: null },
         favoriteKeys: Array.isArray(parsed && parsed.favoriteKeys) ? parsed.favoriteKeys.slice(-500) : [],
+        parentRewards: Array.isArray(parsed && parsed.parentRewards) ? parsed.parentRewards.filter((r) => r && typeof r === 'object' && r.id != null) : [],
+        parentStudyGoal: (parsed && typeof parsed.parentStudyGoal === 'object' && parsed.parentStudyGoal) || null,
+        speedRunBests: (parsed && typeof parsed.speedRunBests === 'object' && parsed.speedRunBests) || {},
       };
     }
   } catch (e) {
@@ -11439,6 +12115,8 @@ const ENGLISH_SUBTYPE_LABELS = {
   article: 'člen', preposition: 'předložka', irregular: 'nepravidelné sloveso', vocab: 'slovní zásoba',
   tense: 'slovesný čas / podmínkové věty', passive: 'trpný rod', phrasal: 'frázové sloveso', reported: 'nepřímá řeč',
 };
+/** České slovní názvy známek 1-5, viz predictFinalGradeFromAverage/šablona "Predikce známky". */
+const GRADE_LABELS_CS = { 1: 'výborný', 2: 'chvalitebný', 3: 'dobrý', 4: 'dostatečný', 5: 'nedostatečný' };
 function describeMistakeKey(key, subjectsList) {
   const list = Array.isArray(subjectsList) ? subjectsList : [];
   const parts = String(key || '').split(':');
@@ -11798,6 +12476,83 @@ const app = createApp({
       });
     }
 
+    /* ---------- Odměny za splněné cíle ----------
+       Rodič appce nadefinuje odměnu (libovolný text - výlet, kapesné,
+       oblíbené jídlo...) vázanou na metu, které appka umí sama vyhodnotit:
+       dosaženou úroveň (currentLevel), nejlepší sérii (stats.bestStreak,
+       stejný zdroj jako badge za sérii) nebo celkem vyřešeno
+       (stats.totalSolved). Přidání/smazání odměny appka chrání rodičovským
+       PINem (pokud je nastavený, viz requireParentPin výš) - appka se tak
+       nedá "obejít" tím, že by si dítě samo přidalo snadno splnitelnou
+       odměnu. Vyzvednutí (claimed) naopak PIN nevyžaduje - to je pro dítě. */
+    const PARENT_REWARD_META_LABELS = {
+      level: 'Dosažená úroveň',
+      streak: 'Nejlepší série (dny v kuse)',
+      totalSolved: 'Celkem vyřešeno příkladů',
+    };
+    function parentRewardMetaCurrentValue(metaType) {
+      if (metaType === 'level') return currentLevel.value;
+      if (metaType === 'streak') return stats.bestStreak || 0;
+      if (metaType === 'totalSolved') return stats.totalSolved || 0;
+      return 0;
+    }
+    function parentRewardMetaLabel(metaType) {
+      return PARENT_REWARD_META_LABELS[metaType] || metaType;
+    }
+    const parentRewardsWithStatus = computed(() => (Array.isArray(stats.parentRewards) ? stats.parentRewards : []).map((r) => ({
+      ...r,
+      currentValue: parentRewardMetaCurrentValue(r.metaType),
+      achieved: parentRewardMetaCurrentValue(r.metaType) >= r.metaValue,
+    })).sort((a, b) => (a.claimed === b.claimed ? 0 : a.claimed ? 1 : -1)));
+    const newlyEarnedRewards = computed(() => parentRewardsWithStatus.value.filter((r) => r.achieved && !r.claimed));
+    const showParentRewards = ref(false);
+    const parentRewardModal = reactive({ open: false, metaType: 'totalSolved', metaValue: 50, rewardText: '', error: '' });
+    function closeParentRewardModal() {
+      parentRewardModal.open = false;
+      parentRewardModal.error = '';
+    }
+    function openAddParentRewardModal() {
+      return requireParentPin(() => {
+        parentRewardModal.metaType = 'totalSolved';
+        parentRewardModal.metaValue = 50;
+        parentRewardModal.rewardText = '';
+        parentRewardModal.error = '';
+        parentRewardModal.open = true;
+      });
+    }
+    function submitParentRewardModal() {
+      const target = Math.round(Number(parentRewardModal.metaValue));
+      const text = (parentRewardModal.rewardText || '').trim();
+      if (!text) { parentRewardModal.error = 'Napiš, jaká odměna to bude.'; return; }
+      if (!target || target <= 0) { parentRewardModal.error = 'Zadej platnou cílovou hodnotu (kladné číslo).'; return; }
+      if (!Array.isArray(stats.parentRewards)) stats.parentRewards = [];
+      stats.parentRewards.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        metaType: parentRewardModal.metaType,
+        metaValue: target,
+        rewardText: text,
+        claimed: false,
+        claimedAt: null,
+        createdAt: new Date().toISOString(),
+      });
+      closeParentRewardModal();
+    }
+    function requestRemoveParentReward(id) {
+      return requireParentPin(() => {
+        if (!Array.isArray(stats.parentRewards)) return;
+        const idx = stats.parentRewards.findIndex((r) => r.id === id);
+        if (idx !== -1) stats.parentRewards.splice(idx, 1);
+      });
+    }
+    function claimParentReward(id) {
+      if (!Array.isArray(stats.parentRewards)) return;
+      const reward = stats.parentRewards.find((r) => r.id === id);
+      if (!reward || reward.claimed) return;
+      if (parentRewardMetaCurrentValue(reward.metaType) < reward.metaValue) return;
+      reward.claimed = true;
+      reward.claimedAt = new Date().toISOString();
+    }
+
     /* ---------- Lokální žebříček mezi profily ----------
        Na rozdíl od žebříčku se spolužáky (studyGroup výš, přes Firebase)
        jde o čistě LOKÁLNÍ srovnání profilů appky NA TOMTO ZAŘÍZENÍ - žádná
@@ -11843,6 +12598,244 @@ const app = createApp({
     function toggleLocalLeaderboard() {
       showLocalLeaderboard.value = !showLocalLeaderboard.value;
       if (showLocalLeaderboard.value) loadLocalLeaderboard();
+    }
+
+    /* ---------- Rodinný přehled termínů napříč profily ----------
+       Podobně jako lokální žebříček výš - žádná síť, appka jen dočte
+       PŘEDMĚTY (ne jen statistiky) ostatních profilů na tomto zařízení
+       přímo z jejich vlastního uloženého klíče (parseSubjectsJson +
+       loadRawForKey) a z nich stejnou logikou jako upcomingExams/
+       upcomingHomework výš sestaví jeden společný seznam nadcházejících
+       zkoušek a nesplněných domácích úkolů za VŠECHNY profily najednou -
+       rodič tak nemusí kvůli přehledu přepínat mezi dětmi jedno po druhém. */
+    const showFamilyDeadlines = ref(false);
+    const familyDeadlinesLoading = ref(false);
+    const familyDeadlinesEntries = reactive([]);
+    async function loadFamilyDeadlines() {
+      if (!hasMultipleProfiles.value) return;
+      familyDeadlinesLoading.value = true;
+      try {
+        const perProfile = await Promise.all(profiles.map(async (p) => {
+          let profileSubjects;
+          if (p.id === activeProfileId.value) {
+            profileSubjects = subjects;
+          } else {
+            const raw = await loadRawForKey(profileScopedKey('studijniHubData_v1', p.id));
+            profileSubjects = parseSubjectsJson(raw);
+          }
+          const items = [];
+          profileSubjects.filter((s) => !s.archived).forEach((s) => {
+            const info = examInfo(s);
+            if (info) {
+              items.push({
+                profileId: p.id, profileName: p.name, profileEmoji: p.emoji,
+                kind: 'exam', subjectName: s.name, subjectEmoji: s.emoji,
+                label: info.label, days: info.days,
+              });
+            }
+            (s.homework || []).filter((h) => !h.done).forEach((h) => {
+              const days = h.dueDate ? daysUntil(h.dueDate) : null;
+              items.push({
+                profileId: p.id, profileName: p.name, profileEmoji: p.emoji,
+                kind: 'homework', subjectName: s.name, subjectEmoji: s.emoji,
+                label: h.text, days,
+              });
+            });
+          });
+          return items;
+        }));
+        const merged = perProfile.flat();
+        merged.sort((a, b) => {
+          if (a.days == null && b.days == null) return 0;
+          if (a.days == null) return 1;
+          if (b.days == null) return -1;
+          return a.days - b.days;
+        });
+        familyDeadlinesEntries.splice(0, familyDeadlinesEntries.length, ...merged);
+      } catch (e) {
+        console.warn('Rodinný přehled termínů se nepodařilo sestavit.', e);
+      } finally {
+        familyDeadlinesLoading.value = false;
+      }
+    }
+    function toggleFamilyDeadlines() {
+      showFamilyDeadlines.value = !showFamilyDeadlines.value;
+      if (showFamilyDeadlines.value) loadFamilyDeadlines();
+    }
+
+    /* ---------- Pravidelný stažitelný report pokroku (všechny profily) ----------
+       Na rozdíl od "📊 Sdílet pokrok" výš (shareProgressReport - jeden
+       AKTUÁLNÍ profil, VŠECHNY data od začátku, appka je pošle na Firebase
+       a vytvoří odkaz) jde o krátký STAŽITELNÝ obrázek (stejný princip jako
+       downloadYearInReviewImage výš) za ZVOLENÉ období (posledních 7/30
+       dní, viz periodDateKeys výš) a za VŠECHNY profily najednou - appka
+       přitom nepotřebuje internet, čte jen appkou uložená lokální data. */
+    const showFamilyProgressReport = ref(false);
+    const familyProgressReportPeriod = ref('week');
+    const familyProgressReportLoading = ref(false);
+    const familyProgressReportEntries = reactive([]);
+    async function loadFamilyProgressReport() {
+      familyProgressReportLoading.value = true;
+      try {
+        const keys = periodDateKeys(familyProgressReportPeriod.value);
+        const sumKeys = (obj) => keys.reduce((sum, k) => sum + ((obj && obj[k]) || 0), 0);
+        const entries = await Promise.all(profiles.map(async (p) => {
+          let profileStats;
+          if (p.id === activeProfileId.value) {
+            profileStats = stats;
+          } else {
+            const raw = await loadRawForKey(profileScopedKey('studijniHubStats_v1', p.id));
+            profileStats = parseStatsJson(raw);
+          }
+          const solved = sumKeys(profileStats.dailyHistory);
+          const attempts = sumKeys(profileStats.dailyAttempts);
+          return {
+            id: p.id, name: p.name, emoji: p.emoji,
+            solved, attempts,
+            successRate: attempts > 0 ? Math.round((solved / attempts) * 100) : null,
+            currentStreak: profileStats.currentStreak || 0,
+            bestStreak: profileStats.bestStreak || 0,
+          };
+        }));
+        familyProgressReportEntries.splice(0, familyProgressReportEntries.length, ...entries);
+      } catch (e) {
+        console.warn('Rodinný report pokroku se nepodařilo sestavit.', e);
+      } finally {
+        familyProgressReportLoading.value = false;
+      }
+    }
+    function toggleFamilyProgressReport() {
+      showFamilyProgressReport.value = !showFamilyProgressReport.value;
+      if (showFamilyProgressReport.value) loadFamilyProgressReport();
+    }
+    function setFamilyProgressReportPeriod(period) {
+      familyProgressReportPeriod.value = period;
+      // appka vrací výsledný Promise, ať appka i async volající (třeba v
+      // testech) může počkat na doopravdové dokončení přepočtu.
+      return loadFamilyProgressReport();
+    }
+    function downloadFamilyProgressReportImage() {
+      const entries = familyProgressReportEntries;
+      if (!entries.length) return;
+      try {
+        const rowH = 92;
+        const width = 640;
+        const height = 210 + entries.length * rowH;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext && canvas.getContext('2d');
+        if (!ctx) { alert('Tvůj prohlížeč bohužel neumí vykreslit obrázek reportu (canvas).'); return; }
+
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, '#1e1b4b');
+        grad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#a5b4fc';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('🎓 STUDIJNÍ HUB', width / 2, 56);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 32px sans-serif';
+        ctx.fillText('Report pokroku', width / 2, 100);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px sans-serif';
+        const periodLabel = familyProgressReportPeriod.value === 'month' ? 'posledních 30 dní' : 'posledních 7 dní';
+        ctx.fillText(`${periodLabel} · vygenerováno ${new Date().toLocaleDateString('cs-CZ')}`, width / 2, 124);
+
+        let y = 170;
+        entries.forEach((e) => {
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(32, y - 34, width - 64, rowH - 16, 14) : ctx.rect(32, y - 34, width - 64, rowH - 16);
+          ctx.fill();
+          ctx.textAlign = 'left';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillText(`${e.emoji} ${e.name}`, 52, y);
+          ctx.font = '14px sans-serif';
+          ctx.fillStyle = '#94a3b8';
+          const rateLabel = e.successRate === null ? 'bez pokusů' : `${e.successRate} % úspěšnost`;
+          ctx.fillText(`✅ ${e.solved} vyřešeno · ${rateLabel} · 🔥 ${e.bestStreak} nejlepší série`, 52, y + 24);
+          y += rowH;
+        });
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#475569';
+        ctx.fillText('Vygenerováno ve Studijním Hubu', width / 2, height - 20);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `studijni-hub-report-${familyProgressReportPeriod.value}.png`;
+        a.click();
+      } catch (e) {
+        console.warn('Obrázek reportu pokroku se nepodařilo vytvořit.', e);
+        alert('Obrázek reportu se teď nepodařilo vytvořit.');
+      }
+    }
+
+    /* ---------- Studijní cíl od rodiče (denní/týdenní) ----------
+       Na rozdíl od "Vlastních cílů" výš (goals - appka jich může mít víc
+       najednou, nastavuje si je uživatel sám, appka je vždy počítá za
+       aktuální kalendářní týden) jde o JEDEN cíl, který appka chrání
+       rodičovským PINem (stejně jako odměny/PIN výš) - nastavuje ho rodič,
+       a appka ho měří buď v počtu vyřešených příkladů (stats.dailyHistory,
+       stejný zdroj jako graf pokroku), nebo v minutách aktivního času s
+       appkou otevřenou (stats.studyTimeByDay, stejný zdroj jako
+       todayStudyMinutes/weekStudyMinutes výš) - appka podle zvoleného
+       období (den/týden) porovná se stejným oknem jako u Vlastních cílů. */
+    const parentStudyGoalModal = reactive({ open: false, period: 'daily', metric: 'questions', target: 10 });
+    function parentStudyGoalCurrentValue(goal) {
+      if (goal.metric === 'minutes') {
+        return goal.period === 'daily' ? todayStudyMinutes.value : weekStudyMinutes.value;
+      }
+      if (goal.period === 'daily') return stats.dailyHistory[dateKey(new Date())] || 0;
+      const monday = mondayOfWeek(new Date());
+      let sum = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(d.getDate() + i);
+        sum += (stats.dailyHistory[dateKey(d)] || 0);
+      }
+      return sum;
+    }
+    const parentStudyGoalProgress = computed(() => {
+      const goal = stats.parentStudyGoal;
+      if (!goal || !goal.enabled) return null;
+      const current = parentStudyGoalCurrentValue(goal);
+      const percent = goal.target > 0 ? Math.min(100, Math.round((current / goal.target) * 100)) : 0;
+      return { ...goal, current, percent, done: current >= goal.target };
+    });
+    function closeParentStudyGoalModal() {
+      parentStudyGoalModal.open = false;
+    }
+    function openParentStudyGoalForm() {
+      return requireParentPin(() => {
+        const goal = stats.parentStudyGoal;
+        parentStudyGoalModal.period = (goal && goal.period) || 'daily';
+        parentStudyGoalModal.metric = (goal && goal.metric) || 'questions';
+        parentStudyGoalModal.target = (goal && goal.target) || 10;
+        parentStudyGoalModal.open = true;
+      });
+    }
+    function submitParentStudyGoalForm() {
+      const target = Math.round(Number(parentStudyGoalModal.target));
+      if (!target || target <= 0) return;
+      stats.parentStudyGoal = {
+        enabled: true,
+        period: parentStudyGoalModal.period,
+        metric: parentStudyGoalModal.metric,
+        target,
+      };
+      closeParentStudyGoalModal();
+    }
+    function clearParentStudyGoal() {
+      stats.parentStudyGoal = null;
+      closeParentStudyGoalModal();
     }
 
     /* ---------- Velký pozdrav na dashboardu podle denní doby ---------- */
@@ -11900,6 +12893,9 @@ const app = createApp({
       studyGroup: { id: null, memberId: null, name: '' },
       maturitaDate: null,
       favoriteKeys: [],
+      parentRewards: [],
+      parentStudyGoal: null,
+      speedRunBests: {},
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -12065,6 +13061,13 @@ const app = createApp({
                 ...(Array.isArray(stats.favoriteKeys) ? stats.favoriteKeys : []),
                 ...(Array.isArray(remote.stats.favoriteKeys) ? remote.stats.favoriteKeys : []),
               ])).slice(-500),
+              // Sloučení odměn za cíle ze dvou zařízení podle id, viz
+              // mergeParentRewardsArrays výš.
+              parentRewards: mergeParentRewardsArrays(stats.parentRewards, remote.stats.parentRewards),
+              parentStudyGoal: (remote.stats.parentStudyGoal && typeof remote.stats.parentStudyGoal === 'object') ? remote.stats.parentStudyGoal : null,
+              // Sloučení osobních rekordů "Rychlá palba" ze dvou zařízení podle
+              // id předmětu, viz mergeSpeedRunBests výš.
+              speedRunBests: mergeSpeedRunBests(stats.speedRunBests, remote.stats.speedRunBests),
             });
             // Merge mohl přinést otázku dne z jiného zařízení/dne (nebo žádnou) -
             // znovu ověřit/doplnit podle DNEŠNÍHO data a AKTUÁLNÍHO seznamu předmětů.
@@ -13659,6 +14662,214 @@ const app = createApp({
       openSubject(subjectId);
     }
 
+    /* ---------- Párovací hra (pexeso) ----------
+       Appka z buildQuiz() daného předmětu vylosuje N různých otázek (podle
+       textu promptu zahazuje případné duplicity) a z každé udělá dvě karty -
+       otázku a odpověď. Ty appka zamíchá a hráč hledá odpovídající páry,
+       stejně jako u klasického pexesa - na rozdíl od běžného kvízu appka
+       nevyžaduje napsání odpovědi, jen porovnání dvou otočených karet.
+       Dokončená hra appka počítá do denní aktivity/série stejně jako běžné
+       vyřešené příklady (viz recordMemoryGameCompletion), ale NEPROCHÁZÍ
+       přes mistakeCounts/srs - pexeso nemá koncept "špatné odpovědi u
+       konkrétní otázky", jen dvojici karet, která zatím nebyla nalezena. */
+    const MEMORY_GAME_GENERATE_ATTEMPTS_PER_PAIR = 20;
+    function buildMemoryGamePairs(subject, pairCount) {
+      const seenPrompts = new Set();
+      const pairs = [];
+      let attempts = 0;
+      while (pairs.length < pairCount && attempts < pairCount * MEMORY_GAME_GENERATE_ATTEMPTS_PER_PAIR) {
+        attempts++;
+        const q = buildQuiz(subject, {}, 'quiz', {}, false);
+        if (!q || !q.prompt || !q.answerText) continue;
+        if (seenPrompts.has(q.prompt)) continue;
+        seenPrompts.add(q.prompt);
+        pairs.push({ prompt: q.prompt, answerText: q.answerText });
+      }
+      return pairs;
+    }
+    function recordMemoryGameCompletion(subject, pairCount) {
+      const today = dateKey(new Date());
+      stats.totalSolved = (stats.totalSolved || 0) + pairCount;
+      stats.totalAttempts = (stats.totalAttempts || 0) + pairCount;
+      stats.dailyHistory[today] = (stats.dailyHistory[today] || 0) + pairCount;
+      if (!stats.dailyAttempts) stats.dailyAttempts = {};
+      stats.dailyAttempts[today] = (stats.dailyAttempts[today] || 0) + pairCount;
+      stats.currentStreak = (stats.currentStreak || 0) + pairCount;
+      if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
+      if (subject) {
+        subject.solvedCount = (subject.solvedCount || 0) + pairCount;
+        subject.attemptsCount = (subject.attemptsCount || 0) + pairCount;
+        subject.lastPracticedAt = new Date().toISOString();
+      }
+    }
+    let memoryGameTimerId = null;
+    const memoryGame = reactive({ active: false, subjectId: null, cards: [], flipped: [], matchedPairs: 0, totalPairs: 0, moves: 0, finished: false });
+    function closeMemoryGame() {
+      if (memoryGameTimerId) { clearTimeout(memoryGameTimerId); memoryGameTimerId = null; }
+      memoryGame.active = false;
+    }
+    function startMemoryGame(subject, pairCount) {
+      if (!subject) return;
+      const count = Math.max(2, Math.min(10, pairCount || 6));
+      const pairs = buildMemoryGamePairs(subject, count);
+      if (pairs.length < 2) {
+        alert('Appka pro tenhle předmět nenašla dost různých otázek na párovací hru - zkus to u jiného předmětu, nebo mu nejdřív přidej pár vlastních otázek.');
+        return;
+      }
+      if (memoryGameTimerId) { clearTimeout(memoryGameTimerId); memoryGameTimerId = null; }
+      const cards = [];
+      pairs.forEach((p, i) => {
+        cards.push({ id: i * 2, pairId: i, kind: 'prompt', text: p.prompt, matched: false });
+        cards.push({ id: i * 2 + 1, pairId: i, kind: 'answer', text: p.answerText, matched: false });
+      });
+      for (let i = cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = cards[i]; cards[i] = cards[j]; cards[j] = tmp;
+      }
+      memoryGame.subjectId = subject.id;
+      memoryGame.cards.splice(0, memoryGame.cards.length, ...cards);
+      memoryGame.flipped.splice(0, memoryGame.flipped.length);
+      memoryGame.matchedPairs = 0;
+      memoryGame.totalPairs = pairs.length;
+      memoryGame.moves = 0;
+      memoryGame.finished = false;
+      memoryGame.active = true;
+    }
+    function flipMemoryCard(card) {
+      if (!memoryGame.active || memoryGame.finished) return;
+      if (card.matched) return;
+      // appka čeká, dokud se předchozí neshodující se dvojice nezavře (viz
+      // setTimeout níž) - třetí kartu appka tak nedovolí otočit napůl cesty.
+      if (memoryGame.flipped.length >= 2) return;
+      if (memoryGame.flipped.some((c) => c.id === card.id)) return;
+      memoryGame.flipped.push(card);
+      if (memoryGame.flipped.length === 2) {
+        memoryGame.moves++;
+        const a = memoryGame.flipped[0];
+        const b = memoryGame.flipped[1];
+        if (a.pairId === b.pairId) {
+          a.matched = true;
+          b.matched = true;
+          memoryGame.matchedPairs++;
+          memoryGame.flipped.splice(0, memoryGame.flipped.length);
+          if (memoryGame.matchedPairs >= memoryGame.totalPairs) {
+            memoryGame.finished = true;
+            const subject = subjects.find((s) => s.id === memoryGame.subjectId);
+            recordMemoryGameCompletion(subject, memoryGame.totalPairs);
+          }
+        } else {
+          memoryGameTimerId = setTimeout(() => {
+            memoryGame.flipped.splice(0, memoryGame.flipped.length);
+            memoryGameTimerId = null;
+          }, 900);
+        }
+      }
+    }
+
+    /* ---------- Mapa myšlenek předmětu (vizuální strom hlavních témat) ----------
+       Na rozdíl od weakestTopicsOverview výš appka tady staví strom ze VŠECH
+       dostupných témat daného předmětu (viz buildSubjectMindMapTree), ne jen
+       z těch, kde appka zaznamenala chybu - weight se používá jen k obarvení
+       uzlu. Appka drží rozbalenou nejvýš jednu větev najednou
+       (mindMapExpandedBranch), aby strom u předmětů s hodně tématy zůstal
+       přehledný. */
+    const showSubjectMindMap = ref(false);
+    const mindMapExpandedBranch = ref(null);
+    const subjectMindMapTree = computed(() => {
+      if (!activeSubject.value) return null;
+      return buildSubjectMindMapTree(activeSubject.value, stats.mistakeCounts);
+    });
+    function toggleSubjectMindMap() {
+      showSubjectMindMap.value = !showSubjectMindMap.value;
+      if (showSubjectMindMap.value) mindMapExpandedBranch.value = null;
+    }
+    function toggleMindMapBranch(key) {
+      mindMapExpandedBranch.value = mindMapExpandedBranch.value === key ? null : key;
+    }
+    function mindMapNodeColorClass(weight) {
+      if (!weight) return 'bg-slate-800/70 text-slate-400 border-slate-700';
+      if (weight >= 4) return 'bg-rose-950/40 text-rose-300 border-rose-800';
+      if (weight >= 2) return 'bg-amber-950/40 text-amber-300 border-amber-800';
+      return 'bg-emerald-950/40 text-emerald-300 border-emerald-800';
+    }
+
+    /* ---------- Podrobnější mapa slabých témat (heatmapa) ----------
+       Znovupoužívá buildSubjectWeaknessHeatmap výš (samo o sobě staví na
+       buildSubjectMindMapTree ze stejné sekce) - appka tu jen drží stav
+       otevření panelu a computed pro aktivní předmět. */
+    const showWeaknessHeatmap = ref(false);
+    const activeSubjectWeaknessHeatmap = computed(() =>
+      activeSubject.value ? buildSubjectWeaknessHeatmap(activeSubject.value, stats.mistakeCounts) : []
+    );
+    function toggleWeaknessHeatmap() {
+      showWeaknessHeatmap.value = !showWeaknessHeatmap.value;
+    }
+
+    /* ---------- Šibenice na pojmy (hangman) ----------
+       Zdroj slov viz buildHangmanWordPool výš (top-level, mimo setup() -
+       appka díky tomu recykluje VOCAB_DECK/buildQuiz/customQuestions, aniž by
+       potřebovala vlastní ručně sepsanou databázi slov navíc). */
+    function recordHangmanCompletion(subject) {
+      const today = dateKey(new Date());
+      stats.totalSolved = (stats.totalSolved || 0) + 1;
+      stats.totalAttempts = (stats.totalAttempts || 0) + 1;
+      stats.dailyHistory[today] = (stats.dailyHistory[today] || 0) + 1;
+      if (!stats.dailyAttempts) stats.dailyAttempts = {};
+      stats.dailyAttempts[today] = (stats.dailyAttempts[today] || 0) + 1;
+      stats.currentStreak = (stats.currentStreak || 0) + 1;
+      if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
+      if (subject) {
+        subject.solvedCount = (subject.solvedCount || 0) + 1;
+        subject.attemptsCount = (subject.attemptsCount || 0) + 1;
+        subject.lastPracticedAt = new Date().toISOString();
+      }
+    }
+    const hangman = reactive({ active: false, subjectId: null, word: '', hint: '', guessed: [], wrongGuesses: [], finished: false, won: false });
+    function closeHangman() {
+      hangman.active = false;
+    }
+    function startHangman(subject) {
+      if (!subject) return;
+      const pool = buildHangmanWordPool(subject, stats.mistakeCounts);
+      if (pool.length === 0) {
+        alert('Pro tenhle předmět appka zatím nenašla žádná vhodná slova/pojmy pro šibenici - zkus to u předmětu s víc obsahem (matematika pro tuhle hru nemá vhodná krátká slova).');
+        return;
+      }
+      const picked = pool[Math.floor(Math.random() * pool.length)];
+      hangman.active = true;
+      hangman.subjectId = subject.id;
+      hangman.word = picked.word;
+      hangman.hint = picked.hint;
+      hangman.guessed = [];
+      hangman.wrongGuesses = [];
+      hangman.finished = false;
+      hangman.won = false;
+    }
+    function guessHangmanLetter(letter) {
+      if (!hangman.active || hangman.finished) return;
+      const L = String(letter || '').toUpperCase();
+      if (!L || hangman.guessed.includes(L)) return;
+      hangman.guessed.push(L);
+      const letters = hangman.word.split('').filter((c) => c !== ' ' && c !== '-');
+      if (letters.includes(L)) {
+        const allFound = letters.every((c) => hangman.guessed.includes(c));
+        if (allFound) {
+          hangman.finished = true;
+          hangman.won = true;
+          recordHangmanCompletion(subjects.find((s) => s.id === hangman.subjectId));
+        }
+      } else {
+        hangman.wrongGuesses.push(L);
+        if (hangman.wrongGuesses.length >= HANGMAN_MAX_WRONG_GUESSES) {
+          hangman.finished = true;
+          hangman.won = false;
+        }
+      }
+    }
+    const hangmanMaskedWord = computed(() =>
+      hangman.word.split('').map((c) => (c === ' ' || c === '-' || hangman.guessed.includes(c)) ? c : '_').join(' ')
+    );
+
     /* ---------- Režim bez rušení (fullscreen focus) ----------
        Schová horní lištu, hlavičku předmětu, panel vlastních otázek a
        zápisky - zůstane vidět jen samotná procvičovací karta (viz
@@ -14060,8 +15271,30 @@ const app = createApp({
        "vynuluje" tím, že se posune okno, ze kterého se progress počítá, ne
        mazáním - appka žádnou historii minulých týdnů u cílů neukládá. */
     const showGoals = ref(false);
-    const newGoalForm = reactive({ type: 'total', subjectId: null, target: 20 });
+    const newGoalForm = reactive({ type: 'total', subjectId: null, target: 20, dueDate: '' });
     function addGoal() {
+      if (newGoalForm.type === 'rateByDate') {
+        // Cíl typu "X % úspěšnosti u předmětu do data Y" - appka narozdíl od
+        // ostatních dvou typů NEPOČÍTÁ progres za aktuální týden, ale
+        // celkovou (všech dob) úspěšnost daného předmětu vůči termínu, viz
+        // goalRateByDateInfo níž.
+        const target = Math.round(Number(newGoalForm.target));
+        if (!target || target < 1 || target > 100) { alert('Cílová úspěšnost musí být číslo od 1 do 100 %.'); return; }
+        if (newGoalForm.subjectId == null) return;
+        if (!newGoalForm.dueDate) { alert('Vyber datum, do kterého chceš cílové úspěšnosti dosáhnout.'); return; }
+        if (!Array.isArray(stats.goals)) stats.goals = [];
+        stats.goals.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          type: 'rateByDate',
+          subjectId: newGoalForm.subjectId,
+          target,
+          dueDate: newGoalForm.dueDate,
+          createdAt: new Date().toISOString(),
+        });
+        newGoalForm.target = 20;
+        newGoalForm.dueDate = '';
+        return;
+      }
       const target = Math.round(Number(newGoalForm.target));
       if (!target || target <= 0) return;
       if (newGoalForm.type === 'subject' && newGoalForm.subjectId == null) return;
@@ -14094,7 +15327,32 @@ const app = createApp({
       }
       return sum;
     }
+    /** appka počítá celkovou (nikoli jen týdenní) úspěšnost u předmětu cíle
+     *  typu "rateByDate" plus počet dní do termínu (daysUntil vrátí záporné
+     *  číslo, když je termín už po datu). */
+    function goalRateByDateInfo(goal) {
+      const subject = subjects.find((s) => s.id === goal.subjectId);
+      const attempts = (subject && subject.attemptsCount) || 0;
+      const solved = (subject && subject.solvedCount) || 0;
+      return {
+        currentPercent: attempts > 0 ? Math.round((solved / attempts) * 100) : 0,
+        daysLeft: goal.dueDate ? daysUntil(goal.dueDate) : null,
+      };
+    }
     const activeGoalsWithProgress = computed(() => (stats.goals || []).map((g) => {
+      if (g.type === 'rateByDate') {
+        const info = goalRateByDateInfo(g);
+        const done = info.currentPercent >= g.target;
+        return {
+          ...g,
+          progress: info.currentPercent,
+          percent: g.target > 0 ? Math.min(100, Math.round((info.currentPercent / g.target) * 100)) : 0,
+          done,
+          subject: subjects.find((s) => s.id === g.subjectId) || null,
+          daysLeft: info.daysLeft,
+          overdue: !done && info.daysLeft != null && info.daysLeft < 0,
+        };
+      }
       const progress = goalWeekProgress(g);
       const percent = g.target > 0 ? Math.min(100, Math.round((progress / g.target) * 100)) : 0;
       return {
@@ -14657,6 +15915,26 @@ const app = createApp({
       return Math.round(sum / 60);
     });
 
+    /* ---------- Odhad stráveného času učením (podrobný rozpis) ----------
+       Malý odznak výš (todayStudyMinutes/weekStudyMinutes) ukazuje jen dnešek
+       a tento týden - tenhle panel navíc appka doplní o graf posledních 14 dní,
+       posledních 30 dní celkem, nejsilnější den a průměr na aktivní den,
+       vše postavené nad stejným stats.studyTimeByDay. */
+    const STUDY_TIME_CHART_DAYS = 14;
+    const showStudyTimeBreakdown = ref(false);
+    function toggleStudyTimeBreakdown() {
+      showStudyTimeBreakdown.value = !showStudyTimeBreakdown.value;
+    }
+    const studyTimeDailyBreakdown = computed(() =>
+      buildStudyTimeDailyBreakdown(stats.studyTimeByDay, STUDY_TIME_CHART_DAYS, new Date())
+    );
+    const studyTimeDailyMax = computed(() => Math.max(1, ...studyTimeDailyBreakdown.value.map((d) => d.minutes)));
+    function studyTimeBarHeight(minutes) {
+      return Math.round((minutes / studyTimeDailyMax.value) * 100);
+    }
+    const studyTimeDailyHasData = computed(() => studyTimeDailyBreakdown.value.some((d) => d.minutes > 0));
+    const studyTimeBreakdownSummary = computed(() => studyTimeSummary(stats.studyTimeByDay, new Date()));
+
     /* ---------- Připomínky (místní notifikace prohlížeče) ----------
        DŮLEŽITÉ omezení, se kterým appka počítá: bez vlastního serveru appka
        neumí poslat "opravdovou" push notifikaci, když je appka úplně
@@ -14953,6 +16231,50 @@ const app = createApp({
       };
     }
     const activeSubjectGradeSummary = computed(() => gradeSummaryForSubject(activeSubject.value));
+
+    /* ---------- Predikce známky na vysvědčení ----------
+       Rozšiřuje výše uvedený vážený průměr o dvě věci: české "pedagogické"
+       zaokrouhlení na celou výslednou známku (viz predictFinalGradeFromAverage)
+       a odhad trendu - jestli se poslední známky oproti starším spíš lepší,
+       nebo zhoršují (viz gradeTrend). Appka počítá obojí zvlášť pro 1. a 2.
+       pololetí, stejně jako gradeSummaryForSubject výš. */
+    /** Na rozdíl od Math.round appka zaokrouhluje přesnou půlku (např. 1,50)
+     *  směrem k LEPŠÍ (nižší) známce, což odpovídá běžné praxi na českých
+     *  školách - průměr 1,50 appka zaokrouhlí na výbornou, ne na chvalitebnou. */
+    function predictFinalGradeFromAverage(avg) {
+      if (typeof avg !== 'number' || !Number.isFinite(avg)) return null;
+      const rounded = Math.ceil(avg - 0.5);
+      return Math.min(5, Math.max(1, rounded));
+    }
+    /** Appka porovná průměr novější poloviny známek se starší polovinou -
+     *  při míň než 4 známkách appka trend nehodnotí (vrací null), protože
+     *  rozdělení na "starší"/"novější" by bylo příliš nespolehlivé. Na české
+     *  stupnici znamená vyšší číslo horší známku, takže kladný rozdíl
+     *  (novější průměr vyšší než starší) appka vyhodnotí jako zhoršování. */
+    function gradeTrend(grades) {
+      if (!Array.isArray(grades) || grades.length < 4) return null;
+      const mid = Math.floor(grades.length / 2);
+      const olderAvg = weightedGradeAverage(grades.slice(0, mid));
+      const newerAvg = weightedGradeAverage(grades.slice(mid));
+      if (olderAvg == null || newerAvg == null) return null;
+      const diff = newerAvg - olderAvg;
+      if (diff <= -0.3) return 'improving';
+      if (diff >= 0.3) return 'worsening';
+      return 'stable';
+    }
+    function gradePredictionForSubject(subject) {
+      if (!subject || !Array.isArray(subject.grades) || subject.grades.length === 0) return null;
+      const buildHalf = (list) => {
+        if (list.length === 0) return null;
+        const average = weightedGradeAverage(list);
+        return { average, predictedGrade: predictFinalGradeFromAverage(average), trend: gradeTrend(list), count: list.length };
+      };
+      return {
+        half1: buildHalf(subject.grades.filter((g) => g.halfYear === 1)),
+        half2: buildHalf(subject.grades.filter((g) => g.halfYear === 2)),
+      };
+    }
+    const activeSubjectGradePrediction = computed(() => gradePredictionForSubject(activeSubject.value));
     const showGrades = ref(false);
     const showHomework = ref(false);
 
@@ -16332,6 +17654,9 @@ const app = createApp({
               studyGroup: { id: null, memberId: null, name: '' },
               maturitaDate: (typeof importedStats.maturitaDate === 'string' && importedStats.maturitaDate) ? importedStats.maturitaDate : null,
               favoriteKeys: Array.isArray(importedStats.favoriteKeys) ? importedStats.favoriteKeys.slice(-500) : [],
+              parentRewards: Array.isArray(importedStats.parentRewards) ? importedStats.parentRewards.filter((r) => r && typeof r === 'object' && r.id != null) : [],
+              parentStudyGoal: (importedStats.parentStudyGoal && typeof importedStats.parentStudyGoal === 'object') ? importedStats.parentStudyGoal : null,
+              speedRunBests: (importedStats.speedRunBests && typeof importedStats.speedRunBests === 'object') ? importedStats.speedRunBests : {},
             });
           }
           activeSubjectId.value = null;
@@ -16704,7 +18029,7 @@ const app = createApp({
     /* ---------- Časovaný režim procvičování (co nejvíc příkladů na čas) ---------- */
     const timedSession = reactive({
       active: false, showSummary: false, totalSeconds: 0, secondsLeft: 0,
-      correctCount: 0, mistakesTotal: 0,
+      correctCount: 0, mistakesTotal: 0, subjectId: null,
     });
     let timedIntervalId = null;
     function clearTimedInterval() {
@@ -16726,18 +18051,47 @@ const app = createApp({
       timedSession.secondsLeft = seconds;
       timedSession.correctCount = 0;
       timedSession.mistakesTotal = 0;
+      timedSession.subjectId = activeSubject.value.id;
+      speedRunNewRecord.value = false;
       generateNewQuiz();
       timedIntervalId = setInterval(() => {
         timedSession.secondsLeft--;
         if (timedSession.secondsLeft <= 0) finishTimedSession();
       }, 1000);
     }
+    /* ---------- "Rychlá palba" - osobní rekord v 60sekundovém time attacku ----------
+       Znovupoužívá timedSession výš (60s je jen jedna z jeho předvolených
+       délek) - appka navíc jen hlídá osobní rekord PRO KONKRÉTNÍ PŘEDMĚT při
+       délce PŘESNĚ 60s, a to jen u čistého jednopředmětového běhu (ne u
+       Maturity nanečisto/večerního opakování/mixu předmětů, kde by srovnání
+       se "60s na tenhle předmět" nedávalo smysl). */
+    const speedRunNewRecord = ref(false);
+    function recordSpeedRunResult() {
+      if (timedSession.totalSeconds !== 60) return;
+      if (isMaturitaMockSession.value || mixedQuizMode.value || eveningReviewActive.value) return;
+      if (!timedSession.subjectId) return;
+      if (!stats.speedRunBests || typeof stats.speedRunBests !== 'object') stats.speedRunBests = {};
+      const existing = stats.speedRunBests[timedSession.subjectId];
+      const candidate = { correctCount: timedSession.correctCount, mistakesTotal: timedSession.mistakesTotal, achievedAt: new Date().toISOString() };
+      const isBetter = !existing
+        || candidate.correctCount > existing.correctCount
+        || (candidate.correctCount === existing.correctCount && candidate.mistakesTotal < existing.mistakesTotal);
+      if (isBetter && candidate.correctCount > 0) {
+        stats.speedRunBests[timedSession.subjectId] = candidate;
+        speedRunNewRecord.value = true;
+      }
+    }
+    const speedRunBestForActiveSubject = computed(() => {
+      if (!activeSubject.value || !stats.speedRunBests) return null;
+      return stats.speedRunBests[activeSubject.value.id] || null;
+    });
     /** Čas vypršel - zastaví odpočet a zobrazí souhrn výsledků. */
     function finishTimedSession() {
       clearTimedInterval();
       timedSession.active = false;
       timedSession.showSummary = true;
-      if (timedSession.correctCount > 0) fireConfetti(50);
+      recordSpeedRunResult();
+      if (timedSession.correctCount > 0) fireConfetti(speedRunNewRecord.value ? 90 : 50);
     }
     /** Ukončí časovaný test předčasně (např. při přepnutí na jiný režim procvičování). */
     function stopTimedSession() {
@@ -17607,6 +18961,14 @@ const app = createApp({
       deleteProfile, switchToProfile,
       hasParentPin, parentPinModal, closeParentPinModal, submitParentPinModal, openSetupParentPin, requestChangeParentPin, requestRemoveParentPin,
       showLocalLeaderboard, localLeaderboardLoading, localLeaderboardEntries, toggleLocalLeaderboard, loadLocalLeaderboard,
+      showFamilyDeadlines, familyDeadlinesLoading, familyDeadlinesEntries, toggleFamilyDeadlines, loadFamilyDeadlines,
+      showFamilyProgressReport, familyProgressReportPeriod, familyProgressReportLoading, familyProgressReportEntries,
+      toggleFamilyProgressReport, loadFamilyProgressReport, setFamilyProgressReportPeriod, downloadFamilyProgressReportImage,
+      parentStudyGoalModal, parentStudyGoalProgress, closeParentStudyGoalModal, openParentStudyGoalForm, submitParentStudyGoalForm, clearParentStudyGoal,
+      memoryGame, startMemoryGame, closeMemoryGame, flipMemoryCard,
+      showSubjectMindMap, mindMapExpandedBranch, subjectMindMapTree, toggleSubjectMindMap, toggleMindMapBranch, mindMapNodeColorClass,
+      showWeaknessHeatmap, activeSubjectWeaknessHeatmap, toggleWeaknessHeatmap, heatmapIntensityClass,
+      hangman, hangmanMaskedWord, startHangman, closeHangman, guessHangmanLetter, HANGMAN_ALPHABET, HANGMAN_MAX_WRONG_GUESSES,
       stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak, appBadgingSupported, updateAppBadge,
       totalDueReviewCount, soonExamsForOverview, todayOverviewVisible,
       recentSubjects, recentSubjectIds,
@@ -17623,6 +18985,7 @@ const app = createApp({
       folderFilter, subjectFolders, setSubjectFolder, studyPlanForSubject, activeSubjectStudyPlan,
       reviewPlanForSubject, activeSubjectReviewPlan, showReviewPlan, toggleReviewPlanDay,
       gradeForm, addGrade, removeGrade, weightedGradeAverage, gradeSummaryForSubject, activeSubjectGradeSummary, showGrades,
+      gradePredictionForSubject, activeSubjectGradePrediction, GRADE_LABELS_CS,
       newHomeworkText, newHomeworkDue, addHomework, toggleHomeworkDone, removeHomework, upcomingHomework, showHomework, showHomeworkOverview,
       showAddModal, newSubject,
       confirmState,
@@ -17657,6 +19020,8 @@ const app = createApp({
       openSubject, closeSubject, scrollCarousel, updateScrollState,
       focusMode, toggleFocusMode,
       spinWheelModal, openSpinWheel, closeSpinWheelModal, startPracticeFromSpinWheel,
+      parentRewardsWithStatus, newlyEarnedRewards, showParentRewards, parentRewardModal,
+      closeParentRewardModal, openAddParentRewardModal, submitParentRewardModal, requestRemoveParentReward, claimParentReward, parentRewardMetaLabel,
       onSubjectDragStart, onSubjectDragOver, onSubjectDrop, onSubjectDragEnd,
       toggleArchiveSubject,
       openAddModal, closeAddModal, addSubject,
@@ -17698,7 +19063,7 @@ const app = createApp({
       showWeeklyPlan, weeklyPlan,
       showTimetable, DAY_LABELS, DAY_ORDER, timetableForm, timetableSlotsForDay, addTimetableSlot, removeTimetableSlot, todayTimetable,
       exportTimetableToPrint,
-      showGoals, newGoalForm, addGoal, removeGoal, activeGoalsWithProgress,
+      showGoals, newGoalForm, addGoal, removeGoal, activeGoalsWithProgress, goalRateByDateInfo,
       showBookAnalysis, bookAnalysisAuthor, bookAnalysisTitle, bookAnalysisAuthors, bookAnalysisTitlesForAuthor, selectBookAnalysisAuthor, activeBookAnalysis, printBookAnalysis,
       readBooksCount, isBookRead, toggleBookRead, activeBookNote,
       bookQuizActive, bookQuizQuestion, bookQuizSelected, bookQuizScore, startBookQuiz, nextBookQuizQuestion, answerBookQuiz, stopBookQuiz,
@@ -17718,12 +19083,14 @@ const app = createApp({
       nextEnglishBuilderSentence, pickBuilderWord, undoBuilderWord, checkEnglishBuilder, selectEnglishBuilderExercise,
       englishDialogueDifficulty, englishDialogueItem, englishDialogueSelected, nextEnglishDialogue, setEnglishDialogueDifficulty, answerEnglishDialogue,
       todayStudyMinutes, weekStudyMinutes, addStudySeconds,
+      showStudyTimeBreakdown, toggleStudyTimeBreakdown, studyTimeDailyBreakdown, studyTimeDailyHasData, studyTimeBarHeight, studyTimeBreakdownSummary,
       notificationsSupported, notificationPermission, enableNotifications,
       showActivityHeatmap, activityHeatmapDays, activityHeatmapWeeks, activityHeatmapHasData,
       heatmapCellClass, heatmapCellTitle,
       exportSubjectData, triggerImportSubjectFile, handleImportSubjectFile,
       speechSupported, speakingNoteId, isSpeakingQuizPrompt, stopSpeaking, speakNote, speakQuizPrompt,
       timedSession, startTimedSession, stopTimedSession, timedPacePerMinute,
+      speedRunNewRecord, speedRunBestForActiveSubject, recordSpeedRunResult,
       showMaturitaMock, toggleMaturitaMockSetup, maturitaMockSubjectIds, toggleMaturitaMockSubject,
       maturitaMockMinutes, startMaturitaMock, isMaturitaMockSession,
       showEveningReviewCard, eveningReviewSubjects, eveningReviewActive, startEveningReview, isEveningHoursNow,
