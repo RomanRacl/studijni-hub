@@ -1078,7 +1078,7 @@
   <!-- ============================================================= -->
   <!-- HORNÍ LIŠTA -->
   <!-- ============================================================= -->
-  <div class="border-b border-slate-800/70 entrance topbar-glass">
+  <div v-if="!focusMode" class="border-b border-slate-800/70 entrance topbar-glass">
     <div class="max-w-7xl mx-auto px-6 md:px-12 py-5 flex items-center gap-3">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/20">🎓</div>
       <span class="font-semibold text-xl tracking-tight">Studijní <span class="text-cyan-400">Hub</span></span>
@@ -1142,6 +1142,17 @@
                 class="input !text-sm flex-1"
               />
               <button @click="addProfile" class="btn-primary !text-sm !px-3 shrink-0">Vytvořit</button>
+            </div>
+          </div>
+          <div class="border-t border-slate-800 pt-3 mt-3">
+            <p class="text-xs text-slate-500 mb-2">🔒 Rodičovský PIN {{ hasParentPin ? '(nastavený)' : '(nenastavený)' }}</p>
+            <p class="text-xs text-slate-500 mb-2">Když je nastavený, appka ho vyžádá před přepnutím na jiný profil a před smazáním profilu - hodí se, když si appku na jednom zařízení spolu sdílí rodič s dítětem nebo víc sourozenců.</p>
+            <div class="flex gap-2">
+              <button v-if="!hasParentPin" @click="openSetupParentPin" class="btn-secondary !text-xs">Nastavit PIN</button>
+              <template v-else>
+                <button @click="requestChangeParentPin" class="btn-secondary !text-xs">Změnit PIN</button>
+                <button @click="requestRemoveParentPin" class="btn-ghost !text-xs !text-rose-400">Zrušit PIN</button>
+              </template>
             </div>
           </div>
           <div class="flex justify-end mt-3">
@@ -1452,6 +1463,9 @@
           <button @click="showWeeklyProgress = !showWeeklyProgress" class="btn-ghost !text-emerald-300">
             📊 {{ showWeeklyProgress ? 'Skrýt úspěšnost v čase' : 'Úspěšnost v čase' }}
           </button>
+          <button @click="showWeekTrend = !showWeekTrend" class="btn-ghost !text-emerald-300">
+            📈 {{ showWeekTrend ? 'Skrýt týden vs týden' : 'Týden vs týden' }}
+          </button>
           <button @click="showActivityHeatmap = !showActivityHeatmap" class="btn-ghost !text-cyan-300">
             🗓️ {{ showActivityHeatmap ? 'Skrýt mapu aktivity' : 'Zobrazit mapu aktivity' }}
           </button>
@@ -1461,6 +1475,12 @@
           <button @click="showYearInReview = !showYearInReview" class="btn-ghost !text-violet-300">
             🎉 {{ showYearInReview ? 'Skrýt roční souhrn' : 'Rok ve Studijním Hubu' }}
           </button>
+          <button @click="openSpinWheel" class="btn-ghost !text-amber-300">
+            🎡 Co se učit teď?
+          </button>
+          <button v-if="hasMultipleProfiles" @click="toggleLocalLeaderboard" class="btn-ghost !text-fuchsia-300">
+            🏆 {{ showLocalLeaderboard ? 'Skrýt žebříček profilů' : 'Žebříček profilů (na tomto zařízení)' }}
+          </button>
           <button @click="toggleStudyGroup" class="btn-ghost !text-fuchsia-300">
             🏆 {{ showStudyGroup ? 'Skrýt žebříček' : 'Žebříček se spolužáky' }}
           </button>
@@ -1469,6 +1489,9 @@
           </button>
           <button v-if="weakestTopicsOverview.length > 0" @click="showWeakTopics = !showWeakTopics" class="btn-ghost !text-rose-300">
             📊 {{ showWeakTopics ? 'Skrýt slabá témata' : `Slabá témata (${weakestTopicsOverview.length})` }}
+          </button>
+          <button v-if="favoriteQuestionsOverview.length > 0" @click="showFavoriteQuestions = !showFavoriteQuestions" class="btn-ghost !text-amber-300">
+            ⭐ {{ showFavoriteQuestions ? 'Skrýt oblíbené otázky' : `Oblíbené otázky (${favoriteQuestionsOverview.length})` }}
           </button>
           <button v-if="srsCalendarSummary.total > 0" @click="showSrsCalendar = !showSrsCalendar" class="btn-ghost !text-violet-300">
             🗓️ {{ showSrsCalendar ? 'Skrýt kalendář opakování' : `Kalendář opakování${srsCalendarSummary.overdue > 0 ? ` (${srsCalendarSummary.overdue} po termínu)` : ''}` }}
@@ -1481,6 +1504,9 @@
           </button>
           <button v-if="upcomingExams.length > 0" @click="showUpcomingExams = !showUpcomingExams" class="btn-ghost !text-rose-300">
             📅 {{ showUpcomingExams ? 'Skrýt termíny' : `Termíny (${upcomingExams.length})` }}
+          </button>
+          <button v-if="upcomingHomework.length > 0" @click="showHomeworkOverview = !showHomeworkOverview" class="btn-ghost !text-amber-300">
+            📝 {{ showHomeworkOverview ? 'Skrýt domácí úkoly' : `Domácí úkoly (${upcomingHomework.length})` }}
           </button>
           <button v-if="weeklyPlan.length > 0" @click="showWeeklyPlan = !showWeeklyPlan" class="btn-ghost !text-emerald-300">
             🗓️ {{ showWeeklyPlan ? 'Skrýt plánovač' : 'Týdenní plánovač' }}
@@ -1565,7 +1591,8 @@
             <button @click="showTrashModal = true" class="btn-secondary text-xs !py-1.5 !px-3" title="Smazané předměty a zápisy zůstávají dočasně v koši, odkud je jde obnovit">🗑️ Koš<span v-if="trash.length"> ({{ trash.length }})</span></button>
             <button @click="exportAllSubjectsToPdf" class="btn-secondary text-xs !py-1.5 !px-3" title="Otevře tiskový náhled úplně všech předmětů a zápisů, ze kterého jde uložit jedno souhrnné PDF">🖨️ Export vše do PDF</button>
             <button @click="exportBackup" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne JSON soubor se všemi předměty, zápisy a statistikami">⬇️ Export zálohy</button>
-            <button @click="triggerImportFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Nahraje dříve staženou zálohu a nahradí jí aktuální data">⬆️ Import zálohy</button>
+            <button @click="triggerImportFile" class="btn-secondary text-xs !py-1.5 !px-3" title="Nahraje dříve staženou zálohu a nahradí jí aktuální data - appka rozpozná i šifrovanou zálohu a rovnou požádá o heslo">⬆️ Import zálohy</button>
+            <button @click="openExportBackupWithPassword" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne stejnou zálohu jako Export zálohy, ale obsah souboru navíc zašifruje zadaným heslem - hodí se, když zálohu posíláš e-mailem nebo ukládáš do cloudu">🔒 Export zálohy s heslem</button>
             <button @click="shareProgressReport" class="btn-secondary text-xs !py-1.5 !px-3" title="Vytvoří odkaz jen se statistikami (bez textu zápisků) - hodí se poslat rodiči nebo učiteli, který má vidět pokrok">📊 Sdílet pokrok</button>
             <button @click="exportExamDatesToIcs" class="btn-secondary text-xs !py-1.5 !px-3" title="Stáhne termíny zkoušek jako .ics soubor, který jde přidat přímo do kalendáře v telefonu/počítači">🗓️ Termíny do kalendáře</button>
             <input ref="importFileEl" type="file" accept="application/json,.json" class="hidden" @change="handleImportFile" />
@@ -1657,6 +1684,30 @@
           </div>
         </Transition>
 
+        <Transition name="fade">
+          <div v-if="showWeekTrend" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">📈 Týden vs týden</p>
+            <p class="text-xs text-slate-500 mb-3">Srovnání tohoto týdne s minulým - rychlý přehled, jde to nahoru, nebo dolů.</p>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div class="p-3 rounded-xl bg-slate-800/50">
+                <p class="text-xs text-slate-500 mb-1">✅ Vyřešeno tento týden</p>
+                <p class="text-2xl font-bold">
+                  {{ weekOverWeekTrend.thisWeek.solved }}
+                  <span class="text-sm font-semibold">{{ trendIcon(weekOverWeekTrend.solvedDiff) }} {{ trendDiffLabel(weekOverWeekTrend.solvedDiff) }}</span>
+                </p>
+                <p class="text-xs text-slate-500">minulý týden: {{ weekOverWeekTrend.lastWeek.solved }}</p>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-800/50">
+                <p class="text-xs text-slate-500 mb-1">🎯 Úspěšnost tento týden</p>
+                <p class="text-2xl font-bold">
+                  {{ weekOverWeekTrend.thisWeek.successRate === null ? '—' : weekOverWeekTrend.thisWeek.successRate + ' %' }}
+                  <span v-if="weekOverWeekTrend.rateDiff !== null" class="text-sm font-semibold">{{ trendIcon(weekOverWeekTrend.rateDiff) }} {{ trendDiffLabel(weekOverWeekTrend.rateDiff, ' b.') }}</span>
+                </p>
+                <p class="text-xs text-slate-500">minulý týden: {{ weekOverWeekTrend.lastWeek.successRate === null ? '—' : weekOverWeekTrend.lastWeek.successRate + ' %' }}</p>
+              </div>
+            </div>
+          </div>
+        </Transition>
 
         <Transition name="fade">
           <div v-if="showActivityHeatmap" class="px-5 pb-5 pt-1 border-t border-slate-800">
@@ -1743,6 +1794,27 @@
             </div>
             <p v-if="yearInReviewStats.topSubject" class="text-sm text-violet-300 mb-4">💜 Nejvíc ses věnoval/a: {{ yearInReviewStats.topSubject.emoji }} {{ yearInReviewStats.topSubject.name }} ({{ yearInReviewStats.topSubject.solvedCount }}×)</p>
             <button @click="downloadYearInReviewImage" class="btn-primary w-full">📥 Stáhnout jako obrázek</button>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showLocalLeaderboard" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">🏆 Žebříček profilů na tomto zařízení</p>
+            <p class="text-xs text-slate-500 mb-3">Srovnání appkou uložených profilů jen na tomhle zařízení, bez internetu - žádná data appka nikam neposílá.</p>
+            <p v-if="localLeaderboardLoading" class="text-sm text-slate-500">Appka čte statistiky ostatních profilů…</p>
+            <div v-else class="flex flex-col gap-1.5">
+              <div
+                v-for="(entry, idx) in localLeaderboardEntries" :key="entry.id"
+                class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm"
+                :class="entry.id === activeProfileId ? 'bg-cyan-500/10 border border-cyan-800/40' : 'bg-slate-800/50'"
+              >
+                <span class="w-5 text-center font-bold text-slate-500">{{ idx + 1 }}.</span>
+                <span class="text-lg">{{ entry.emoji }}</span>
+                <span class="flex-1 min-w-0 truncate">{{ entry.name }}<span v-if="entry.id === activeProfileId" class="text-cyan-400 text-xs ml-1">(ty)</span></span>
+                <span class="shrink-0 text-xs px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300">✅ {{ entry.totalSolved }}</span>
+                <span class="shrink-0 text-xs px-2 py-0.5 rounded-full bg-orange-950/60 text-orange-300">🔥 {{ entry.bestStreak }}</span>
+              </div>
+            </div>
           </div>
         </Transition>
 
@@ -1834,6 +1906,22 @@
               <div v-for="item in weakestTopicsOverview" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
                 <span>{{ item.label }}</span>
                 <span class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-rose-950/60 text-rose-300">{{ item.count }}× chyba</span>
+              </div>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
+          <div v-if="showFavoriteQuestions && favoriteQuestionsOverview.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">⭐ Oblíbené/obtížné otázky</p>
+            <p class="text-xs text-slate-500 mb-3">Otázky, který sis během procvičování označil hvězdičkou (tlačítkem ⭐ u zadání) - třeba proto, že jsou obtížné, nebo si je chceš jen zapamatovat.</p>
+            <div class="flex flex-col gap-1.5">
+              <div v-for="item in favoriteQuestionsOverview" :key="item.key" class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 text-sm">
+                <div class="flex-1 min-w-0">
+                  <span class="text-xs text-amber-300 font-semibold">{{ item.subjectLabel }}</span>
+                  <p class="truncate">{{ item.text }}</p>
+                </div>
+                <button @click="removeFavoriteKey(item.key)" class="btn-ghost !text-rose-300 !p-1 shrink-0" title="Odebrat z oblíbených">✕</button>
               </div>
             </div>
           </div>
@@ -1978,6 +2066,24 @@
         </Transition>
 
         <Transition name="fade">
+          <div v-if="showHomeworkOverview && upcomingHomework.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
+            <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 mt-3">Nesplněné domácí úkoly napříč předměty</p>
+            <div class="flex flex-col gap-2">
+              <label
+                v-for="h in upcomingHomework" :key="h.subjectId + '-' + h.id"
+                class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition text-left cursor-pointer"
+              >
+                <span class="flex items-center gap-2">
+                  <input type="checkbox" :checked="h.done" @change="toggleHomeworkDone(subjects.find((s) => s.id === h.subjectId), h.id)" class="accent-emerald-500" />
+                  <span class="text-sm font-medium">{{ h.subjectEmoji }} {{ h.subjectName }} <span class="text-slate-500 font-normal">— {{ h.text }}</span></span>
+                </span>
+                <span v-if="h.dueDate" class="text-xs text-slate-500 shrink-0">{{ formatDateShortCs(h.dueDate) }}</span>
+              </label>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition name="fade">
           <div v-if="showWeeklyPlan && weeklyPlan.length > 0" class="px-5 pb-5 pt-1 border-t border-slate-800">
             <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1 mt-3">Co se učit tento týden</p>
             <p class="text-xs text-slate-500 mb-3">Appka rozvrhla předměty podle blížících se zkoušek a toho, jak dávno jsi u kterého byl/a - je to jen doporučení, klidně si vyber jinak.</p>
@@ -2028,6 +2134,7 @@
                 </div>
               </div>
             </div>
+            <button @click="exportTimetableToPrint" class="btn-secondary text-sm mt-3" title="Otevře tiskový náhled celého rozvrhu na jednu stránku A4">🖨️ Vytisknout rozvrh</button>
           </div>
         </Transition>
 
@@ -2654,12 +2761,20 @@
     <!-- ============================================================= -->
     <div v-else key="detail" class="px-6 md:px-12 py-8 max-w-7xl mx-auto">
 
-      <button @click="closeSubject" class="btn-ghost mb-5 !text-slate-300 inline-flex items-center gap-1.5">
-        ← Zpět na přehled
+      <div v-if="!focusMode" class="flex items-center justify-between mb-5">
+        <button @click="closeSubject" class="btn-ghost !text-slate-300 inline-flex items-center gap-1.5">
+          ← Zpět na přehled
+        </button>
+        <button @click="toggleFocusMode" class="btn-ghost !text-violet-300 inline-flex items-center gap-1.5" title="Schová appku vyrušující prvky (hlavičku předmětu, vlastní otázky, zápisky) a nabídne appku přes celou obrazovku, ať se soustředíš jen na procvičování">
+          🧘 Režim bez rušení
+        </button>
+      </div>
+      <button v-else @click="toggleFocusMode" class="btn-ghost mb-5 !text-violet-300 inline-flex items-center gap-1.5" title="Ukončí režim bez rušení a vrátí appku do běžného zobrazení">
+        ✕ Ukončit režim bez rušení
       </button>
 
       <div
-        v-if="activeSubject"
+        v-if="activeSubject && !focusMode"
         id="active-subject-header"
         class="relative overflow-hidden rounded-2xl p-6 md:p-8 mb-8 flex items-center justify-between flex-wrap gap-4"
         :class="[activeSubject.gradient, { 'has-image': activeSubject.image }]"
@@ -2744,6 +2859,69 @@
               <datalist id="subject-folder-options">
                 <option v-for="f in subjectFolders" :key="f" :value="f"></option>
               </datalist>
+            </div>
+            <div class="mt-2">
+              <button
+                @click="showGrades = !showGrades"
+                class="text-xs opacity-80 hover:opacity-100 underline decoration-dotted text-left"
+                title="Zápis známek a vážený průměr"
+              >🎯 Známky{{ activeSubjectGradeSummary ? ': průměr ' + activeSubjectGradeSummary.overallAvg.toFixed(2) : '' }}{{ showGrades ? ' (skrýt)' : ' (zobrazit/zapsat)' }}</button>
+              <Transition name="fade">
+                <div v-if="showGrades" class="mt-2 p-3 rounded-xl bg-black/25 border border-white/10">
+                  <div v-if="activeSubjectGradeSummary" class="flex flex-wrap gap-3 mb-3 text-sm">
+                    <span>Celkem: <b>{{ activeSubjectGradeSummary.overallAvg.toFixed(2) }}</b> ({{ activeSubjectGradeSummary.count }})</span>
+                    <span v-if="activeSubjectGradeSummary.half1Count">1. pololetí: <b>{{ activeSubjectGradeSummary.half1Avg.toFixed(2) }}</b></span>
+                    <span v-if="activeSubjectGradeSummary.half2Count">2. pololetí: <b>{{ activeSubjectGradeSummary.half2Avg.toFixed(2) }}</b></span>
+                  </div>
+                  <p v-else class="text-xs opacity-70 mb-3">Zatím žádné známky - appka spočítá průměr, jakmile nějakou zapíšeš.</p>
+                  <div v-if="activeSubject.grades.length" class="flex flex-col gap-1 max-h-40 overflow-y-auto mb-3 pr-1">
+                    <div v-for="g in activeSubject.grades" :key="g.id" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-black/20">
+                      <span class="font-bold">{{ g.value }}</span>
+                      <span class="opacity-70">váha {{ g.weight }}</span>
+                      <span v-if="g.label" class="opacity-80 truncate">{{ g.label }}</span>
+                      <span class="opacity-60 text-xs ml-auto">{{ g.halfYear }}. pol.</span>
+                      <button @click="removeGrade(activeSubject, g.id)" class="btn-ghost !text-xs !p-1 opacity-80" title="Smazat známku">✕</button>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap gap-2 items-center">
+                    <select v-model.number="gradeForm.value" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20" title="Hodnota známky">
+                      <option v-for="v in [1,2,3,4,5]" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <input v-model.number="gradeForm.weight" type="number" min="0.5" step="0.5" class="input !py-1 !px-2 !text-xs !w-16 !bg-black/25 !border-white/20" title="Váha" />
+                    <select v-model.number="gradeForm.halfYear" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20">
+                      <option :value="1">1. pololetí</option>
+                      <option :value="2">2. pololetí</option>
+                    </select>
+                    <input v-model="gradeForm.label" type="text" placeholder="Popis (nepovinné)" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20" />
+                    <button @click="addGrade(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 !text-xs !py-1.5">➕ Zapsat známku</button>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+            <div class="mt-2">
+              <button
+                @click="showHomework = !showHomework"
+                class="text-xs opacity-80 hover:opacity-100 underline decoration-dotted text-left"
+                title="Domácí úkoly u tohoto předmětu"
+              >📝 Domácí úkoly{{ activeSubject.homework.filter((h) => !h.done).length ? ' (' + activeSubject.homework.filter((h) => !h.done).length + ')' : '' }}{{ showHomework ? ' (skrýt)' : ' (zobrazit/přidat)' }}</button>
+              <Transition name="fade">
+                <div v-if="showHomework" class="mt-2 p-3 rounded-xl bg-black/25 border border-white/10">
+                  <div v-if="activeSubject.homework.length" class="flex flex-col gap-1 max-h-40 overflow-y-auto mb-3 pr-1">
+                    <label v-for="h in activeSubject.homework" :key="h.id" class="flex items-center gap-2 text-sm px-2 py-1 rounded-lg bg-black/20 cursor-pointer">
+                      <input type="checkbox" :checked="h.done" @change="toggleHomeworkDone(activeSubject, h.id)" class="accent-emerald-500" />
+                      <span :class="h.done ? 'line-through opacity-50' : ''">{{ h.text }}</span>
+                      <span v-if="h.dueDate" class="text-xs opacity-60 ml-auto">{{ formatDateShortCs(h.dueDate) }}</span>
+                      <button @click="removeHomework(activeSubject, h.id)" class="btn-ghost !text-xs !p-1 opacity-80" title="Smazat úkol">✕</button>
+                    </label>
+                  </div>
+                  <p v-else class="text-xs opacity-70 mb-3">Zatím žádné domácí úkoly u tohoto předmětu.</p>
+                  <div class="flex flex-wrap gap-2 items-center">
+                    <input v-model="newHomeworkText" @keyup.enter="addHomework(activeSubject)" type="text" placeholder="Úkol (např. Pracovní list str. 12)" class="input !py-1 !px-2 !text-xs !w-auto flex-1 min-w-[180px] !bg-black/25 !border-white/20" />
+                    <input v-model="newHomeworkDue" type="date" class="input !py-1 !px-2 !text-xs !w-auto !bg-black/25 !border-white/20" />
+                    <button @click="addHomework(activeSubject)" class="btn-secondary !bg-black/25 !border-white/20 hover:!bg-black/40 !text-xs !py-1.5">➕ Přidat úkol</button>
+                  </div>
+                </div>
+              </Transition>
             </div>
             <div v-if="activeSubjectIsMath || activeSubjectIsEnglish || activeSubjectIsCzech" class="flex items-center flex-wrap gap-1.5 mt-2">
               <span class="text-xs opacity-80">🎚️ Obtížnost:</span>
@@ -2915,6 +3093,12 @@
             <div class="flex items-start gap-2">
               <p class="quiz-prompt flex-1">{{ quiz.prompt }}</p>
               <button
+                v-if="quiz.key"
+                @click="toggleFavoriteCurrentQuestion"
+                class="btn-ghost !text-lg !p-1 shrink-0"
+                :title="isCurrentQuestionFavorite ? 'Odebrat z oblíbených/obtížných otázek' : 'Označit jako oblíbenou/obtížnou otázku'"
+              >{{ isCurrentQuestionFavorite ? '⭐' : '☆' }}</button>
+              <button
                 @click="shareCurrentQuestion"
                 class="btn-ghost !text-lg !p-1 shrink-0"
                 title="Sdílet tuhle otázku odkazem"
@@ -2999,7 +3183,7 @@
           </div>
 
           <!-- Vlastní otázky k tomuto předmětu -->
-          <div class="mt-5 border-t border-slate-800 pt-4">
+          <div v-if="!focusMode" class="mt-5 border-t border-slate-800 pt-4">
             <button @click="showCustomQuestions = !showCustomQuestions" class="hint-toggle !mt-0 !text-slate-300">
               ⚙️ Moje vlastní otázky ({{ activeSubject.customQuestions.length }}) <span>{{ showCustomQuestions ? '▲' : '▼' }}</span>
             </button>
@@ -3021,6 +3205,33 @@
                   <button @click="addCustomQuestion" :disabled="!newCustomQuestion.question.trim() || !newCustomQuestion.answer.trim()" class="btn-primary w-full">➕ Přidat vlastní otázku</button>
                   <button type="button" @click="openOcrPicker(null, 'card')" class="btn-secondary w-full text-sm" title="Vyfotí zápisník/učebnici a appka zkusí z fotky rovnou udělat vlastní otázku (rozdělí text na otázku a odpověď)">📷 Vytvořit kartičku z fotky (OCR)</button>
                   <button type="button" @click="showAutoQuestionsPicker = !showAutoQuestionsPicker" class="btn-secondary w-full text-sm" title="Appka z vybraného zápisu sama najde pár vhodných vět a schová v nich slovo - vygenerované doplňovačky si pak jedním klikem uložíš mezi vlastní otázky">🪄 Auto-otázky z mých zápisků</button>
+                  <button type="button" @click="showBulkImportQuestions = !showBulkImportQuestions" class="btn-secondary w-full text-sm" title="Vlož celý seznam otázka/odpověď najednou (např. zkopírovaný z jiné appky) - jeden pár na řádek">📋 Hromadně vložit z textu</button>
+                </div>
+
+                <div v-if="showBulkImportQuestions" class="mt-3 bg-slate-950/40 border border-violet-800/40 rounded-lg p-3 space-y-2">
+                  <p class="text-xs text-slate-500">Vlož víc otázek najednou, jeden pár otázka/odpověď na řádek. Víc možných odpovědí odděl v odpovědi čárkou.</p>
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="text-slate-500">Oddělovač otázky a odpovědi:</span>
+                    <select v-model="bulkImportSeparator" class="input !text-xs !py-1 !w-auto">
+                      <option value="auto">Automaticky rozpoznat</option>
+                      <option value="tab">Tabulátor</option>
+                      <option value="pipe">Svislá čára „ | “</option>
+                      <option value="dash">Pomlčka „ - “</option>
+                      <option value="semicolon">Středník „;“</option>
+                    </select>
+                  </div>
+                  <textarea
+                    v-model="bulkImportText"
+                    rows="5"
+                    class="input !text-sm w-full"
+                    placeholder="Kdy začala třicetiletá válka? - 1618&#10;Hlavní město Francie? - Paříž"
+                  ></textarea>
+                  <p class="text-xs text-slate-500">Appka rozpoznala <b>{{ bulkImportPreview.length }}</b> {{ pluralize(bulkImportPreview.length, 'platný pár', 'platné páry', 'platných párů') }} otázka/odpověď.</p>
+                  <button
+                    @click="importBulkQuestions(activeSubject)"
+                    :disabled="bulkImportPreview.length === 0"
+                    class="btn-primary w-full text-sm"
+                  >➕ Přidat {{ bulkImportPreview.length }} {{ pluralize(bulkImportPreview.length, 'otázku', 'otázky', 'otázek') }}</button>
                 </div>
 
                 <div v-if="showAutoQuestionsPicker" class="mt-3 space-y-2">
@@ -3094,7 +3305,7 @@
         </section>
 
         <!-- ===================== ZÁPISY ===================== -->
-        <section class="panel">
+        <section v-if="!focusMode" class="panel">
           <h3 class="text-lg font-bold mb-5 flex items-center gap-2">📝 Zápisy z hodin</h3>
 
           <form @submit.prevent="addNote" class="space-y-2 mb-6">
@@ -3456,6 +3667,79 @@
         <div class="flex justify-end gap-3">
           <button @click="cancelConfirm" class="btn-secondary">Zrušit</button>
           <button @click="confirmYes" class="btn-danger">Ano, smazat</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: RODIČOVSKÝ PIN (ověření před citlivou akcí, nebo nastavení nového) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="parentPinModal.open" class="modal-overlay" @click.self="closeParentPinModal">
+      <div class="modal-card !max-w-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">🔒 {{ parentPinModal.mode === 'setup' ? 'Nastavit rodičovský PIN' : 'Zadej rodičovský PIN' }}</h3>
+        <template v-if="parentPinModal.mode === 'setup'">
+          <p class="text-slate-400 text-sm mb-3">PIN appka vyžádá před přepnutím na jiný profil a před smazáním profilu - platí pro celou appku na tomto zařízení, ne jen pro jeden profil.</p>
+          <input v-model="parentPinModal.input" @keyup.enter="submitParentPinModal" type="password" inputmode="numeric" maxlength="8" placeholder="Nový PIN (4-8 číslic)" class="input mb-2" />
+          <input v-model="parentPinModal.input2" @keyup.enter="submitParentPinModal" type="password" inputmode="numeric" maxlength="8" placeholder="Zopakuj nový PIN" class="input mb-2" />
+        </template>
+        <template v-else>
+          <p class="text-slate-400 text-sm mb-3">Tahle akce je appkou chráněná rodičovským PINem.</p>
+          <input v-model="parentPinModal.input" @keyup.enter="submitParentPinModal" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" class="input mb-2" />
+        </template>
+        <p v-if="parentPinModal.error" class="text-rose-400 text-sm mb-2">{{ parentPinModal.error }}</p>
+        <div class="flex justify-end gap-3 mt-3">
+          <button @click="closeParentPinModal" class="btn-secondary">Zrušit</button>
+          <button @click="submitParentPinModal" class="btn-primary">{{ parentPinModal.mode === 'setup' ? 'Uložit' : 'Potvrdit' }}</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: HESLO PRO ZÁLOHU (export = zašifrovat, import = dešifrovat) -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="backupPasswordModal.open" class="modal-overlay" @click.self="closeBackupPasswordModal">
+      <div class="modal-card !max-w-sm">
+        <h3 class="text-lg font-bold mb-3 flex items-center gap-2">🔒 {{ backupPasswordModal.mode === 'export' ? 'Zašifrovat zálohu heslem' : 'Zadej heslo k záloze' }}</h3>
+        <template v-if="backupPasswordModal.mode === 'export'">
+          <p class="text-slate-400 text-sm mb-3">Heslo si appka nikam neuloží - bez něj nikdo (ani ty) zálohu později nedešifruje, tak si ho někam poznamenej.</p>
+          <input v-model="backupPasswordModal.password" @keyup.enter="submitBackupPasswordModal" type="password" placeholder="Heslo (aspoň 4 znaky)" class="input mb-2" />
+          <input v-model="backupPasswordModal.password2" @keyup.enter="submitBackupPasswordModal" type="password" placeholder="Zopakuj heslo" class="input mb-2" />
+        </template>
+        <template v-else>
+          <p class="text-slate-400 text-sm mb-3">Tahle záloha je appkou zašifrovaná heslem.</p>
+          <input v-model="backupPasswordModal.password" @keyup.enter="submitBackupPasswordModal" type="password" placeholder="Heslo" class="input mb-2" />
+        </template>
+        <p v-if="backupPasswordModal.error" class="text-rose-400 text-sm mb-2">{{ backupPasswordModal.error }}</p>
+        <div class="flex justify-end gap-3 mt-3">
+          <button @click="closeBackupPasswordModal" class="btn-secondary">Zrušit</button>
+          <button @click="submitBackupPasswordModal" :disabled="backupPasswordModal.busy" class="btn-primary">{{ backupPasswordModal.busy ? 'Chvilku…' : (backupPasswordModal.mode === 'export' ? 'Zašifrovat a stáhnout' : 'Dešifrovat') }}</button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: NÁHODNÝ KOLOTOČ "CO SE UČIT TEĎ" -->
+  <!-- ============================================================= -->
+  <Transition name="modal">
+    <div v-if="spinWheelModal.open" class="modal-overlay" @click.self="closeSpinWheelModal">
+      <div class="modal-card !max-w-sm text-center">
+        <h3 class="text-lg font-bold mb-4 flex items-center justify-center gap-2">🎡 Co se učit teď?</h3>
+        <div v-if="spinWheelModal.currentDisplay" class="py-6">
+          <div :class="spinWheelModal.spinning ? 'animate-pulse' : ''" class="transition-transform">
+            <div class="text-5xl mb-2">{{ spinWheelModal.currentDisplay.emoji }}</div>
+            <div class="text-xl font-bold">{{ spinWheelModal.currentDisplay.name }}</div>
+          </div>
+          <p v-if="spinWheelModal.spinning" class="text-slate-500 text-sm mt-3">Losuje se…</p>
+          <p v-else class="text-emerald-400 text-sm mt-3">🎉 Vylosováno!</p>
+        </div>
+        <div class="flex justify-center gap-3 mt-3">
+          <button @click="closeSpinWheelModal" class="btn-secondary">{{ spinWheelModal.result ? 'Zavřít' : 'Zrušit' }}</button>
+          <button v-if="spinWheelModal.result" @click="startPracticeFromSpinWheel" class="btn-primary">🚀 Začít procvičovat</button>
         </div>
       </div>
     </div>
@@ -5014,6 +5298,48 @@ function buildFlashcardsPrintHtml(subject) {
     <p>Delší odpovědi appka pro kartičku zkrátila - celé znění najdeš v appce.</p>
   </div>
   ${cards.length ? pagesHtml : '<p style="text-align:center;padding:3rem;">Tenhle předmět zatím nemá žádné vlastní otázky, zápisy ani rozbory vět, ze kterých by šlo kartičky vytvořit.</p>'}
+</body>
+</html>`;
+}
+
+/** Sestaví tiskovou stránku s celým týdenním rozvrhem hodin na jednu
+ *  stránku A4 - viz exportTimetableToPrint. daysData je už hotové pole
+ *  { dayLabel, slots: [{ time, subjectName, subjectEmoji }] } v pořadí,
+ *  ve kterém se má zobrazit (pondělí až neděle, viz DAY_ORDER) - appka
+ *  tady jen vyrenderuje HTML, pořadí dnů appka sama neurčuje. */
+function buildTimetablePrintHtml(daysData) {
+  const daysHtml = daysData.map((d) => `
+    <div class="tt-day">
+      <h2>${escapeHtml(d.dayLabel)}</h2>
+      ${d.slots.length
+        ? `<ul>${d.slots.map((s) => `<li><span class="tt-time">${escapeHtml(s.time || '')}</span>${escapeHtml(s.subjectEmoji || '')} ${escapeHtml(s.subjectName)}</li>`).join('')}</ul>`
+        : '<p class="tt-empty">—</p>'}
+    </div>
+  `).join('');
+  return `<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Rozvrh hodin — Studijní Hub</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #ffffff; max-width: 980px; margin: 2rem auto; padding: 0 1.5rem; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  .tt-subtitle { color: #64748b; margin-bottom: 1.4rem; font-size: 0.85rem; }
+  .tt-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem; }
+  .tt-day { border: 1px solid #cbd5e1; border-radius: 0.5rem; padding: 0.6rem 0.7rem; page-break-inside: avoid; }
+  .tt-day h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: #475569; margin: 0 0 0.5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; }
+  .tt-day ul { list-style: none; padding: 0; margin: 0; }
+  .tt-day li { font-size: 0.82rem; line-height: 1.7; }
+  .tt-time { color: #64748b; margin-right: 0.35rem; }
+  .tt-empty { color: #cbd5e1; font-size: 0.8rem; }
+  @media print { body { margin: 0; padding: 1rem; } }
+  @media (max-width: 700px) { .tt-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+  <h1>🏫 Rozvrh hodin</h1>
+  <p class="tt-subtitle">Vygenerováno ${escapeHtml(new Date().toLocaleDateString('cs-CZ'))} ze Studijního Hubu</p>
+  <div class="tt-grid">${daysHtml}</div>
 </body>
 </html>`;
 }
@@ -8433,9 +8759,9 @@ function sampleSentenceAnalyses(baseId) {
 
 function defaultSubjects() {
   return [
-    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {} },
-    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: sampleSentenceAnalyses(2), reviewPlanChecks: {} },
-    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {} },
+    { id: 1, name: 'Matematika', emoji: '📐', gradient: GRADIENTS[0].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {}, grades: [], homework: [] },
+    { id: 2, name: 'Čeština',    emoji: '📖', gradient: GRADIENTS[1].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: sampleSentenceAnalyses(2), reviewPlanChecks: {}, grades: [], homework: [] },
+    { id: 3, name: 'Angličtina', emoji: '🗣️', gradient: GRADIENTS[2].classes, image: null, notes: [], solvedCount: 0, attemptsCount: 0, lastPracticedAt: null, archived: false, examDate: null, difficulty: 'medium', customQuestions: [], sentenceAnalyses: [], reviewPlanChecks: {}, grades: [], homework: [] },
   ];
 }
 
@@ -8549,6 +8875,34 @@ function normalizeSubject(raw, fallbackId) {
       predicatePart: (q && String(q.predicatePart || '').trim()) || '',
       sentenceType: (q && String(q.sentenceType || '').trim()) || '',
     })).filter((q) => q.sentence && (q.subjectPart || q.predicatePart || q.sentenceType)),
+    // Známky (viz addGrade/gradeSummaryForSubject) - appka z nich počítá
+    // vážený průměr (hodnota 1-5 jako v české škole, váhu určí uživatel sám
+    // podle důležitosti známky - písemka vs. drobné zkoušení), rozdělený
+    // po pololetích.
+    grades: (Array.isArray(raw && raw.grades) ? raw.grades : [])
+      .filter((g) => g && typeof g === 'object')
+      .map((g, i) => ({
+        id: (g.id || g.id === 0) ? g.id : fallbackId + 6000 + i,
+        value: (Number.isFinite(g.value) && g.value >= 1 && g.value <= 5) ? g.value : 3,
+        weight: (Number.isFinite(g.weight) && g.weight > 0) ? g.weight : 1,
+        label: (typeof g.label === 'string' && g.label.trim()) ? g.label.trim().slice(0, 60) : '',
+        halfYear: (g.halfYear === 2) ? 2 : 1,
+        date: (typeof g.date === 'string' && g.date) ? g.date : null,
+      })),
+    // Domácí úkoly (viz addHomework/toggleHomeworkDone) - samostatný seznam
+    // NEZÁVISLÝ na termínech zkoušek (examDate/extraExamDates výš) - sem
+    // patří drobné, časté úkoly ("do pátku vypracovat pracovní list"), ne
+    // velké milníky jako zkouška/zápočet.
+    homework: (Array.isArray(raw && raw.homework) ? raw.homework : [])
+      .filter((h) => h && typeof h === 'object')
+      .map((h, i) => ({
+        id: (h.id || h.id === 0) ? h.id : fallbackId + 7000 + i,
+        text: (typeof h.text === 'string' && h.text.trim()) ? h.text.trim().slice(0, 200) : '',
+        dueDate: (typeof h.dueDate === 'string' && h.dueDate) ? h.dueDate : null,
+        done: !!h.done,
+        createdAt: (typeof h.createdAt === 'string' && h.createdAt) ? h.createdAt : new Date().toISOString(),
+      }))
+      .filter((h) => h.text),
   };
 }
 
@@ -8619,6 +8973,81 @@ function idbDeleteRaw(key) {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error || new Error('Smazání z IndexedDB selhalo.'));
   })).catch(() => {}); // appka smazání profilu nesmí shodit jen kvůli chybějící/nedostupné IndexedDB
+}
+
+/** Přečte syrový (JSON.stringify) obsah pro daný klíč bez jakékoliv migrace
+ *  ani zápisu zpátky - jen zkusí IndexedDB a při nedostupnosti/chybě spadne
+ *  na localStorage. Používá se pro ČTENÍ dat JINÉHO než právě aktivního
+ *  profilu (viz lokální žebříček mezi profily), kde appka nechce vedlejší
+ *  efekty jako u migrateKeyToIdb - jen se podívat, nic přesouvat. */
+async function loadRawForKey(key) {
+  try {
+    const idbVal = await idbGetRaw(key);
+    if (idbVal != null) return idbVal;
+  } catch (e) { /* appka zkusí localStorage jako zálohu */ }
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+/* =====================================================================
+   Šifrování zálohy heslem (AES-GCM + PBKDF2) - viz exportBackupWithPassword
+   a submitBackupPasswordModal níž ve setup(). Na rozdíl od běžného Exportu
+   zálohy appka tady obsah souboru doopravdy zašifruje klíčem odvozeným
+   z hesla (PBKDF2, 150000 iterací, náhodná sůl), appku jen nezamaskuje -
+   záloha se tak klidně dá poslat e-mailem nebo uložit do cloudu a bez
+   znalosti hesla ji nikdo nepřečte. Appka pro to používá standardní Web
+   Crypto API prohlížeče (window.crypto.subtle) - žádná vlastní appka
+   kryptografie. */
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+async function deriveAesKeyFromPassword(password, saltBytes) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 150000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+/** Zašifruje libovolný JSON-serializovatelný objekt heslem a vrátí hotový
+ *  obálkový objekt {app, version, salt, iv, ciphertext} (vše base64),
+ *  který appka rovnou JSON.stringify a uloží do souboru. */
+async function encryptJsonWithPassword(obj, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveAesKeyFromPassword(password, salt);
+  const plaintext = new TextEncoder().encode(JSON.stringify(obj));
+  const ciphertextBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
+  return {
+    app: 'studijni-hub-encrypted',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertextBuf)),
+  };
+}
+/** Opak encryptJsonWithPassword - z obálky a hesla appka vrátí zpátky
+ *  původní objekt. Vyhodí výjimku, když je heslo špatné (AES-GCM si
+ *  integritu ověří sám) - volající appka to odchytává a ukáže chybovou
+ *  hlášku místo nekontrolovaného spadnutí. */
+async function decryptJsonWithPassword(payload, password) {
+  const salt = base64ToBytes(payload.salt);
+  const iv = base64ToBytes(payload.iv);
+  const key = await deriveAesKeyFromPassword(password, salt);
+  const ciphertext = base64ToBytes(payload.ciphertext);
+  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
 /** Jednorázově přestěhuje existující data z localStorage[key] do IndexedDB
@@ -8734,6 +9163,9 @@ function parseStatsJson(raw) {
     // subject.examDate u jednotlivých předmětů jde o JEDNO datum napříč celou
     // appkou (maturita se neváže na konkrétní předmět), viz maturitaCountdown.
     maturitaDate: null,
+    // Oblíbené/obtížné otázky - pole univerzálních quiz.key hodnot, které si
+    // uživatel označil hvězdičkou, viz toggleFavoriteCurrentQuestion.
+    favoriteKeys: [],
   };
   try {
     if (raw) {
@@ -8771,6 +9203,7 @@ function parseStatsJson(raw) {
         englishExtraStreak: (parsed && typeof parsed.englishExtraStreak === 'object' && parsed.englishExtraStreak) || { count: 0, best: 0, lastDate: null },
         dailyQuestion: (parsed && typeof parsed.dailyQuestion === 'object' && parsed.dailyQuestion) || null,
         dailyQuestionStreak: (parsed && typeof parsed.dailyQuestionStreak === 'object' && parsed.dailyQuestionStreak) || { count: 0, best: 0, lastDate: null },
+        favoriteKeys: Array.isArray(parsed && parsed.favoriteKeys) ? parsed.favoriteKeys.slice(-500) : [],
       };
     }
   } catch (e) {
@@ -11217,41 +11650,199 @@ const app = createApp({
         return;
       }
       if (profiles.length <= 1) return; // appka musí vždycky mít aspoň jeden profil
-      if (!confirm(`Opravdu smazat profil "${profile.name}" i se všemi jeho předměty a statistikami? Tohle appka nejde vrátit zpět.`)) return;
-      const idx = profiles.findIndex((p) => p.id === profile.id);
-      if (idx === -1) return;
-      profiles.splice(idx, 1);
-      persistProfilesRegistry();
-      // appka smaže i skutečně uložená data profilu (IndexedDB + případná
-      // starší záloha v localStorage) - stejný princip odvození klíčů jako
-      // appka sama používá za běžného provozu (viz STORAGE_KEY výš).
-      const keysToDelete = [
-        profileScopedKey('studijniHubData_v1', profile.id),
-        profileScopedKey('studijniHubStats_v1', profile.id),
-        profileScopedKey('studijniHubTrash_v1', profile.id),
-        profileScopedKey('studijniHubSyncMeta_v1', profile.id),
-      ];
-      keysToDelete.forEach((k) => {
-        idbDeleteRaw(k);
-        try { localStorage.removeItem(k); } catch (e) { /* nevadí, appka pokračuje */ }
+      // appka smazání profilu vždy zaštítí rodičovským PINem, pokud je nastavený
+      // (viz requireParentPin níž) - nejdřív ale appka ověří guard podmínky výš,
+      // ať appka o PIN nežádá zbytečně, když smazání stejně nejde provést.
+      return requireParentPin(() => {
+        if (!confirm(`Opravdu smazat profil "${profile.name}" i se všemi jeho předměty a statistikami? Tohle appka nejde vrátit zpět.`)) return;
+        const idx = profiles.findIndex((p) => p.id === profile.id);
+        if (idx === -1) return;
+        profiles.splice(idx, 1);
+        persistProfilesRegistry();
+        // appka smaže i skutečně uložená data profilu (IndexedDB + případná
+        // starší záloha v localStorage) - stejný princip odvození klíčů jako
+        // appka sama používá za běžného provozu (viz STORAGE_KEY výš).
+        const keysToDelete = [
+          profileScopedKey('studijniHubData_v1', profile.id),
+          profileScopedKey('studijniHubStats_v1', profile.id),
+          profileScopedKey('studijniHubTrash_v1', profile.id),
+          profileScopedKey('studijniHubSyncMeta_v1', profile.id),
+        ];
+        keysToDelete.forEach((k) => {
+          idbDeleteRaw(k);
+          try { localStorage.removeItem(k); } catch (e) { /* nevadí, appka pokračuje */ }
+        });
       });
     }
     async function switchToProfile(profile) {
       if (!profile || profile.id === activeProfileId.value) { showProfileSwitcher.value = false; return; }
-      // appka nejdřív explicitně DOČKÁ uložení právě rozehraného profilu
-      // (ne jen spoléhá na debounced watch(subjects)/watch(stats) výš), ať
-      // appka při přepnutí neztratí žádnou čerstvou změnu.
+      // appka přepnutí na jiný profil taky zaštítí rodičovským PINem, pokud je
+      // nastavený - dítě se tak nedostane do rodičova/sourozencova profilu bez
+      // dovolení. Když PIN nastavený není, requireParentPin appka jen okamžitě
+      // provede akci beze změny chování oproti dřívějšku.
+      return requireParentPin(async () => {
+        // appka nejdřív explicitně DOČKÁ uložení právě rozehraného profilu
+        // (ne jen spoléhá na debounced watch(subjects)/watch(stats) výš), ať
+        // appka při přepnutí neztratí žádnou čerstvou změnu.
+        try {
+          await Promise.all([
+            saveKeyToIdb(STORAGE_KEY, JSON.stringify(subjects)),
+            saveKeyToIdb(STATS_KEY, JSON.stringify(stats)),
+          ]);
+        } catch (e) {
+          console.warn('Poslední uložení dat před přepnutím profilu se nepodařilo, appka i tak pokračuje v přepnutí.', e);
+        }
+        activeProfileId.value = profile.id;
+        persistProfilesRegistry();
+        window.location.reload();
+      });
+    }
+
+    /* ---------- Rodičovský PIN zámek ----------
+       Volitelný numerický PIN (4-8 číslic) uložený jen lokálně a NEZÁVISLE
+       na jednotlivých profilech (na rozdíl od STORAGE_KEY/STATS_KEY výš) -
+       díky tomu appka PIN vyžaduje bez ohledu na to, který profil je právě
+       aktivní, a dítě ho tak nemůže obejít pouhým přepnutím profilu. Appka
+       PINem chrání dvě citlivé akce: přepnutí na jiný profil a smazání
+       profilu (viz requireParentPin uvnitř deleteProfile/switchToProfile
+       výš). Jde jen o lehkou rodičovskou pojistku pro rodinné použití appky
+       na jednom zařízení - appka PIN ukládá nešifrovaně, nejde o skutečné
+       bezpečnostní opatření. */
+    const PARENT_PIN_KEY = 'studijniHubParentPin_v1';
+    function loadParentPin() {
       try {
-        await Promise.all([
-          saveKeyToIdb(STORAGE_KEY, JSON.stringify(subjects)),
-          saveKeyToIdb(STATS_KEY, JSON.stringify(stats)),
-        ]);
-      } catch (e) {
-        console.warn('Poslední uložení dat před přepnutím profilu se nepodařilo, appka i tak pokračuje v přepnutí.', e);
+        const saved = localStorage.getItem(PARENT_PIN_KEY);
+        if (saved && /^\d{4,8}$/.test(saved)) return saved;
+      } catch (e) { /* appka poběží bez PINu */ }
+      return '';
+    }
+    function saveParentPinToStorage(pin) {
+      try {
+        if (pin) localStorage.setItem(PARENT_PIN_KEY, pin);
+        else localStorage.removeItem(PARENT_PIN_KEY);
+      } catch (e) { /* appka pokračuje, i když se PIN nepodaří uložit */ }
+    }
+    const parentPinCode = ref(loadParentPin());
+    const hasParentPin = computed(() => !!parentPinCode.value);
+    const parentPinModal = reactive({ open: false, mode: 'confirm', input: '', input2: '', error: '', pendingAction: null });
+    function closeParentPinModal() {
+      parentPinModal.open = false;
+      parentPinModal.input = '';
+      parentPinModal.input2 = '';
+      parentPinModal.error = '';
+      parentPinModal.pendingAction = null;
+    }
+    // Zavolá `action` hned, pokud PIN není nastavený (appka se tak chová
+    // úplně stejně jako před zavedením PINu) - jinak nejdřív appka požádá o
+    // zadání PINu a `action` zavolá až po jeho správném zadání (viz
+    // submitParentPinModal níž). Appka vrací výsledek `action()`, ať appka i
+    // async volající (switchToProfile/deleteProfile) může výsledek počkat
+    // ve chvíli, kdy PIN nastavený není.
+    function requireParentPin(action) {
+      if (!hasParentPin.value) return action();
+      parentPinModal.mode = 'confirm';
+      parentPinModal.input = '';
+      parentPinModal.input2 = '';
+      parentPinModal.error = '';
+      parentPinModal.pendingAction = action;
+      parentPinModal.open = true;
+      return undefined;
+    }
+    function submitParentPinModal() {
+      if (parentPinModal.mode === 'confirm') {
+        if (parentPinModal.input === parentPinCode.value) {
+          const action = parentPinModal.pendingAction;
+          closeParentPinModal();
+          // appka vrací výsledek `action()`, ať appka i async volající (třeba
+          // v testech) může na doopravdové dokončení akce počkat.
+          return action ? action() : undefined;
+        }
+        parentPinModal.error = 'Nesprávný PIN, zkus to znovu.';
+        parentPinModal.input = '';
+        return undefined;
       }
-      activeProfileId.value = profile.id;
-      persistProfilesRegistry();
-      window.location.reload();
+      // mode === 'setup' - appka nastavuje nový PIN (poprvé, nebo jako změnu
+      // za starý, který uživatel před tímhle krokem už ověřil).
+      const pin = (parentPinModal.input || '').trim();
+      if (!/^\d{4,8}$/.test(pin)) {
+        parentPinModal.error = 'PIN musí mít 4 až 8 číslic.';
+        return;
+      }
+      if (pin !== (parentPinModal.input2 || '').trim()) {
+        parentPinModal.error = 'Zadané PINy se neshodují, zkus to znovu.';
+        parentPinModal.input = '';
+        parentPinModal.input2 = '';
+        return;
+      }
+      parentPinCode.value = pin;
+      saveParentPinToStorage(pin);
+      closeParentPinModal();
+    }
+    function openSetupParentPin() {
+      parentPinModal.mode = 'setup';
+      parentPinModal.input = '';
+      parentPinModal.input2 = '';
+      parentPinModal.error = '';
+      parentPinModal.pendingAction = null;
+      parentPinModal.open = true;
+    }
+    function requestChangeParentPin() {
+      // appka nejdřív ověří starý PIN a teprve pak pustí uživatele do
+      // nastavení nového (viz requireParentPin výš).
+      requireParentPin(() => openSetupParentPin());
+    }
+    function requestRemoveParentPin() {
+      requireParentPin(() => {
+        parentPinCode.value = '';
+        saveParentPinToStorage('');
+      });
+    }
+
+    /* ---------- Lokální žebříček mezi profily ----------
+       Na rozdíl od žebříčku se spolužáky (studyGroup výš, přes Firebase)
+       jde o čistě LOKÁLNÍ srovnání profilů appky NA TOMTO ZAŘÍZENÍ - žádná
+       síť, appka jen dočte statistiky ostatních profilů přímo z jejich
+       vlastního uloženého klíče (viz profileScopedKey/loadRawForKey výš) a
+       vypíše je setříděné podle počtu vyřešeno. Appka záměrně NEPOČÍTÁ
+       XP/úroveň pro cizí profily (to by appka musela navíc načíst i jejich
+       předměty a přepočítat odznaky) - appka vystačí s tím, co jde přečíst
+       přímo z jejich stats: vyřešeno, série a nejlepší série. */
+    const showLocalLeaderboard = ref(false);
+    const localLeaderboardLoading = ref(false);
+    const localLeaderboardEntries = reactive([]);
+    async function loadLocalLeaderboard() {
+      if (!hasMultipleProfiles.value) return;
+      localLeaderboardLoading.value = true;
+      try {
+        const entries = await Promise.all(profiles.map(async (p) => {
+          if (p.id === activeProfileId.value) {
+            return {
+              id: p.id, name: p.name, emoji: p.emoji,
+              totalSolved: stats.totalSolved || 0,
+              bestStreak: stats.bestStreak || 0,
+              currentStreak: stats.currentStreak || 0,
+            };
+          }
+          const raw = await loadRawForKey(profileScopedKey('studijniHubStats_v1', p.id));
+          const parsed = parseStatsJson(raw);
+          return {
+            id: p.id, name: p.name, emoji: p.emoji,
+            totalSolved: parsed.totalSolved || 0,
+            bestStreak: parsed.bestStreak || 0,
+            currentStreak: parsed.currentStreak || 0,
+          };
+        }));
+        entries.sort((a, b) => b.totalSolved - a.totalSolved);
+        localLeaderboardEntries.splice(0, localLeaderboardEntries.length, ...entries);
+      } catch (e) {
+        console.warn('Lokální žebříček profilů se nepodařilo sestavit.', e);
+      } finally {
+        localLeaderboardLoading.value = false;
+      }
+    }
+    function toggleLocalLeaderboard() {
+      showLocalLeaderboard.value = !showLocalLeaderboard.value;
+      if (showLocalLeaderboard.value) loadLocalLeaderboard();
     }
 
     /* ---------- Velký pozdrav na dashboardu podle denní doby ---------- */
@@ -11308,6 +11899,7 @@ const app = createApp({
       celebratedLevel: 1,
       studyGroup: { id: null, memberId: null, name: '' },
       maturitaDate: null,
+      favoriteKeys: [],
     });
     const dataLoaded = ref(false);
     const dataLoadError = ref('');
@@ -11467,6 +12059,12 @@ const app = createApp({
               // appku "vyhodit" ze skupiny, do které se mezitím přidala odsud).
               studyGroup: (stats.studyGroup && stats.studyGroup.id) ? stats.studyGroup : normalizeStudyGroup(remote.stats.studyGroup),
               maturitaDate: (typeof remote.stats.maturitaDate === 'string' && remote.stats.maturitaDate) ? remote.stats.maturitaDate : null,
+              // Sloučení oblíbených otázek ze dvou zařízení - appka sjednotí obě
+              // množiny (union), ať se žádná hvězdička sloučením neztratí.
+              favoriteKeys: Array.from(new Set([
+                ...(Array.isArray(stats.favoriteKeys) ? stats.favoriteKeys : []),
+                ...(Array.isArray(remote.stats.favoriteKeys) ? remote.stats.favoriteKeys : []),
+              ])).slice(-500),
             });
             // Merge mohl přinést otázku dne z jiného zařízení/dne (nebo žádnou) -
             // znovu ověřit/doplnit podle DNEŠNÍHO data a AKTUÁLNÍHO seznamu předmětů.
@@ -11834,6 +12432,37 @@ const app = createApp({
       }
     }
     function questionShareViewReveal() { questionShareView.revealed = true; }
+
+    /* ---------- Oblíbené/obtížné otázky (hvězdička) ----------
+       Stejně jako u sdílení jedné otázky výš appka využívá univerzální
+       quiz.key (existuje pro každý typ otázky - matematika, čeština,
+       angličtina, obecný předmět, vlastní otázka, doplňovačka ze zápisků,
+       rozbor vět - viz describeMistakeKey níž pro lidsky čitelný popis).
+       Uživatel si tak může otázku "uložit na později" bez ohledu na to,
+       jakého typu je - appka jen přidá/odebere klíč do stats.favoriteKeys. */
+    const isCurrentQuestionFavorite = computed(() => {
+      return !!(quiz.key && Array.isArray(stats.favoriteKeys) && stats.favoriteKeys.includes(quiz.key));
+    });
+    function toggleFavoriteCurrentQuestion() {
+      if (!quiz.key) return;
+      if (!Array.isArray(stats.favoriteKeys)) stats.favoriteKeys = [];
+      const idx = stats.favoriteKeys.indexOf(quiz.key);
+      if (idx === -1) {
+        stats.favoriteKeys.push(quiz.key);
+      } else {
+        stats.favoriteKeys.splice(idx, 1);
+      }
+    }
+    function removeFavoriteKey(key) {
+      if (!Array.isArray(stats.favoriteKeys)) return;
+      const idx = stats.favoriteKeys.indexOf(key);
+      if (idx !== -1) stats.favoriteKeys.splice(idx, 1);
+    }
+    const showFavoriteQuestions = ref(false);
+    const favoriteQuestionsOverview = computed(() => {
+      if (!Array.isArray(stats.favoriteKeys) || !stats.favoriteKeys.length) return [];
+      return stats.favoriteKeys.map((key) => ({ key, ...describeMistakeKey(key, subjects) })).reverse();
+    });
 
     /* ---------- Žebříček se spolužáky ---------- (viz GROUP_PATH_PREFIX/
        normalizeStudyGroup výš) - appka pošle jen pár čísel za sebe do
@@ -12656,6 +13285,31 @@ const app = createApp({
       return `týden od ${w.label} — úspěšnost ${w.successRate} % (${w.solved} z ${w.attempts} ${w.attempts === 1 ? 'pokusu' : 'pokusů'})`;
     }
 
+    /* ---------- Týden vs týden trend ----------
+       Na rozdíl od grafu úspěšnosti výš (WEEKLY_PROGRESS_WEEKS týdnů v
+       řadě) appka tady srovná jen POSLEDNÍ DVA týdny čelem proti sobě -
+       rychlý přehled "jde to nahoru, nebo dolů" bez nutnosti číst celý
+       graf. Appka znovu využívá computeWeeklyProgress (viz výš). */
+    const showWeekTrend = ref(false);
+    const weekOverWeekTrend = computed(() => {
+      const weeks = computeWeeklyProgress(stats.dailyHistory, stats.dailyAttempts, 2, new Date());
+      const lastWeek = weeks[0];
+      const thisWeek = weeks[1];
+      const solvedDiff = thisWeek.solved - lastWeek.solved;
+      const rateDiff = (thisWeek.successRate !== null && lastWeek.successRate !== null)
+        ? thisWeek.successRate - lastWeek.successRate
+        : null;
+      return { thisWeek, lastWeek, solvedDiff, rateDiff };
+    });
+    function trendIcon(diff) {
+      if (diff === null || diff === 0) return '➡️';
+      return diff > 0 ? '📈' : '📉';
+    }
+    function trendDiffLabel(diff, suffix) {
+      if (diff === null) return '';
+      return (diff > 0 ? '+' : '') + diff + (suffix || '');
+    }
+
     /* ---------- Nejproduktivnější čas dne ----------
        Appka NEUKLÁDÁ žádná nová statistická data navíc - vychází přímo z už
        existujícího podrobného deníku procvičování (stats.practiceLog, viz
@@ -12946,7 +13600,86 @@ const app = createApp({
       stopTimedSession();
       generateNewQuiz();
     }
-    function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; examPracticeScope.value = 'single'; examQuizSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); }
+    function closeSubject() { activeSubjectId.value = null; examPracticeMode.value = false; examPracticeScope.value = 'single'; examQuizSubjectId.value = null; stopSpeaking(); stopTimedSession(); stopDictation(); focusMode.value = false; }
+
+    /* ---------- Náhodný kolotoč "co se učit teď" ----------
+       Herní alternativa k "Doporučeno k procvičení dnes" (to počítá chytře
+       podle termínů/zapomínání) - tady se naopak úplně NÁHODNĚ vybere jeden
+       z nearchivovaných předmětů, s efektem postupně zpomalujícího se
+       "kolotoče" (rychlé přeskakování mezi předměty, než se ustálí na
+       výsledku), podobně jako losovací kolo štěstí. */
+    let spinWheelTimerId = null;
+    const spinWheelModal = reactive({ open: false, spinning: false, currentDisplay: null, result: null });
+    function openSpinWheel() {
+      const candidates = subjects.filter((s) => !s.archived);
+      if (!candidates.length) {
+        alert('Nemáš žádný nearchivovaný předmět, ze kterého by šlo losovat.');
+        return;
+      }
+      if (candidates.length === 1) {
+        // S jediným kandidátem není co losovat - rovnou se ukáže jako
+        // výsledek bez zbytečně dlouhého "kolotoče".
+        spinWheelModal.open = true;
+        spinWheelModal.spinning = false;
+        spinWheelModal.currentDisplay = candidates[0];
+        spinWheelModal.result = candidates[0];
+        return;
+      }
+      spinWheelModal.open = true;
+      spinWheelModal.spinning = true;
+      spinWheelModal.result = null;
+      spinWheelModal.currentDisplay = candidates[0];
+      const totalTicks = 12 + Math.floor(Math.random() * 4);
+      const finalIndex = Math.floor(Math.random() * candidates.length);
+      let ticks = 0;
+      const tick = () => {
+        ticks += 1;
+        const isLast = ticks >= totalTicks;
+        const idx = isLast ? finalIndex : Math.floor(Math.random() * candidates.length);
+        spinWheelModal.currentDisplay = candidates[idx];
+        if (isLast) {
+          spinWheelModal.result = candidates[idx];
+          spinWheelModal.spinning = false;
+          spinWheelTimerId = null;
+          return;
+        }
+        // Postupné zpomalování jako u reálného kolotoče/kola štěstí.
+        spinWheelTimerId = setTimeout(tick, 50 + ticks * 10);
+      };
+      tick();
+    }
+    function closeSpinWheelModal() {
+      if (spinWheelTimerId) { clearTimeout(spinWheelTimerId); spinWheelTimerId = null; }
+      spinWheelModal.open = false;
+    }
+    function startPracticeFromSpinWheel() {
+      if (!spinWheelModal.result) return;
+      const subjectId = spinWheelModal.result.id;
+      closeSpinWheelModal();
+      openSubject(subjectId);
+    }
+
+    /* ---------- Režim bez rušení (fullscreen focus) ----------
+       Schová horní lištu, hlavičku předmětu, panel vlastních otázek a
+       zápisky - zůstane vidět jen samotná procvičovací karta (viz
+       v-if="!focusMode" u jednotlivých panelů v šabloně). Appka se navíc
+       zkusí přepnout do skutečného fullscreen režimu prohlížeče
+       (Fullscreen API) - když to prohlížeč nepovolí, appka pokračuje
+       aspoň se schovanými panely. Když appka stisknutím Esc opustí reálný
+       fullscreen, appka to detekuje přes 'fullscreenchange' (viz
+       onMounted) a focusMode vypne i v appce samotné, ať appka zůstane
+       souběžně v obou stavech. */
+    const focusMode = ref(false);
+    async function toggleFocusMode() {
+      focusMode.value = !focusMode.value;
+      if (focusMode.value) {
+        try {
+          if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+        } catch (e) { /* appka pokračuje i bez reálného fullscreen - jen se schovanými panely */ }
+      } else if (document.fullscreenElement) {
+        try { await document.exitFullscreen(); } catch (e) { /* nevadí */ }
+      }
+    }
 
     /* ---------- Vyhledávání napříč všemi předměty (z dashboardu) ----------
        Kromě vlastních zápisků appka od tohohle rozšíření hledá i v appce
@@ -14166,6 +14899,114 @@ const app = createApp({
       if (subject.reviewPlanChecks[key]) delete subject.reviewPlanChecks[key];
       else subject.reviewPlanChecks[key] = true;
     }
+
+    /* ---------- Známky a vážený průměr ----------
+       Appka nahrazuje papírovou žákovskou knížku jen v tom nejnutnějším -
+       hodnota 1-5 jako v české škole (1 nejlepší), volitelná váha (písemka
+       vs. drobné zkoušení) a pololetí. Appka počítá vážený průměr
+       (sum(hodnota*váha)/sum(váha)) zvlášť za 1./2. pololetí i celkem. */
+    const gradeForm = reactive({ value: 1, weight: 1, label: '', halfYear: 1 });
+    function addGrade(subject) {
+      if (!subject) return;
+      const value = Number(gradeForm.value);
+      if (!Number.isFinite(value) || value < 1 || value > 5) { alert('Známka musí být číslo od 1 do 5.'); return; }
+      const weight = Number(gradeForm.weight);
+      if (!Array.isArray(subject.grades)) subject.grades = [];
+      subject.grades.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        value,
+        weight: (Number.isFinite(weight) && weight > 0) ? weight : 1,
+        label: (gradeForm.label || '').trim().slice(0, 60),
+        halfYear: gradeForm.halfYear === 2 ? 2 : 1,
+        date: new Date().toISOString().slice(0, 10),
+      });
+      gradeForm.label = '';
+    }
+    function removeGrade(subject, gradeId) {
+      if (!subject || !Array.isArray(subject.grades)) return;
+      const idx = subject.grades.findIndex((g) => g.id === gradeId);
+      if (idx !== -1) subject.grades.splice(idx, 1);
+    }
+    /** Vážený průměr ze zadaného pole známek, nebo null u prázdného pole -
+     *  appka zaokrouhluje na 2 desetinná místa až v šabloně, tady appka
+     *  vrací přesnou hodnotu, ať appka nic neztratí zaokrouhlením předem. */
+    function weightedGradeAverage(grades) {
+      if (!Array.isArray(grades) || grades.length === 0) return null;
+      const totalWeight = grades.reduce((sum, g) => sum + g.weight, 0);
+      if (totalWeight <= 0) return null;
+      const weightedSum = grades.reduce((sum, g) => sum + g.value * g.weight, 0);
+      return weightedSum / totalWeight;
+    }
+    function gradeSummaryForSubject(subject) {
+      if (!subject || !Array.isArray(subject.grades)) return null;
+      const grades = subject.grades;
+      if (grades.length === 0) return null;
+      const half1 = grades.filter((g) => g.halfYear === 1);
+      const half2 = grades.filter((g) => g.halfYear === 2);
+      return {
+        count: grades.length,
+        overallAvg: weightedGradeAverage(grades),
+        half1Avg: weightedGradeAverage(half1),
+        half2Avg: weightedGradeAverage(half2),
+        half1Count: half1.length,
+        half2Count: half2.length,
+      };
+    }
+    const activeSubjectGradeSummary = computed(() => gradeSummaryForSubject(activeSubject.value));
+    const showGrades = ref(false);
+    const showHomework = ref(false);
+
+    /* ---------- Domácí úkoly ----------
+       Samostatný seznam NEZÁVISLÝ na termínech zkoušek (examDate/
+       extraExamDates výš) - appka sem počítá drobné, časté úkoly s
+       termínem, appka je zobrazuje i souhrnně přes všechny předměty
+       (viz upcomingHomework na dashboardu). */
+    const newHomeworkText = ref('');
+    const newHomeworkDue = ref('');
+    function addHomework(subject) {
+      if (!subject) return;
+      const text = (newHomeworkText.value || '').trim();
+      if (!text) return;
+      if (!Array.isArray(subject.homework)) subject.homework = [];
+      subject.homework.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        text: text.slice(0, 200),
+        dueDate: newHomeworkDue.value || null,
+        done: false,
+        createdAt: new Date().toISOString(),
+      });
+      newHomeworkText.value = '';
+      newHomeworkDue.value = '';
+    }
+    function toggleHomeworkDone(subject, homeworkId) {
+      if (!subject || !Array.isArray(subject.homework)) return;
+      const item = subject.homework.find((h) => h.id === homeworkId);
+      if (item) item.done = !item.done;
+    }
+    function removeHomework(subject, homeworkId) {
+      if (!subject || !Array.isArray(subject.homework)) return;
+      const idx = subject.homework.findIndex((h) => h.id === homeworkId);
+      if (idx !== -1) subject.homework.splice(idx, 1);
+    }
+    /** Nesplněné domácí úkoly napříč VŠEMI nearchivovanými předměty, řazené
+     *  podle termínu (úkoly bez termínu appka dává na konec) - appka tohle
+     *  zobrazuje jako přehled na dashboardu. */
+    const upcomingHomework = computed(() => {
+      const items = [];
+      subjects.filter((s) => !s.archived).forEach((s) => {
+        (s.homework || []).forEach((h) => {
+          if (!h.done) items.push({ ...h, subjectId: s.id, subjectName: s.name, subjectEmoji: s.emoji });
+        });
+      });
+      items.sort((a, b) => {
+        if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        return 0;
+      });
+      return items;
+    });
+
     /* ---------- Doplňkové termíny u předmětu (zápočet, dílčí test...) ----
        Na rozdíl od subject.examDate výš (jedna hlavní zkouška) jde tohle
        nastavit vícekrát u stejného předmětu - appka je se stejnou vahou
@@ -14205,6 +15046,7 @@ const app = createApp({
         .sort((a, b) => a.info.days - b.info.days)
     );
     const showUpcomingExams = ref(false);
+    const showHomeworkOverview = ref(false);
     /** Přehledná časová osa termínů - na rozdíl od prostého seznamu výš
      *  (upcomingExams, seřazený, ale bez vizuálního odstupu) appka rozmístí
      *  budoucí/dnešní termíny podél jedné osy podle toho, KOLIK dní zbývá -
@@ -14275,6 +15117,8 @@ const app = createApp({
         difficulty: 'medium',
         customQuestions: [],
         sentenceAnalyses: [],
+        grades: [],
+        homework: [],
       });
       showAddModal.value = false;
       nextTick(updateScrollState);
@@ -15290,6 +16134,26 @@ const app = createApp({
       setTimeout(() => { printWindow.print(); }, 350);
     }
 
+    /** Otevře tiskový náhled celého rozvrhu hodin (viz buildTimetablePrintHtml) -
+     *  stejný vzor jako exportSubjectFlashcardsToPrint výš, jen appka nejdřív
+     *  z reaktivního stats.timetable sestaví čistá data pro jednotlivé dny. */
+    function exportTimetableToPrint() {
+      const daysData = DAY_ORDER.map((d) => ({
+        dayLabel: DAY_LABELS[d],
+        slots: timetableSlotsForDay(d).map((x) => ({ time: x.time, subjectName: x.subject.name, subjectEmoji: x.subject.emoji })),
+      }));
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Prohlížeč zablokoval vyskakovací okno potřebné pro tisk rozvrhu. Povol prosím vyskakovací okna pro tuto stránku a zkus to znovu.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(buildTimetablePrintHtml(daysData));
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => { printWindow.print(); }, 350);
+    }
+
     /** Otevře tiskový náhled taháku ke zkoušce (viz buildCheatSheetHtml) -
      *  stejný vzor jako exportSubjectFlashcardsToPrint výš. */
     function exportSubjectCheatSheet(subject) {
@@ -15313,14 +16177,17 @@ const app = createApp({
       setTimeout(() => { printWindow.print(); }, 350);
     }
 
-    function exportBackup() {
-      const payload = {
+    function buildBackupPayload() {
+      return {
         app: 'studijni-hub',
         version: 1,
         exportedAt: new Date().toISOString(),
         subjects: JSON.parse(JSON.stringify(subjects)),
         stats: JSON.parse(JSON.stringify(stats)),
       };
+    }
+    function exportBackup() {
+      const payload = buildBackupPayload();
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -15410,36 +16277,25 @@ const app = createApp({
       reader.readAsText(file);
     }
 
-    function handleImportFile(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
+    /** Společné jádro importu zálohy - použije jak handleImportFile (obyčejný
+     *  JSON), tak submitBackupPasswordModal po úspěšném dešifrování zálohy
+     *  appky s heslem, ať se validace/normalizace/potvrzovací dialog nemusí
+     *  psát dvakrát. */
+    function applyImportedBackupPayload(parsed) {
+      // Záloha může být buď nový formát { subjects, stats }, nebo přímo pole předmětů.
+      const rawSubjects = Array.isArray(parsed) ? parsed : parsed.subjects;
+      if (!Array.isArray(rawSubjects)) {
+        alert('Tento soubor neobsahuje platná data Studijního Hubu.');
+        return;
+      }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        let parsed;
-        try {
-          parsed = JSON.parse(reader.result);
-        } catch (e) {
-          alert('Tento soubor se nepodařilo přečíst jako platnou zálohu (poškozený nebo neplatný JSON).');
-          event.target.value = '';
-          return;
-        }
+      const importedSubjects = rawSubjects.map((s, i) => normalizeSubject(s, Date.now() + i));
+      const importedStats = (parsed && !Array.isArray(parsed) && parsed.stats) ? parsed.stats : null;
 
-        // Záloha může být buď nový formát { subjects, stats }, nebo přímo pole předmětů.
-        const rawSubjects = Array.isArray(parsed) ? parsed : parsed.subjects;
-        if (!Array.isArray(rawSubjects)) {
-          alert('Tento soubor neobsahuje platná data Studijního Hubu.');
-          event.target.value = '';
-          return;
-        }
-
-        const importedSubjects = rawSubjects.map((s, i) => normalizeSubject(s, Date.now() + i));
-        const importedStats = (parsed && !Array.isArray(parsed) && parsed.stats) ? parsed.stats : null;
-
-        confirmState.message = `Opravdu chceš importovat zálohu s ${importedSubjects.length} předměty? Aktuální data v aplikaci (${subjects.length} předmětů) budou touto zálohou nahrazena. Tuto akci nelze vrátit zpět.`;
-        confirmState.onConfirm = () => {
-          subjects.splice(0, subjects.length, ...importedSubjects);
-          if (importedStats) {
+      confirmState.message = `Opravdu chceš importovat zálohu s ${importedSubjects.length} předměty? Aktuální data v aplikaci (${subjects.length} předmětů) budou touto zálohou nahrazena. Tuto akci nelze vrátit zpět.`;
+      confirmState.onConfirm = () => {
+        subjects.splice(0, subjects.length, ...importedSubjects);
+        if (importedStats) {
             // Doplněno o dailyHistory/dailyAttempts/mistakeCounts/srs/celebratedBadges -
             // dřív import zálohy obnovil jen holé součty, ale mapu aktivity, graf
             // pokroku, sledování chyb i rozložené opakování nechal prázdné.
@@ -15475,15 +16331,120 @@ const app = createApp({
               // se případně znovu přidá kódem od spolužáků.
               studyGroup: { id: null, memberId: null, name: '' },
               maturitaDate: (typeof importedStats.maturitaDate === 'string' && importedStats.maturitaDate) ? importedStats.maturitaDate : null,
+              favoriteKeys: Array.isArray(importedStats.favoriteKeys) ? importedStats.favoriteKeys.slice(-500) : [],
             });
           }
           activeSubjectId.value = null;
         };
         confirmState.show = true;
+    }
+
+    function handleImportFile(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        let parsed;
+        try {
+          parsed = JSON.parse(reader.result);
+        } catch (e) {
+          alert('Tento soubor se nepodařilo přečíst jako platnou zálohu (poškozený nebo neplatný JSON).');
+          event.target.value = '';
+          return;
+        }
+
+        // Šifrovaná záloha (viz encryptJsonWithPassword) appka nejdřív
+        // potřebuje heslo - appka se nesnaží ji rovnou normalizovat.
+        if (parsed && !Array.isArray(parsed) && parsed.app === 'studijni-hub-encrypted' && typeof parsed.ciphertext === 'string') {
+          openImportBackupPasswordPrompt(parsed);
+          event.target.value = ''; // aby šlo případně nahrát i stejný soubor znovu
+          return;
+        }
+
+        applyImportedBackupPayload(parsed);
         event.target.value = ''; // aby šlo případně nahrát i stejný soubor znovu
       };
       reader.onerror = () => alert('Soubor se nepodařilo načíst.');
       reader.readAsText(file);
+    }
+
+    /* ---------- Export zálohy s heslem (šifrovaná záloha) ----------
+       Appka nabídne totéž jako běžný Export zálohy (buildBackupPayload
+       výš), ale výsledný soubor navíc zašifruje zadaným heslem (viz
+       encryptJsonWithPassword). Import stejného souboru appka pozná podle
+       app === 'studijni-hub-encrypted' (viz handleImportFile výš) a nejdřív
+       si o heslo požádá, teprve po úspěšném dešifrování appka pokračuje
+       stejnou cestou jako u obyčejné zálohy (applyImportedBackupPayload). */
+    const backupPasswordModal = reactive({ open: false, mode: 'export', password: '', password2: '', error: '', busy: false, pendingEncryptedPayload: null });
+    function closeBackupPasswordModal() {
+      backupPasswordModal.open = false;
+      backupPasswordModal.password = '';
+      backupPasswordModal.password2 = '';
+      backupPasswordModal.error = '';
+      backupPasswordModal.busy = false;
+      backupPasswordModal.pendingEncryptedPayload = null;
+    }
+    function openExportBackupWithPassword() {
+      backupPasswordModal.mode = 'export';
+      backupPasswordModal.password = '';
+      backupPasswordModal.password2 = '';
+      backupPasswordModal.error = '';
+      backupPasswordModal.pendingEncryptedPayload = null;
+      backupPasswordModal.open = true;
+    }
+    function openImportBackupPasswordPrompt(encryptedPayload) {
+      backupPasswordModal.mode = 'import';
+      backupPasswordModal.password = '';
+      backupPasswordModal.password2 = '';
+      backupPasswordModal.error = '';
+      backupPasswordModal.pendingEncryptedPayload = encryptedPayload;
+      backupPasswordModal.open = true;
+    }
+    async function submitBackupPasswordModal() {
+      const password = backupPasswordModal.password || '';
+      if (password.length < 4) {
+        backupPasswordModal.error = 'Heslo musí mít aspoň 4 znaky.';
+        return;
+      }
+      if (backupPasswordModal.mode === 'export') {
+        if (password !== backupPasswordModal.password2) {
+          backupPasswordModal.error = 'Zadaná hesla se neshodují.';
+          return;
+        }
+        backupPasswordModal.busy = true;
+        try {
+          const encrypted = await encryptJsonWithPassword(buildBackupPayload(), password);
+          const blob = new Blob([JSON.stringify(encrypted)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const datePart = new Date().toISOString().slice(0, 10);
+          a.href = url;
+          a.download = `studijni-hub-zaloha-sifrovana-${datePart}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          closeBackupPasswordModal();
+        } catch (e) {
+          console.warn('Šifrování zálohy se nepodařilo.', e);
+          backupPasswordModal.error = 'Šifrování zálohy se nepodařilo - zkus to znovu, případně v jiném prohlížeči.';
+          backupPasswordModal.busy = false;
+        }
+        return;
+      }
+      // mode === 'import' - appka se zadaným heslem pokusí dešifrovat
+      // uloženou appka encryptedPayload a při úspěchu pokračuje stejně
+      // jako u obyčejné (nešifrované) zálohy.
+      backupPasswordModal.busy = true;
+      try {
+        const decrypted = await decryptJsonWithPassword(backupPasswordModal.pendingEncryptedPayload, password);
+        closeBackupPasswordModal();
+        applyImportedBackupPayload(decrypted);
+      } catch (e) {
+        backupPasswordModal.error = 'Zálohu se nepodařilo dešifrovat - heslo je pravděpodobně špatné.';
+        backupPasswordModal.busy = false;
+      }
     }
 
     /* ---------- Procvičování ---------- */
@@ -16423,6 +17384,59 @@ const app = createApp({
       autoQuestionsForNote.value = null;
     }
 
+    /* ---------- Hromadný import vlastních otázek z textu ----------
+       Na rozdíl od "Auto-otázek z mých zápisků" výš appka nic sama
+       nevymýšlí - uživatel vloží HOTOVÝ seznam otázka/odpověď (např.
+       zkopírovaný z jiné appky/dokumentu), appka ho jen rozparsuje podle
+       zvoleného (nebo automaticky rozpoznaného) oddělovače a najednou
+       vytvoří víc vlastních otázek. Jiný účel než Import z Anki výš (ten
+       čeká přesný, konkrétně formátovaný .txt export z appky Anki) -
+       tohle naopak funguje s libovolným volně vloženým textem. */
+    const showBulkImportQuestions = ref(false);
+    const bulkImportText = ref('');
+    const bulkImportSeparator = ref('auto'); // 'auto' | 'tab' | 'pipe' | 'dash' | 'semicolon'
+    const BULK_IMPORT_SEPARATORS = { tab: ['\t'], pipe: [' | '], dash: [' - '], semicolon: [';'] };
+    function parseBulkQuestionLine(line, separatorMode) {
+      const candidates = separatorMode === 'auto'
+        ? ['\t', ' | ', ' - ', ';']
+        : (BULK_IMPORT_SEPARATORS[separatorMode] || ['\t']);
+      for (const sep of candidates) {
+        const idx = line.indexOf(sep);
+        if (idx > 0 && idx + sep.length < line.length) {
+          const question = line.slice(0, idx).trim();
+          const answer = line.slice(idx + sep.length).trim();
+          if (question && answer) return { question, answer };
+        }
+      }
+      return null;
+    }
+    const bulkImportPreview = computed(() =>
+      bulkImportText.value
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((line) => parseBulkQuestionLine(line, bulkImportSeparator.value))
+        .filter(Boolean)
+    );
+    function importBulkQuestions(subject) {
+      if (!subject) return;
+      const items = bulkImportPreview.value;
+      if (!items.length) {
+        alert('V textu appka nenašla žádný platný pár otázka/odpověď - zkontroluj zvolený oddělovač.');
+        return;
+      }
+      if (!Array.isArray(subject.customQuestions)) subject.customQuestions = [];
+      items.forEach((item, i) => {
+        subject.customQuestions.push({
+          id: Date.now() + i,
+          question: item.question,
+          answers: item.answer.split(',').map((a) => a.trim()).filter(Boolean),
+        });
+      });
+      bulkImportText.value = '';
+      showBulkImportQuestions.value = false;
+    }
+
     /* ---------- Rozbory vět (jen u předmětů typu čeština) ---------- */
     const showSentenceAnalyses = ref(false);
     const newSentenceAnalysis = reactive({ sentence: '', subjectPart: '', predicatePart: '', sentenceType: '' });
@@ -16525,6 +17539,13 @@ const app = createApp({
       // loadQuestionShareFromUrl/questionShareView výš.
       loadQuestionShareFromUrl();
       if (questionShareView.active) return;
+      // Když appka opustí reálný fullscreen jinak než přes toggleFocusMode
+      // (typicky stiskem Esc), appka to zachytí tady a vypne i focusMode -
+      // ať appka nezůstane se schovanými panely bez možnosti se dostat zpátky.
+      document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && focusMode.value) focusMode.value = false;
+      });
+
       // Vlastní data appky (předměty/statistiky/koš) se musí nejdřív doopravdy
       // načíst z IndexedDB (asynchronní) - teprve pak dává smysl cokoliv, co
       // s nimi pracuje (detekce sdílení volí výchozí předmět, synchronizace s
@@ -16584,6 +17605,8 @@ const app = createApp({
       profiles, activeProfileId, activeProfile, hasMultipleProfiles, showProfileSwitcher,
       PROFILE_EMOJI_CHOICES, newProfileForm, toggleProfileSwitcher, addProfile, renameProfile,
       deleteProfile, switchToProfile,
+      hasParentPin, parentPinModal, closeParentPinModal, submitParentPinModal, openSetupParentPin, requestChangeParentPin, requestRemoveParentPin,
+      showLocalLeaderboard, localLeaderboardLoading, localLeaderboardEntries, toggleLocalLeaderboard, loadLocalLeaderboard,
       stats, successRate, reviewCount, dueReviewCount, dailyStreak, bestDailyStreak, appBadgingSupported, updateAppBadge,
       totalDueReviewCount, soonExamsForOverview, todayOverviewVisible,
       recentSubjects, recentSubjectIds,
@@ -16599,6 +17622,8 @@ const app = createApp({
       showArchived, visibleSubjects, archivedCount,
       folderFilter, subjectFolders, setSubjectFolder, studyPlanForSubject, activeSubjectStudyPlan,
       reviewPlanForSubject, activeSubjectReviewPlan, showReviewPlan, toggleReviewPlanDay,
+      gradeForm, addGrade, removeGrade, weightedGradeAverage, gradeSummaryForSubject, activeSubjectGradeSummary, showGrades,
+      newHomeworkText, newHomeworkDue, addHomework, toggleHomeworkDone, removeHomework, upcomingHomework, showHomework, showHomeworkOverview,
       showAddModal, newSubject,
       confirmState,
       trash, showTrashModal, TRASH_RETENTION_DAYS,
@@ -16614,6 +17639,7 @@ const app = createApp({
       showCustomQuestions, newCustomQuestion,
       showAutoQuestionsPicker, autoQuestionsNoteId, autoQuestionEligibleNotes, autoQuestionsForNote,
       generateAutoQuestionsForSelectedNote, addAutoQuestionToSubject, addAllAutoQuestions, closeAutoQuestions,
+      showBulkImportQuestions, bulkImportText, bulkImportSeparator, bulkImportPreview, importBulkQuestions,
       showProgressChart, chartDays, chartHasData,
       showWeeklyProgress, weeklyProgressWeeks, weeklyProgressHasData,
       hourlyActivityChart, hourlyActivityHasData, hourlyBarClass, hourlyBarHeight, hourlyBarTitle,
@@ -16629,6 +17655,8 @@ const app = createApp({
       toggleTheme,
       fontSizeLevel, setFontSize, FONT_SIZE_LEVELS, FONT_SIZE_LABELS, applyFontSize,
       openSubject, closeSubject, scrollCarousel, updateScrollState,
+      focusMode, toggleFocusMode,
+      spinWheelModal, openSpinWheel, closeSpinWheelModal, startPracticeFromSpinWheel,
       onSubjectDragStart, onSubjectDragOver, onSubjectDrop, onSubjectDragEnd,
       toggleArchiveSubject,
       openAddModal, closeAddModal, addSubject,
@@ -16642,6 +17670,7 @@ const app = createApp({
       challengeView, challengeViewReveal, challengeViewGrade, challengeViewCurrentQuestion,
       questionShareModal, shareCurrentQuestion, closeQuestionShareModal, copyQuestionShareLink,
       questionShareView, questionShareViewReveal,
+      isCurrentQuestionFavorite, toggleFavoriteCurrentQuestion, removeFavoriteKey, showFavoriteQuestions, favoriteQuestionsOverview,
       dictationSupported, isDictatingTarget, toggleDictation,
       voiceRecordingSupported, voiceRecordingActive, voiceRecordingSeconds, isVoiceRecordingTarget,
       toggleVoiceRecording, removeVoiceNote, formatVoiceDuration, startVoiceRecording, stopVoiceRecording, cancelVoiceRecording,
@@ -16651,7 +17680,9 @@ const app = createApp({
       addCustomQuestion, deleteCustomQuestion,
       chartBarHeight,
       weeklyProgressBarClass, weeklyProgressBarHeight, weeklyProgressTitle,
+      showWeekTrend, weekOverWeekTrend, trendIcon, trendDiffLabel,
       exportBackup, triggerImportFile, handleImportFile,
+      backupPasswordModal, closeBackupPasswordModal, openExportBackupWithPassword, openImportBackupPasswordPrompt, submitBackupPasswordModal, applyImportedBackupPayload,
       openSearchResult, exportSubjectToPdf, exportAllSubjectsToPdf, exportSubjectWorksheet, exportSubjectToAnki,
       exportSubjectCheatSheet,
       importAnkiFileEl, triggerImportAnkiFile, handleImportAnkiFile,
@@ -16666,6 +17697,7 @@ const app = createApp({
       newExtraExamLabel, addExtraExamDate, setExtraExamDate, removeExtraExamDate,
       showWeeklyPlan, weeklyPlan,
       showTimetable, DAY_LABELS, DAY_ORDER, timetableForm, timetableSlotsForDay, addTimetableSlot, removeTimetableSlot, todayTimetable,
+      exportTimetableToPrint,
       showGoals, newGoalForm, addGoal, removeGoal, activeGoalsWithProgress,
       showBookAnalysis, bookAnalysisAuthor, bookAnalysisTitle, bookAnalysisAuthors, bookAnalysisTitlesForAuthor, selectBookAnalysisAuthor, activeBookAnalysis, printBookAnalysis,
       readBooksCount, isBookRead, toggleBookRead, activeBookNote,
